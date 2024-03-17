@@ -1,0 +1,41 @@
+<a> ::= % | <instruction> <a>
+
+<instruction> ::=
+  "add" <reg> <reg> <reg> |
+  "addv" <reg> <reg> <val> |
+  "sub" <reg> <reg> <reg> |
+  "subv" <reg> <reg> <val> |
+  "mul" <reg> <reg> <reg> |
+  "mulv" <reg> <reg> <val> |
+  "or" <reg> <reg> <reg> |
+  "orv" <reg> <reg> <val> |
+  "and" <reg> <reg> <reg> |
+  "andv" <reg> <reg> <val> |
+  "not" <reg> <reg> |
+  "eq" <reg> <reg> <reg> |
+  "eqv" <reg> <reg> <val> |
+  "neq" <reg> <reg> <reg> |
+  "neqv" <reg> <reg> <val> |
+  "gt" <reg> <reg> <reg> |
+  "gtv" <reg> <reg> <val> |
+  "geq" <reg> <reg> <reg> |
+  "geqv" <reg> <reg> <val> |
+  "lt" <reg> <reg> <reg> |
+  "ltv" <reg> <reg> <val> |
+  "leq" <reg> <reg> <reg> |
+  "leqv" <reg> <reg> <val> |
+  "set" <reg> <reg> |
+  "setv" <reg> <val> |
+  "jump" <reg> |
+  "jumpif" <reg> <reg> |
+  "print" <reg> |
+  "read" <reg> |
+  "load" <reg> <reg> |
+  "printi" <reg> |
+  "readi" <reg> |
+  "jumpv" <val> |
+  "jumpvif" <reg> <val>
+
+<reg> ::= <decimal_integer>
+
+<val> ::= <decimal_integer>

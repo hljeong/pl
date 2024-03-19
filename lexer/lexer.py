@@ -82,6 +82,17 @@ class Lexer:
   def __consume_match_set(self, ch_set) -> bool:
     return any(map(lambda ch: self.__consume_match(ch), ch_set))
 
+  def __consume_expect(self, ch) -> None:
+    if not self.__consume_match(ch):
+      # todo: LexError?
+      raise ValueError(f'expected \'{ch}\' at {self._current_cursor.to_string(True)}, found \'{self.__peek()}\'')
+
+  def __consume_expect_set(self, ch_set) -> None:
+    if not self.__consume_match_set(ch_set):
+      # todo: LexError?
+      ch_set_str = ' or '.join(map(lambda ch: f"'{ch}'", ch_set))
+      raise ValueError(f'expected {ch_set_str} at {self._current_cursor.to_string(True)}, found {self.__peek()}')
+
   def __make_token(
     self,
     token_type: Token.Type,
@@ -115,6 +126,31 @@ class Lexer:
         Token.Type.DECIMAL_INTEGER,
         int(self._source[self._start : self._current]),
       )
+
+    elif self.__consume_match('"'):
+      while not self.__consume_match('"'):
+        self.__consume_match('\\')
+        self.__advance()
+
+      token = self.__make_token(
+        Token.Type.ESCAPED_STRING,
+        bytes(self._source[self._start + 1 : self._current - 1], "utf-8").decode("unicode_escape"),
+      )
+
+    elif self.__consume_match(':'):
+      self.__consume_expect(':')
+      self.__consume_expect('=')
+
+      token = self.__make_token(Token.Type.COLON_COLON_EQUAL)
+
+    elif self.__consume_match(';'):
+      token = self.__make_token(Token.Type.SEMICOLON)
+
+    elif self.__consume_match('<'):
+      token = self.__make_token(Token.Type.LESS_THAN)
+
+    elif self.__consume_match('>'):
+      token = self.__make_token(Token.Type.GREATER_THAN)
 
     elif self.__consume_match('#'):
       while self.__peek() != '\n' and not self.__at_end():

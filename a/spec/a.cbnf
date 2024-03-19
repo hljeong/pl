@@ -1,0 +1,13 @@
+<a> ::= <instruction> <a>;
+
+<a> ::= <instruction>;
+
+<instruction> ::= <command> <operand> <operand> <operand>;
+
+<instruction> ::= <command> <operand> <operand>;
+
+<instruction> ::= <command> <operand>;
+
+<command> ::= <identifier>;
+
+<operand> ::= <decimal_integer>;

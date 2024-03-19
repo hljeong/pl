@@ -6,6 +6,11 @@ class Token:
   class Type(Enum):
     IDENTIFIER = 0
     DECIMAL_INTEGER = 1
+    ESCAPED_STRING = 2
+    COLON_COLON_EQUAL = 3
+    SEMICOLON = 4
+    LESS_THAN = 5
+    GREATER_THAN = 6
 
   def __init__(
     self,
@@ -49,4 +54,4 @@ class Token:
     if verbose:
       return f'{self._token_type.name}(\'{self._lexeme}\') at {self._position.to_string(True)}'
     else:
-      return f'{self._token_type.name}(\'{self._lexeme}\')@{self._position.to_string()}'
+      return f'{self._token_type.name}(\'{self._lexeme}\')'

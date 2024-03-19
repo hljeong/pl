@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-from grammar import Grammar
 from lexer import Lexer
-from ast import Visitor
-from parser import ASTParser
+from grammar import Grammar
+from ast import Parser, Visitor
 
 DEFAULT_MEM = 16 * 1024 * 1024
 
-with open('a/spec/a.cbnf') as a_cbnf_f:
+with open('langs/a/spec/a.cbnf') as a_cbnf_f:
   a_cbnf = ''.join(a_cbnf_f.readlines())
 a_grammar = Grammar(a_cbnf)
 
 class AInterpreter:
   def __init__(self, prog: str, mem: int = DEFAULT_MEM):
-    self._ast: ASTNode = ASTParser(a_grammar, Lexer(prog).tokens).ast
+    self._ast: Node = Parser(a_grammar, Lexer(prog).tokens).ast
     self._imem = Visitor(self._ast, a_loader_node_visitors).ret
     self._dmem = [0] * mem
     self._pc = 0
@@ -159,7 +158,7 @@ class AInterpreter:
 
 
 def a_loader_visit_a(
-  node: ASTNode,
+  node: Node,
   visitor: Visitor,
 ) -> Any:
   instructions = [visitor.visit(node.get(0))]
@@ -168,7 +167,7 @@ def a_loader_visit_a(
   return instructions
 
 def a_loader_visit_instruction(
-  node: ASTNode,
+  node: Node,
   visitor: Visitor,
 ) -> Any:
   match node.production:

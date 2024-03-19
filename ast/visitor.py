@@ -1,24 +1,19 @@
 from __future__ import annotations
-from abc import ABC, abstractmethod
-
-from common import Token
-
-from .ast import ASTNode
 
 class Visitor:
   def __init__(
     self,
-    ast: ASTNode,
-    node_visitors: dict[str, Callable[[ASTNode, Visitor], Any]],
+    ast: Node,
+    node_visitors: dict[str, Callable[[Node, Visitor], Any]],
     initial_env: Any = None,
   ):
-    self._node_visitors: dict[str, Callable[[ASTNode, Any, Visitor], Any]] = node_visitors
+    self._node_visitors: dict[str, Callable[[Node, Any, Visitor], Any]] = node_visitors
     self._env: Any = initial_env
     self._ret: Any = self.visit(ast)
 
   def visit(
     self,
-    node: ASTNode,
+    node: Node,
   ) -> Any:
     return self._node_visitors[node.node_type](node, self)
 

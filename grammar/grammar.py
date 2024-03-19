@@ -3,14 +3,13 @@ from collections import defaultdict
 
 from common import Token
 from lexer import Lexer
-from parser import ASTParser, generate_nonterminal_parser, generate_terminal_parser
-from ast import Visitor
+from ast import generate_nonterminal_parser, generate_terminal_parser, Parser, Visitor
 
 class Grammar:
   def __init__(
     self,
     cbnf: Optional[str] = None,
-    node_parsers: Optional[dict[str, Callable[[ASTParser, Optional[bool]], Optional[Union[ASTNode, Token]]]]] = None,
+    node_parsers: Optional[dict[str, Callable[[Parser, Optional[bool]], Optional[Union[Node, Token]]]]] = None,
   ):
     # bootstrap
     if node_parsers is None:
@@ -19,7 +18,7 @@ class Grammar:
 
       # parse grammar and generate parsers
       tokens: list[Token] = Lexer(cbnf).tokens
-      ast: ASTParser = ASTParser(cbnf_grammar, tokens).ast
+      ast: Parser = Parser(cbnf_grammar, tokens).ast
       node_parsers: Visitor = Visitor(
         ast,
         node_parser_generator_node_visitors,
@@ -33,11 +32,11 @@ class Grammar:
     self._name = list(node_parsers.keys())[0]
     self._node_parsers = node_parsers
 
-  def get_parser(self, node_type: str) -> Callable[[ASTParser, Optional[bool]], Optional[Union[ASTNode, Token]]]:
+  def get_parser(self, node_type: str) -> Callable[[Parser, Optional[bool]], Optional[Union[Node, Token]]]:
     return self._node_parsers[node_type]
 
   @property
-  def entry_point_parser(self) -> Callable[[ASTParser, Optional[bool]], Optional[Union[ASTNode, Token]]]:
+  def entry_point_parser(self) -> Callable[[Parser, Optional[bool]], Optional[Union[Node, Token]]]:
     return self._node_parsers[self._name]
     
 
@@ -113,7 +112,7 @@ terminal_parsers = {
 }
 
 def node_parser_generator_visit_cbnf(
-  node: ASTNode,
+  node: Node,
   visitor: Visitor,
 ) -> Any:
   visitor.visit(node.get(0))
@@ -126,14 +125,14 @@ def node_parser_generator_visit_cbnf(
   return visitor.env['node_parsers']
 
 def node_parser_generator_visit_rule(
-  node: ASTNode,
+  node: Node,
   visitor: Visitor,
 ) -> Any:
   nonterminal: str = node.get(0).get(1).literal
   visitor.env['rule_term_lists'][nonterminal].append(visitor.visit(node.get(2)))
 
 def node_parser_generator_visit_expression(
-  node: ASTNode,
+  node: Node,
   visitor: Visitor,
 ) -> Any:
   ret = [visitor.visit(node.get(0))]
@@ -142,19 +141,19 @@ def node_parser_generator_visit_expression(
   return ret
 
 def node_parser_generator_visit_term(
-  node: ASTNode,
+  node: Node,
   visitor: Visitor,
 ) -> Any:
   return visitor.visit(node.get(0))
 
 def node_parser_generator_visit_nonterminal(
-  node: ASTNode,
+  node: Node,
   visitor: Visitor,
 ) -> Any:
   return node.get(1).literal
 
 def node_parser_generator_visit_terminal(
-  node: ASTNode,
+  node: Node,
   visitor: Visitor,
 ) -> Any:
   return node.get(0).literal

@@ -1,4 +1,4 @@
-.PHONY: install test requirements
+.PHONY: install test requirements clean
 
 MODULES = common lexer
 
@@ -10,3 +10,8 @@ test:
 
 requirements:
 	python -m pip freeze > requirements.txt
+
+clean:
+	rm -rf htmlcov
+	python -Bc "import pathlib; [p.unlink() for p in pathlib.Path('.').rglob('*.py[co]')]"
+	python -Bc "import pathlib; [p.rmdir() for p in pathlib.Path('.').rglob('__pycache__')]"

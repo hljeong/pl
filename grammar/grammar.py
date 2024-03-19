@@ -3,7 +3,7 @@ from collections import defaultdict
 
 from common import Token
 from lexer import Lexer
-from ast import generate_nonterminal_parser, generate_terminal_parser, Parser, Visitor
+from plast import generate_nonterminal_parser, generate_terminal_parser, Parser, Visitor
 
 class Grammar:
   def __init__(

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from lexer import Lexer
 from grammar import Grammar
-from ast import Parser, Visitor
+from plast import Parser, Visitor
 
 DEFAULT_MEM = 16 * 1024 * 1024
 

@@ -1,40 +1,77 @@
 from __future__ import annotations
+from dataclasses import dataclass
 from enum import Enum
-from copy import copy
+import re
+
+@dataclass(eq=False, match_args=False)
+class TokenPatternDefinition:
+  token_pattern: str
+  literal_parser: Callable[[str], Any] = None
+  generate_token: bool = True
+
+  def make_plain(plain_pattern: str) -> TokenPatternDefinition:
+    return TokenPatternDefinition(
+      plain_pattern,
+      None,
+      True,
+    )
+
+@dataclass(eq=False, match_args=False)
+class TokenMatcherDefinition:
+  token_matcher: re.Pattern
+  literal_parser: Callable[[str], Any] = None
+  generate_token: bool = True
+
+  def from_token_pattern_definition(
+    definition: TokenPatternDefinition
+  ) -> TokenMatcherDefinition:
+    return TokenMatcherDefinition(
+      re.compile(f'\\A{definition.token_pattern}'),
+      definition.literal_parser,
+      definition.generate_token,
+    )
+
+builtin_tokens = {
+  'identifier': TokenPatternDefinition(
+    r'[A-Za-z_$][A-Za-z0-9_$]*',
+    str,
+    True,
+  ),
+  'decimal_integer': TokenPatternDefinition(
+    r'0|[1-9][0-9]*',
+    int,
+    True,
+  ),
+  'escaped_string': TokenPatternDefinition(
+    r'"(\.|[^\"])*"',
+    lambda lexeme: lexeme[1 : -1],
+    True,
+  ),
+}
 
 class Token:
-  class Type(Enum):
-    IDENTIFIER = 0
-    DECIMAL_INTEGER = 1
-    ESCAPED_STRING = 2
-    COLON_COLON_EQUAL = 3
-    SEMICOLON = 4
-    LESS_THAN = 5
-    GREATER_THAN = 6
-
   def __init__(
     self,
-    token_type: Type,
+    token_type: str,
     lexeme: str,
-    literal: Optional[Union[str, int]],
-    position: CursorRange,
+    literal: Optional[Union[str, int]] = None,
+    extra: dict[str, Any] = {},
   ):
     self._token_type = token_type
     self._lexeme = lexeme
     self._literal = literal
-    self._position = copy(position)
+    self._extra = extra
 
   def __eq__(self, other: Token) -> bool:
     return self._token_type == other._token_type and \
            self._lexeme == other._lexeme and \
-           self._literal == other._literal and \
-           self._position == other._position
+           self._literal == other._literal
 
   def __ne__(self, other: Token) -> bool:
     return not self == other
 
   @property
-  def token_type(self) -> Type:
+  def token_type(self) -> str:
     return self._token_type
 
   @property
@@ -45,13 +82,16 @@ class Token:
   def literal(self) -> Optional[Union[str, int]]:
     return self._literal
 
+  # todo: access control
   @property
-  def position(self) -> CursorRange:
-    return self._position
+  def extra(self) -> dict[str, Any]:
+    return self._extra
 
 
-  def to_string(self, verbose: bool = False) -> str:
-    if verbose:
-      return f'{self._token_type.name}(\'{self._lexeme}\') at {self._position.to_string(True)}'
+  def to_string(self) -> str:
+    # builtin token type
+    if self._token_type in builtin_tokens:
+      return f'{self._token_type}(\'{self._lexeme}\')'
+
     else:
-      return f'{self._token_type.name}(\'{self._lexeme}\')'
+      return f'\'{self._lexeme}\''

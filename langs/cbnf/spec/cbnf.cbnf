@@ -12,6 +12,8 @@
 
 <term> ::= <terminal>;
 
-<nonterminal> ::= "<" <identifier> ">";
+<nonterminal> ::= "<" identifier ">";
 
-<terminal> ::= <escaped_string>;
+<terminal> ::= escaped_string;
+
+<terminal> ::= ":" identifier;

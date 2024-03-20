@@ -22,11 +22,8 @@ class Cursor:
   def column(self):
     return self._column
 
-  def to_string(self, verbose: bool = False) -> str:
-    if verbose:
-      return f'line {self._line} column {self._column}'
-    else:
-      return f'l{self._line}c{self._column}'
+  def to_string(self) -> str:
+    return f'line {self._line} column {self._column}'
 
   def __lt__(self, other: Cursor) -> bool:
     return self._line < other._line or \
@@ -78,13 +75,11 @@ class CursorRange:
   def end(self):
     return self._end
 
-  def to_string(self, verbose: bool = False) -> str:
+  def to_string(self) -> str:
     if self._start.line == self._end.line:
       if self._start.column == self._end.column:
-        return self._start.to_string(verbose)
+        return self._start.to_string()
       else:
         return f'{self.start.to_string(verbose)}-{self.end.column}'.replace('column', 'columns')
-    elif verbose:
-      return f'{self.start.to_string(True)} - {self.end.to_string(True)}'
     else:
-      return f'{self.start.to_string()}-{self.end.to_string()}'
+      return f'{self.start.to_string(True)} - {self.end.to_string(True)}'

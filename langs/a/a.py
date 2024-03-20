@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from lexer import Lexer
+from common import Lexer
 from grammar import Grammar
 from plast import Parser, Visitor
 
@@ -8,11 +8,76 @@ DEFAULT_MEM = 16 * 1024 * 1024
 
 with open('langs/a/spec/a.cbnf') as a_cbnf_f:
   a_cbnf = ''.join(a_cbnf_f.readlines())
-a_grammar = Grammar(a_cbnf)
+a_grammar = Grammar('a', a_cbnf, ignore=[r'#[^\n]*'])
+
+class AParser:
+  def __init__(self, prog: str):
+    lexer = Lexer(a_grammar, prog)
+    parser = Parser(b_grammar, lexer.tokens)
+    self._ast: Node = parser.ast
+
+  @property
+  def ast(self) -> Node:
+    return self._ast
+
+class APrinter:
+  def __init__(self, ast: Node):
+    self._ast: Node = ast
+    self._str: str = Visitor(self._ast, a_printer_node_visitors).ret
+
+  @property
+  def str(self) -> str:
+    return self._str
+
+def a_printer_visit_a(
+  node: Node,
+  visitor: Visitor,
+) -> Any:
+  prog = visitor.visit(node.get(0))
+  if node.production == 0:
+    prog = '\n'.join([prog, visitor.visit(node.get(1))])
+  return prog
+
+def a_printer_visit_instruction(
+  node: Node,
+  visitor: Visitor,
+) -> Any:
+  match node.production:
+    # 3 operands
+    case 0:
+      return ' '.join([
+        node.get(0).get(0).lexeme,
+        node.get(1).get(0).lexeme,
+        node.get(2).get(0).lexeme,
+        node.get(3).get(0).lexeme,
+      ])
+
+    # 2 operands
+    case 1:
+      return ' '.join([
+        node.get(0).get(0).lexeme,
+        node.get(1).get(0).lexeme,
+        node.get(2).get(0).lexeme,
+      ])
+
+    # 1 operand
+    case 2:
+      return ' '.join([
+        node.get(0).get(0).lexeme,
+        node.get(1).get(0).lexeme,
+      ])
+
+a_printer_node_visitors = {
+  'a': a_printer_visit_a,
+  'instruction': a_printer_visit_instruction,
+}
+
+    
+
 
 class AInterpreter:
-  def __init__(self, prog: str, mem: int = DEFAULT_MEM):
-    self._ast: Node = Parser(a_grammar, Lexer(prog).tokens).ast
+  def __init__(self, ast: Node, mem: int = DEFAULT_MEM):
+    self._ast: Node = ast
     self._imem = Visitor(self._ast, a_loader_node_visitors).ret
     self._dmem = [0] * mem
     self._pc = 0

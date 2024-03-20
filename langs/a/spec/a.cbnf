@@ -8,6 +8,6 @@
 
 <instruction> ::= <command> <operand>;
 
-<command> ::= <identifier>;
+<command> ::= identifier;
 
-<operand> ::= <decimal_integer>;
+<operand> ::= decimal_integer;

@@ -40,5 +40,5 @@ class Node:
         token_list.extend(child.tokens)
     return tuple(token_list)
 
-  def to_string(self, verbose = False) -> str:
-    return f'{self._node_type}{{{", ".join(map(lambda child: child.to_string(verbose), self._children))}}}'
+  def to_string(self) -> str:
+    return f'{self._node_type}{{{", ".join(map(lambda child: child.to_string(), self._children))}}}'

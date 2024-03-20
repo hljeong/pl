@@ -12,6 +12,8 @@ class Parser:
     self._tokens: list[Token] = tokens
     self._current: int = 0
     self._root: Node = self.__parse()
+    if not self.at_end():
+      raise ValueError('did not parse to end of file')
 
   def __parse(self) -> Node:
     return self._grammar.entry_point_parser(self, True)
@@ -25,7 +27,7 @@ class Parser:
   def __peek(self) -> Token:
     return self._tokens[self._current]
 
-  def expect(self, token_type: Token.Type) -> Optional[Token]:
+  def expect(self, token_type: str) -> Optional[Token]:
     if self.at_end():
       return None
 
@@ -43,7 +45,7 @@ class Parser:
     return self._root
 
 def generate_nonterminal_parser(nonterminal: str, rules: list[list[str]]) -> Callable[[Parser], Optional[Union[Node, Token]]]:
-  def term_parser(parser: Parser, entry_point = False) -> Optional[Union[Node, Token]]:
+  def nonterminal_parser(parser: Parser, entry_point = False) -> Optional[Union[Node, Token]]:
     for idx, rule in enumerate(rules):
       node: Node = Node(nonterminal, idx)
       good: bool = True
@@ -57,9 +59,9 @@ def generate_nonterminal_parser(nonterminal: str, rules: list[list[str]]) -> Cal
       if good:
         return node
     return None
-  return term_parser
+  return nonterminal_parser
 
-def generate_terminal_parser(terminal: Token.Type) -> Callable[[Parser], Optional[Union[Node, Token]]]:
-  def token_parser(parser: Parser) -> Optional[Union[Node, Token]]:
+def generate_terminal_parser(terminal: str) -> Callable[[Parser], Optional[Union[Node, Token]]]:
+  def terminal_parser(parser: Parser) -> Optional[Union[Node, Token]]:
     return parser.expect(terminal)
-  return token_parser
+  return terminal_parser

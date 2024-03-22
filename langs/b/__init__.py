@@ -1,1 +1,1 @@
-from .b import BParser, XBParser, BPrinter, BAllocator
+from .b import BParser, XBParser, BPrinter, XBPrinter, BAllocator

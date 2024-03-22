@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from common import Lexer
 from grammar import Grammar, XBNFGrammar
-from plast import Parser, Visitor
+from plast import Parser, Visitor, visit_it, telescope
 
 with open('langs/b/spec/b.cbnf') as b_cbnf_f:
   b_cbnf = ''.join(b_cbnf_f.readlines())
@@ -21,6 +21,8 @@ class BParser:
   @property
   def ast(self) -> Node:
     return self._ast
+
+
 
 class XBParser:
   def __init__(self, prog: str):
@@ -147,6 +149,126 @@ class BPrinter:
       # <operand> ::= decimal_integer;
       case 1:
         return node.get(0).lexeme
+
+
+
+class XBPrinter:
+  tab = '  '
+
+  def __init__(self, ast: Node):
+    node_visitors: dict[str, Callable[[Node, Visitor], Any]] = {
+      'b': self.visit_b,
+      'block': self.visit_block,
+      'statement': self.visit_statement,
+      'expression': self.visit_expression,
+      'operand': self.visit_operand,
+      'unary_operator': self.visit_unary_operator,
+      'binary_operator': self.visit_binary_operator,
+      'variable': self.visit_variable,
+      'string': self.visit_string,
+    }
+    self._tab_stop = 0
+    self._str: str = Visitor(
+      ast,
+      node_visitors,
+    ).ret
+
+  @property
+  def str(self) -> str:
+    return self._str
+
+  def visit_b(
+    self,
+    node: Node,
+    visitor: Visitor,
+  ) -> Any:
+    prog: str = '\n'.join(visitor.visit(child) for child in node.get(0))
+    return prog
+
+  def visit_block(
+    self,
+    node: Node,
+    visitor: Visitor,
+  ) -> Any:
+    match node.production:
+      # <block> ::= <statement>;
+      case 0:
+        return visitor.visit(node.get(0))
+
+      # <block> ::= "{" <statements> "}";
+      case 1:
+        self._tab_stop += 1
+        inner_prog: str = '\n'.join(visitor.visit(child) for child in node.get(0).get(1))
+        self._tab_stop -= 1
+        prog: str = '\n'.join(['{', inner_prog, f'{self._tab_stop * BPrinter.tab}}}'])
+        return prog
+
+  def visit_statement(
+    self,
+    node: Node,
+    visitor: Visitor,
+  ) -> Any:
+    match node.production:
+      case 0:
+        return f'{self._tab_stop * BPrinter.tab}{visitor.visit(node[0][0])} = {visitor.visit(node[0][2])};'
+
+      case 1:
+        return f'{self._tab_stop * BPrinter.tab}{telescope(node[0][0]).lexeme}({visitor.visit(node[0][2])})'
+
+      case 2:
+        return f'{self._tab_stop * BPrinter.tab}while ({visitor.visit(node[0][2])}) {visitor.visit(node[0][4])}'
+
+      case 3:
+        return f'{self._tab_stop * BPrinter.tab}if ({visitor.visit(node[0][2])}) {visitor.visit(node[0][4])}'
+
+  def visit_expression(
+    self,
+    node: Node,
+    visitor: Visitor,
+  ) -> Any:
+    match node.production:
+      # <expression> ::= <unary_operator> <operand>;
+      case 0:
+        return f'{visitor.visit(node[0])}{visitor.visit(node[0][1])}'
+
+      # <expression> ::= <operand> <binary_operator> <operand>;
+      case 1:
+        return f'{visitor.visit(node[0][0])} {visitor.visit(node[0][1])} {visitor.visit(node[0][2])}'
+
+  def visit_operand(
+    self,
+    node: Node,
+    visitor: Visitor,
+  ) -> Any:
+    return telescope(node).lexeme
+
+  def visit_unary_operator(
+    self,
+    node: Node,
+    visitor: Visitor,
+  ) -> Any:
+    return telescope(node).lexeme
+
+  def visit_binary_operator(
+    self,
+    node: Node,
+    visitor: Visitor,
+  ) -> Any:
+    return telescope(node).lexeme
+
+  def visit_variable(
+    self,
+    node: Node,
+    visitor: Visitor,
+  ) -> Any:
+    return node[0].lexeme
+
+  def visit_string(
+    eslf,
+    node: Node,
+    visitor: Visitor,
+  ) -> Any:
+    return node[0].lexeme
 
 
 
@@ -330,7 +452,7 @@ class BCompiler:
       # <statement> ::= "read" "\(" <variable> "\)" ";";
       # <statement> ::= "readi" "\(" <variable> "\)" ";";
       case 3 | 4 | 5 | 6:
-        return f'{visitor.env["tab_stop"] * Bcompiler.tab}{node.get(0).lexeme}({node.get(2).get(0).lexeme})'
+        return f'{visitor.env["tab_stop"] * Bcompiler.tab}{node.get(0).lexeme}({telescope(node[2]).lexeme})'
 
       # <statement> ::= "while" "\(" <expression> "\)" <block>;
       # <statement> ::= "if" "\(" <expression> "\)" <block>;
@@ -345,22 +467,15 @@ class BCompiler:
     match node.production:
       # <expression> ::= <unary_operator> <operand>;
       case 0:
-        return f'{node.get(0).get(0).lexeme}{visitor.visit(node.get(1))}'
+        return f'{telescope(node[0]).lexeme}{visitor.visit(node.get(1))}'
 
       # <expression> ::= <operand> <binary_operator> <operand>;
       case 1:
-        return f'{visitor.visit(node.get(0))} {node.get(1).get(0).lexeme} {visitor.visit(node.get(2))}'
+        return f'{visitor.visit(node.get(0))} {telescpoe(node[1]).lexeme} {visitor.visit(node.get(2))}'
 
   def visit_operand(
     self,
     node: Node,
     visitor: Visitor,
   ) -> Any:
-    match node.production:
-      # <operand> ::= <variable>;
-      case 0:
-        return node.get(0).get(0).lexeme
-
-      # <operand> ::= decimal_integer;
-      case 1:
-        return node.get(0).lexeme
+    return telescope(node).lexeme

@@ -18,6 +18,9 @@ class Node:
   def get(self, idx: int) -> Union[Node, list[Node], Token]:
     return self._children[idx]
 
+  def __getitem__(self, key: int) -> Union[Node, list[Node], Token]:
+    return self._children[key]
+
   @property
   def node_type(self) -> str:
     return self._node_type

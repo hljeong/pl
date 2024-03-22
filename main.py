@@ -4,7 +4,7 @@ from common import ast_to_tree_string
 from grammar import Grammar
 from plast import Node
 from langs.a import AParser, APrinter, AInterpreter
-from langs.b import BParser, XBParser, BPrinter, BAllocator
+from langs.b import BParser, XBParser, BPrinter, XBPrinter, BAllocator
 
 if __name__ == '__main__':
 
@@ -16,7 +16,10 @@ if __name__ == '__main__':
     prog = ''.join(f.readlines())
 
   ast = XBParser(prog).ast
-  print(ast_to_tree_string(ast))
+  # print(ast_to_tree_string(ast))
+
+  ast_prog = XBPrinter(ast).str
+  print(ast_prog)
 
   exit(0)
 

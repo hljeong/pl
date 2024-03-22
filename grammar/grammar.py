@@ -2,7 +2,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from common import Token, TokenPatternDefinition, builtin_tokens, Lexer, ast_to_tree_string
-from plast import generate_nonterminal_parser, generate_extended_nonterminal_parser, generate_terminal_parser, ExpressionTerm, Parser, Visitor
+from plast import generate_nonterminal_parser, generate_extended_nonterminal_parser, generate_terminal_parser, visit_it, ExpressionTerm, Parser, Visitor
 
 class Grammar:
   def __init__(
@@ -906,9 +906,3 @@ class XBNFTokenDefNodeParserGenerator:
     #   # node: decimal_integer
     #   case 1:
     #     return node.get(0).literal
-
-def visit_it(
-  node: Node,
-  visitor: Visitor,
-) -> Any:
-  return visitor.visit(node.get(0))

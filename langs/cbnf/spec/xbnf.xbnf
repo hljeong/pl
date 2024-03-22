@@ -1,0 +1,17 @@
+<xbnf> ::= <production>+;
+
+<production> ::= <nonterminal> "::=" <body> ";";
+
+<nonterminal> ::= "<" identifier ">";
+
+<body> ::= <expression> ("\|" <expression>)*;
+
+<expression> ::= (<group> <multiplicity>?)+;
+
+<group> ::= <term> | "\(" <body> "\)";
+
+<term> ::= <nonterminal> | <terminal>;
+
+<terminal> ::= "e" | escaped_string | identifier;
+
+<multiplicity> ::= "\?" | "\*" | "\+" | decimal_integer;

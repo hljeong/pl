@@ -87,11 +87,13 @@ class Token:
   def extra(self) -> dict[str, Any]:
     return self._extra
 
-
-  def to_string(self) -> str:
+  def __str__(self) -> str:
     # builtin token type
     if self._token_type in builtin_tokens:
       return f'{self._token_type}(\'{self._lexeme}\')'
 
     else:
       return f'\'{self._lexeme}\''
+
+  def __repr__(self) -> str:
+    return f'Token({self})'

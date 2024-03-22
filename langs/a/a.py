@@ -20,10 +20,18 @@ class AParser:
   def ast(self) -> Node:
     return self._ast
 
+
+
 class APrinter:
   def __init__(self, ast: Node):
-    self._ast: Node = ast
-    self._str: str = Visitor(self._ast, a_printer_node_visitors).ret
+    node_visitors: dict[str, Callable[[Node, Visitor], Any]] = {
+      'a': self.visit_a,
+      'instruction': self.visit_instruction,
+    }
+    self._str: str = Visitor(
+      ast,
+      node_visitors,
+    ).ret
 
   @property
   def str(self) -> str:
@@ -71,14 +79,12 @@ a_printer_node_visitors = {
   'a': a_printer_visit_a,
   'instruction': a_printer_visit_instruction,
 }
-
     
 
 
 class AInterpreter:
   def __init__(self, ast: Node, mem: int = DEFAULT_MEM):
-    self._ast: Node = ast
-    self._imem = Visitor(self._ast, a_loader_node_visitors).ret
+    self._imem = Visitor(ast, a_loader_node_visitors).ret
     self._dmem = [0] * mem
     self._pc = 0
 
@@ -220,47 +226,42 @@ class AInterpreter:
       if advance:
         self.__advance()
 
+  def visit_a(
+    self,
+    node: Node,
+    visitor: Visitor,
+  ) -> Any:
+    instructions = [visitor.visit(node.get(0))]
+    if node.production == 0:
+      instructions.extend(visitor.visit(node.get(1)))
+    return instructions
 
+  def visit_instruction(
+    self,
+    node: Node,
+    visitor: Visitor,
+  ) -> Any:
+    match node.production:
+      # 3 operands
+      case 0:
+        return (
+          node.get(0).get(0).literal,
+          node.get(1).get(0).literal,
+          node.get(2).get(0).literal,
+          node.get(3).get(0).literal,
+        )
 
-def a_loader_visit_a(
-  node: Node,
-  visitor: Visitor,
-) -> Any:
-  instructions = [visitor.visit(node.get(0))]
-  if node.production == 0:
-    instructions.extend(visitor.visit(node.get(1)))
-  return instructions
+      # 2 operands
+      case 1:
+        return (
+          node.get(0).get(0).literal,
+          node.get(1).get(0).literal,
+          node.get(2).get(0).literal,
+        )
 
-def a_loader_visit_instruction(
-  node: Node,
-  visitor: Visitor,
-) -> Any:
-  match node.production:
-    # 3 operands
-    case 0:
-      return (
-        node.get(0).get(0).literal,
-        node.get(1).get(0).literal,
-        node.get(2).get(0).literal,
-        node.get(3).get(0).literal,
-      )
-
-    # 2 operands
-    case 1:
-      return (
-        node.get(0).get(0).literal,
-        node.get(1).get(0).literal,
-        node.get(2).get(0).literal,
-      )
-
-    # 1 operand
-    case 2:
-      return (
-        node.get(0).get(0).literal,
-        node.get(1).get(0).literal,
-      )
-
-a_loader_node_visitors = {
-  'a': a_loader_visit_a,
-  'instruction': a_loader_visit_instruction,
-}
+      # 1 operand
+      case 2:
+        return (
+          node.get(0).get(0).literal,
+          node.get(1).get(0).literal,
+        )

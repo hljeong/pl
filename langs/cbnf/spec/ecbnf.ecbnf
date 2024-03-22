@@ -1,18 +1,20 @@
-<cbnf> ::= <rule> <cbnf>;
-
-<cbnf> ::= <rule>;
+<ecbnf> ::= <rule>+;
 
 <rule> ::= <nonterminal> "::=" <expression> ";";
 
-<expression> ::= <term> <expression>;
-
-<expression> ::= <term>;
+<expression> ::= <term>+;
 
 <term> ::= <nonterminal>;
 
 <term> ::= <terminal>;
 
 <nonterminal> ::= "<" identifier ">";
+
+<nonterminal> ::= "<" identifier ">\?";
+
+<nonterminal> ::= "<" identifier ">\*";
+
+<nonterminal> ::= "<" identifier ">\+";
 
 <terminal> ::= escaped_string;
 

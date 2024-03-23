@@ -1,10 +1,17 @@
 from __future__ import annotations
+from typing import Iterable
 
-from common import Token
-from plast import Node
+# a node by duck typing must have node_type, __iter__, and __len__
+def is_node(x: Any):
+  # todo: can this be done w hasattr?
+  try:
+    _ = x.node_type, iter(x), len(x)
+    return True
+  except:
+    return False
 
-def ast_to_tree_string(
-  ast: Union[Node, Token],
+def to_tree_string(
+  node: Any,
   prefix: str = '',
   last: bool = False,
   entry_point: bool = True,
@@ -14,33 +21,29 @@ def ast_to_tree_string(
     if last:
       use_prefix = prefix + '└─ '
       prefix += '   '
+
     else:
       use_prefix = prefix + '├─ '
       prefix += '│  '
 
-  if type(ast) is Token:
-    return f'{use_prefix}{ast}'
-
-  elif type(ast) is Node:
-    lines = [f'{use_prefix}<{ast.node_type}>']
-    for idx, child in enumerate(ast.children):
-      is_last = idx == len(ast.children) - 1
-      lines.append(ast_to_tree_string(
-        child,
-        prefix,
-        is_last,
-        False,
+  if is_node(node):
+    lines = [f'{use_prefix}<{node.node_type}>']
+    for idx, child in enumerate(node):
+      is_last = idx == len(node) - 1
+      lines.append(to_tree_string(
+        child, prefix, is_last, False,
       ))
     return '\n'.join(lines)
+  
+  elif type(node) is not list:
+    return f'{use_prefix}{node}'
 
-  elif type(ast) is list:
-    lines = [f'{use_prefix}(list)']
-    for idx, child in enumerate(ast):
-      is_last = idx == len(ast) - 1
-      lines.append(ast_to_tree_string(
-        child,
-        prefix,
-        is_last,
-        False,
+  # todo: kill this by implementing different types of nodes as subclasses
+  elif type(node) is list:
+    lines = [f'{use_prefix}.']
+    for idx, child in enumerate(node):
+      is_last = idx == len(node) - 1
+      lines.append(to_tree_string(
+        child, prefix, is_last, False,
       ))
     return '\n'.join(lines)

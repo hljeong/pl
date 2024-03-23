@@ -1,8 +1,10 @@
 from __future__ import annotations
 from collections import defaultdict
 
-from common import Token, TokenPatternDefinition, builtin_tokens, Lexer, ast_to_tree_string
-from plast import generate_nonterminal_parser, generate_extended_nonterminal_parser, generate_terminal_parser, visit_it, ExpressionTerm, Parser, Visitor
+from common import Log, to_tree_string
+from lexical import Token, TokenPatternDefinition, builtin_tokens, Lexer
+from .parser import generate_nonterminal_parser, generate_extended_nonterminal_parser, generate_terminal_parser, ExpressionTerm, Parser
+from .visitor import visit_it, Visitor
 
 class Grammar:
   def __init__(
@@ -346,7 +348,6 @@ class XBNFGrammar:
 
       # parse grammar xbnf
       ast: Parser = Parser(xbnf_grammar, tokens).ast
-      # print(ast_to_tree_string(ast))
 
       # generate token definitions and node parsers
       token_defs: dict[str, TokenPatternDefinition]
@@ -431,15 +432,6 @@ xbnf_node_parsers = {
       [
         ExpressionTerm('expression'),
         ExpressionTerm('body:1', '*'),
-        # CompoundExpressionTerm(
-        #   [
-        #     [
-        #       ExpressionTerm('\|'),
-        #       ExpressionTerm('expression'),
-        #     ],
-        #   ],
-        #   '*'
-        # ),
       ],
     ],
   ),
@@ -459,15 +451,6 @@ xbnf_node_parsers = {
     [
       [
         ExpressionTerm('expression:0', '+'),
-        # CompoundExpressionTerm(
-        #   [
-        #     [
-        #       ExpressionTerm('group'),
-        #       ExpressionTerm('multiplicity', '?'),
-        #     ],
-        #   ],
-        #  ExpressionTerm('+'),
-        # ),
       ],
     ],
   ),
@@ -485,8 +468,14 @@ xbnf_node_parsers = {
   'group': generate_extended_nonterminal_parser(
     'group',
     [
-      [ExpressionTerm('group~0')],
-      [ExpressionTerm('group~1')],
+      # [ExpressionTerm('group~0')],
+      # [ExpressionTerm('group~1')],
+      [ExpressionTerm('term')],
+      [
+        ExpressionTerm('\\('),
+        ExpressionTerm('body'),
+        ExpressionTerm('\\)'),
+      ]
     ],
   ),
 
@@ -511,8 +500,10 @@ xbnf_node_parsers = {
   'term': generate_extended_nonterminal_parser(
     'term',
     [
-      [ExpressionTerm('term~0')],
-      [ExpressionTerm('term~1')],
+      # [ExpressionTerm('term~0')],
+      # [ExpressionTerm('term~1')],
+      [ExpressionTerm('nonterminal')],
+      [ExpressionTerm('terminal')],
     ],
   ),
 
@@ -533,9 +524,12 @@ xbnf_node_parsers = {
   'terminal': generate_extended_nonterminal_parser(
     'terminal',
     [
-      [ExpressionTerm('terminal~0')],
-      [ExpressionTerm('terminal~1')],
-      [ExpressionTerm('terminal~2')],
+      # [ExpressionTerm('terminal~0')],
+      # [ExpressionTerm('terminal~1')],
+      # [ExpressionTerm('terminal~2')],
+      [ExpressionTerm('e')],
+      [ExpressionTerm('escaped_string')],
+      [ExpressionTerm('identifier')],
     ],
   ),
 
@@ -563,10 +557,14 @@ xbnf_node_parsers = {
   'multiplicity': generate_extended_nonterminal_parser(
     'multiplicity',
     [
-      [ExpressionTerm('multiplicity~0')],
-      [ExpressionTerm('multiplicity~1')],
-      [ExpressionTerm('multiplicity~2')],
-      [ExpressionTerm('multiplicity~3')],
+      # [ExpressionTerm('multiplicity~0')],
+      # [ExpressionTerm('multiplicity~1')],
+      # [ExpressionTerm('multiplicity~2')],
+      # [ExpressionTerm('multiplicity~3')],
+      [ExpressionTerm('\\?')],
+      [ExpressionTerm('\\*')],
+      [ExpressionTerm('\\+')],
+      [ExpressionTerm('decimal_integer')],
     ],
   ),
 
@@ -627,22 +625,22 @@ class XBNFTokenDefNodeParserGenerator:
       'production': self.visit_production,
       'body': self.visit_body,
       'expression': self.visit_expression,
-      'group': visit_it,
-      'group~0': visit_it,
-      'group~1': self.visit_group_option1,
-      'term': visit_it,
-      'term~0': visit_it,
-      'term~1': visit_it,
+      'group': self.visit_group,
+      # 'group~0': visit_it,
+      # 'group~1': self.visit_group_option1,
+      # 'term': self.visit_term,
+      # 'term~0': visit_it,
+      # 'term~1': visit_it,
       'nonterminal': self.visit_nonterminal,
       'terminal': self.visit_terminal,
-      'multiplicity': visit_it,
-      'multiplicity~0': lambda node, visitor: node.get(0).lexeme,
-      'multiplicity~1': lambda node, visitor: node.get(0).lexeme,
-      'multiplicity~2': lambda node, visitor: node.get(0).lexeme,
-      'multiplicity~3': lambda node, visitor: node.get(0).literal,
       'terminal~0': lambda node, visitor: node.get(0).lexeme,
       'terminal~1': lambda node, visitor: node.get(0).literal,
       'terminal~2': lambda node, visitor: node.get(0).lexeme,
+      'multiplicity': self.visit_multiplicity,
+      # 'multiplicity~0': lambda node, visitor: node.get(0).lexeme,
+      # 'multiplicity~1': lambda node, visitor: node.get(0).lexeme,
+      # 'multiplicity~2': lambda node, visitor: node.get(0).lexeme,
+      # 'multiplicity~3': lambda node, visitor: node.get(0).literal,
     }
     self._productions = defaultdict(list[ExpressionTerm])
     self._lhs_stack: list[str] = []
@@ -655,8 +653,6 @@ class XBNFTokenDefNodeParserGenerator:
       ast,
       node_visitors,
     ).ret
-    # for nonterminal in self._productions:
-    #   print(f'{nonterminal}: {self._productions[nonterminal]}')
 
   @property
   def token_defs(self) -> dict[str, TokenPatternDefinition]:
@@ -680,7 +676,6 @@ class XBNFTokenDefNodeParserGenerator:
     node_parsers = {}
 
     # generate token definitions and node parsers for terminals
-    print(self._terminals)
     for terminal in self._terminals:
       token_defs[terminal] = builtin_tokens.get(
         terminal,
@@ -689,6 +684,8 @@ class XBNFTokenDefNodeParserGenerator:
       node_parsers[terminal] = generate_terminal_parser(terminal)
 
     # generate node parsers for nonterminals
+    Log.begin_section()
+    Log.d('generating extended nonterminal parsers:')
     for nonterminal, body in self._productions.items():
       # todo: fix bad hack
       if len(body) == 1:
@@ -697,6 +694,9 @@ class XBNFTokenDefNodeParserGenerator:
       # branch nonterminal
       else:
         node_parsers[nonterminal] = generate_extended_nonterminal_parser(nonterminal, body)
+
+      Log.d(f'  {nonterminal} -> {body}')
+    Log.end_section()
 
     # check if all nonterminals have a parser
     for nonterminal in self._nonterminals:
@@ -732,20 +732,21 @@ class XBNFTokenDefNodeParserGenerator:
     # only 1 production
     if len(node.get(1)) == 0:
       # node.get(0): <expression>
-      productions.append(visitor.visit(node.get(0)))
+      productions.append(visitor.visit(node[0]))
 
     # multiple productions
     else:
       # self._nonterminals.add(self._lhs_stack[-1])
 
       auxiliary_nonterminal = f'{self._lhs_stack[-1]}~{self._idx_stack[-1]}'
-      self._nonterminals.add(auxiliary_nonterminal)
-      productions.append([ExpressionTerm(auxiliary_nonterminal)])
+      # self._nonterminals.add(auxiliary_nonterminal)
+      # productions.append([ExpressionTerm(auxiliary_nonterminal)])
       self._lhs_stack.append(auxiliary_nonterminal)
       self._idx_stack.append(0)
 
       # node.get(0): <expression>
-      self._productions[auxiliary_nonterminal] = [visitor.visit(node.get(0))]
+      productions.append(visitor.visit(node[0]))
+      # self._productions[auxiliary_nonterminal] = [visitor.visit(node.get(0))]
 
       self._idx_stack.pop()
       self._lhs_stack.pop()
@@ -753,15 +754,16 @@ class XBNFTokenDefNodeParserGenerator:
 
     # node.get(1): ("\|" <expression>)*
     # or_production: "\|" <expression>
-    for or_production in node.get(1):
+    for or_production in node[1]:
       auxiliary_nonterminal = f'{self._lhs_stack[-1]}~{self._idx_stack[-1]}'
-      productions.append([ExpressionTerm(auxiliary_nonterminal)])
-      self._nonterminals.add(auxiliary_nonterminal)
+      # self._nonterminals.add(auxiliary_nonterminal)
+      # productions.append([ExpressionTerm(auxiliary_nonterminal)])
       self._lhs_stack.append(auxiliary_nonterminal)
       self._idx_stack.append(0)
 
       # or_production.get(1): <expression>
-      self._productions[auxiliary_nonterminal] = [visitor.visit(or_production.get(1))]
+      # self._productions[auxiliary_nonterminal] = [visitor.visit(or_production.get(1))]
+      productions.append(visitor.visit(or_production[1]))
 
       self._idx_stack.pop()
       self._lhs_stack.pop()
@@ -801,57 +803,57 @@ class XBNFTokenDefNodeParserGenerator:
     node: Node,
     visitor: Visitor,
   ) -> str:
-    pass
+    # pass
     
-    # match node.production:
-    #   # node: <term>
-    #   case 0:
-    #     # term: <nonterminal> | <terminal>
-    #     term = node.get(0)
-    # 
-    #     match term.production:
-    #       # term: <nonterminal>
-    #       case 0:
-    #         nonterminal = term.get(0).get(1).lexeme
-    #         self._nonterminals.add(nonterminal)
-    #         return nonterminal
-    #
-    #       # term: <terminal>
-    #       case 1:
-    #         # terminal_node: "e" | escaped_string | identifier
-    #         terminal_node = term.get(0)
-    #
-    #         match terminal_node.production:
-    #           # terminal_node: "e"
-    #           case 0:
-    #             terminal = terminal_node.get(0).lexeme
-    #
-    #           # terminal_node: escaped_string
-    #           case 1:
-    #             terminal = terminal_node.get(0).literal
-    #
-    #           # terminal_node: identifier
-    #           case 2:
-    #             terminal = terminal_node.get(0).lexeme
-    #
-    #         self._terminals.add(terminal)
-    #         return terminal
-    #
-    #   # node: "\(" <body> "\)"
-    #   case 1:
-    #     auxiliary_nonterminal = f'{self._lhs_stack[-1]}:{self._idx_stack[-1]}'
-    #     self._lhs_stack.append(auxiliary_nonterminal)
-    #     self._idx_stack.append(0)
-    #     self._nonterminals.add(auxiliary_nonterminal)
-    #
-    #     # node.get(1): <body>
-    #     self._productions[auxiliary_nonterminal] = visitor.visit(node.get(1))
-    #
-    #     self._idx_stack.pop()
-    #     self._lhs_stack.pop()
-    #     self._idx_stack[-1] += 1
-    #
-    #     return auxiliary_nonterminal
+    match node.production:
+      # node: <term>
+      case 0:
+        # term: <nonterminal> | <terminal>
+        term = node.get(0)
+    
+        match term.production:
+          # term: <nonterminal>
+          case 0:
+            nonterminal = term.get(0).get(1).lexeme
+            self._nonterminals.add(nonterminal)
+            return nonterminal
+    
+          # term: <terminal>
+          case 1:
+            # terminal_node: "e" | escaped_string | identifier
+            terminal_node = term.get(0)
+    
+            match terminal_node.production:
+              # terminal_node: "e"
+              case 0:
+                terminal = terminal_node.get(0).lexeme
+   
+              # terminal_node: escaped_string
+              case 1:
+                terminal = terminal_node.get(0).literal
+    
+              # terminal_node: identifier
+              case 2:
+                terminal = terminal_node.get(0).lexeme
+    
+            self._terminals.add(terminal)
+            return terminal
+    
+      # node: "\(" <body> "\)"
+      case 1:
+        auxiliary_nonterminal = f'{self._lhs_stack[-1]}:{self._idx_stack[-1]}'
+        self._lhs_stack.append(auxiliary_nonterminal)
+        self._idx_stack.append(0)
+        self._nonterminals.add(auxiliary_nonterminal)
+   
+        # node.get(1): <body>
+        self._productions[auxiliary_nonterminal] = visitor.visit(node.get(1))
+    
+        self._idx_stack.pop()
+        self._lhs_stack.pop()
+        self._idx_stack[-1] += 1
+    
+        return auxiliary_nonterminal
 
   def visit_group_option1(
     self,
@@ -886,8 +888,15 @@ class XBNFTokenDefNodeParserGenerator:
     node: Node,
     visitor: Visitor,
   ) -> str:
-    terminal = visitor.visit(node.get(0))
-    print(terminal)
+    # terminal = visitor.visit(node.get(0))
+    # todo: temporary ugly code
+    match terminal.production:
+      case 0 | 2:
+        terminal = node[0].lexeme
+      
+      case 1:
+        terminal = node[0].literal
+
     self._terminals.add(terminal)
     return terminal
 
@@ -896,13 +905,13 @@ class XBNFTokenDefNodeParserGenerator:
     node: Node,
     visitor: Visitor,
   ) -> Union[str, int]:
-    pass
+    # pass
 
-    # match node.production:
-    #   # node: "\?" | "\*" | "\+"
-    #   case 0 | 1 | 2:
-    #     return node.get(0).lexeme
-    # 
-    #   # node: decimal_integer
-    #   case 1:
-    #     return node.get(0).literal
+    match node.production:
+      # node: "\?" | "\*" | "\+"
+      case 0 | 1 | 2:
+        return node.get(0).lexeme
+    
+      # node: decimal_integer
+      case 1:
+        return node.get(0).literal

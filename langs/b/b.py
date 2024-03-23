@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from common import Lexer
-from grammar import Grammar, XBNFGrammar
-from plast import Parser, Visitor, visit_it, telescope
+from common import log_time
+from lexical import Lexer
+from syntax import Grammar, XBNFGrammar, Parser, Visitor, visit_it, telescope
 
 with open('langs/b/spec/b.cbnf') as b_cbnf_f:
   b_cbnf = ''.join(b_cbnf_f.readlines())
@@ -25,6 +25,7 @@ class BParser:
 
 
 class XBParser:
+  @log_time
   def __init__(self, prog: str):
     lexer = Lexer(b_xbnfgrammar, prog)
     parser = Parser(b_xbnfgrammar, lexer.tokens)
@@ -161,16 +162,12 @@ class XBPrinter:
       'block': self.visit_block,
       'statement': self.visit_statement,
       'expression': self.visit_expression,
-      'operand': self.visit_operand,
-      'unary_operator': self.visit_unary_operator,
-      'binary_operator': self.visit_binary_operator,
-      'variable': self.visit_variable,
-      'string': self.visit_string,
     }
     self._tab_stop = 0
     self._str: str = Visitor(
       ast,
       node_visitors,
+      lambda terminal_node: terminal_node.lexeme
     ).ret
 
   @property
@@ -193,15 +190,17 @@ class XBPrinter:
     match node.production:
       # <block> ::= <statement>;
       case 0:
-        return visitor.visit(node.get(0))
+        return visitor.visit(node[0])
 
       # <block> ::= "{" <statements> "}";
       case 1:
         self._tab_stop += 1
-        inner_prog: str = '\n'.join(visitor.visit(child) for child in node.get(0).get(1))
+
+        inner_prog: str = '\n'.join(visitor.visit(child) for child in node[1])
+
         self._tab_stop -= 1
-        prog: str = '\n'.join(['{', inner_prog, f'{self._tab_stop * BPrinter.tab}}}'])
-        return prog
+
+        return '\n'.join(['{', inner_prog, f'{self._tab_stop * BPrinter.tab}}}'])
 
   def visit_statement(
     self,
@@ -210,16 +209,16 @@ class XBPrinter:
   ) -> Any:
     match node.production:
       case 0:
-        return f'{self._tab_stop * BPrinter.tab}{visitor.visit(node[0][0])} = {visitor.visit(node[0][2])};'
+        return f'{self._tab_stop * BPrinter.tab}{visitor.visit(node[0])} = {visitor.visit(node[2])};'
 
       case 1:
-        return f'{self._tab_stop * BPrinter.tab}{telescope(node[0][0]).lexeme}({visitor.visit(node[0][2])})'
+        return f'{self._tab_stop * BPrinter.tab}{telescope(node[0]).lexeme}({visitor.visit(node[2])})'
 
       case 2:
-        return f'{self._tab_stop * BPrinter.tab}while ({visitor.visit(node[0][2])}) {visitor.visit(node[0][4])}'
+        return f'{self._tab_stop * BPrinter.tab}while ({visitor.visit(node[2])}) {visitor.visit(node[4])}'
 
       case 3:
-        return f'{self._tab_stop * BPrinter.tab}if ({visitor.visit(node[0][2])}) {visitor.visit(node[0][4])}'
+        return f'{self._tab_stop * BPrinter.tab}if ({visitor.visit(node[2])}) {visitor.visit(node[4])}'
 
   def visit_expression(
     self,
@@ -229,46 +228,11 @@ class XBPrinter:
     match node.production:
       # <expression> ::= <unary_operator> <operand>;
       case 0:
-        return f'{visitor.visit(node[0])}{visitor.visit(node[0][1])}'
+        return f'{visitor.visit(node[0])}{visitor.visit(node[1])}'
 
       # <expression> ::= <operand> <binary_operator> <operand>;
       case 1:
-        return f'{visitor.visit(node[0][0])} {visitor.visit(node[0][1])} {visitor.visit(node[0][2])}'
-
-  def visit_operand(
-    self,
-    node: Node,
-    visitor: Visitor,
-  ) -> Any:
-    return telescope(node).lexeme
-
-  def visit_unary_operator(
-    self,
-    node: Node,
-    visitor: Visitor,
-  ) -> Any:
-    return telescope(node).lexeme
-
-  def visit_binary_operator(
-    self,
-    node: Node,
-    visitor: Visitor,
-  ) -> Any:
-    return telescope(node).lexeme
-
-  def visit_variable(
-    self,
-    node: Node,
-    visitor: Visitor,
-  ) -> Any:
-    return node[0].lexeme
-
-  def visit_string(
-    eslf,
-    node: Node,
-    visitor: Visitor,
-  ) -> Any:
-    return node[0].lexeme
+        return f'{visitor.visit(node[0])} {visitor.visit(node[1])} {visitor.visit(node[2])}'
 
 
 

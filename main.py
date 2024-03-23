@@ -1,8 +1,8 @@
 import sys
 
-from common import ast_to_tree_string
-from grammar import Grammar
-from plast import Node
+from common import to_tree_string, log_timed, Log, LogLevel
+Log.level = LogLevel.DEBUG
+from syntax import Node, Grammar
 from langs.a import AParser, APrinter, AInterpreter
 from langs.b import BParser, XBParser, BPrinter, XBPrinter, BAllocator
 
@@ -15,10 +15,10 @@ if __name__ == '__main__':
   with open(sys.argv[1]) as f:
     prog = ''.join(f.readlines())
 
-  ast = XBParser(prog).ast
-  # print(ast_to_tree_string(ast))
+  ast = log_timed(lambda: XBParser(prog).ast, 'parse prog')
+  # print(to_tree_string(ast))
 
-  ast_prog = XBPrinter(ast).str
+  ast_prog = log_timed(lambda: XBPrinter(ast).str, 'print prog')
   print(ast_prog)
 
   exit(0)
@@ -28,7 +28,7 @@ if __name__ == '__main__':
   # AInterpreter(ast).interpret()
 
   ast = BParser(prog).ast
-  # print(ast_to_tree_string(ast))
+  # print(to_tree_string(ast))
 
   ast_prog = BPrinter(ast).str
   print(ast_prog)

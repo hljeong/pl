@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from common import Token
+from lexical import Token
 
 class Node:
   def __init__(
@@ -20,6 +20,13 @@ class Node:
 
   def __getitem__(self, key: int) -> Union[Node, list[Node], Token]:
     return self._children[key]
+
+  # todo: return type annotation
+  def __iter__(self) -> Any:
+    return iter(self.children)
+
+  def __len__(self) -> int:
+    return len(self.children)
 
   @property
   def node_type(self) -> str:

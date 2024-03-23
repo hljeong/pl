@@ -2,7 +2,8 @@ from __future__ import annotations
 from copy import copy
 import re
 
-from .cursor import Cursor, CursorRange
+from common import Cursor, CursorRange
+
 from .token import Token, TokenPatternDefinition, TokenMatcherDefinition
 
 matchers = {

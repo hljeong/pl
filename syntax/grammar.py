@@ -174,7 +174,6 @@ xbnf_node_parsers = {
   '<terminal>': Parser.generate_nonterminal_parser(
     '<terminal>',
     [
-      [ExpressionTerm('"e"')],
       [ExpressionTerm('escaped_string')],
       [ExpressionTerm('identifier')],
     ],
@@ -197,7 +196,6 @@ xbnf_node_parsers = {
   '"\\|"': Parser.generate_terminal_parser('"\\|"'),
   '"\\("': Parser.generate_terminal_parser('"\\("'),
   '"\\)"': Parser.generate_terminal_parser('"\\)"'),
-  '"e"': Parser.generate_terminal_parser('"e"'),
   'escaped_string': Parser.generate_terminal_parser('escaped_string'),
   'identifier': Parser.generate_terminal_parser('identifier'),
   '"\\?"': Parser.generate_terminal_parser('"\\?"'),
@@ -375,7 +373,7 @@ class TokenDefNodeParserGenerator:
     
           # term: <terminal>
           case 1:
-            # term[0]: "e" | escaped_string | identifier
+            # term[0]: escaped_string | identifier
             terminal = term[0][0].lexeme
     
             self.add_terminal(terminal)

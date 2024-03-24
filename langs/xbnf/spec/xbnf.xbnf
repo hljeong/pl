@@ -12,6 +12,6 @@
 
 <term> ::= <nonterminal> | <terminal>;
 
-<terminal> ::= "e" | escaped_string | identifier;
+<terminal> ::= escaped_string | identifier;
 
 <multiplicity> ::= "\?" | "\*" | "\+" | decimal_integer;

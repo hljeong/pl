@@ -224,8 +224,23 @@ class TokenDefNodeParserGenerator:
     self._lhs_stack: list[str] = []
     self._idx_stack: list[int] = []
     self._token_defs: dict[str, TokenPatternDefinition] = {}
+    self._used_nonterminals: set[str] = set()
+    # entry nonterminal is used
+    self._used_nonterminals.add(f'<{ast[0][0][0][1].lexeme}>')
     self._node_parsers: dict[str, Callable[[Parser, Optional[bool]], Optional[ASTNode]]] = {}
     Visitor(ast, node_visitors)
+
+    for nonterminal in self._used_nonterminals:
+      if nonterminal not in self._node_parsers:
+        Log.e(f'no productions defined for {nonterminal}')
+        # todo: error type
+        raise ValueError(f'no productions defined for {nonterminal}')
+
+    # todo: analyze tree from entry nonterminal to determine disconnected components
+    # todo: currently this does not detect <x> ::= <y>; <y> ::= <x>;
+    for node_type in self._node_parsers:
+      if node_type not in self._token_defs and node_type not in self._used_nonterminals:
+        Log.w(f'productions are defined for {node_type} but not used')
 
   @property
   def token_defs(self) -> dict[str, TokenPatternDefinition]:
@@ -248,6 +263,8 @@ class TokenDefNodeParserGenerator:
   def add_nonterminal(self, nonterminal: str, body: list[list[ExpressionTerm]]) -> None:
     if nonterminal not in self._node_parsers:
       self._node_parsers[nonterminal] = Parser.generate_nonterminal_parser(nonterminal, body)
+    else:
+      Log.w(f'multiple production definitions for {nonterminal} are disregarded')
 
   def visit_xbnf(
     self,
@@ -258,11 +275,6 @@ class TokenDefNodeParserGenerator:
     # production: <production>
     for production in node[0]:
       visitor.visit(production)
-
-    # todo: check if all nonterminals have a parser
-    if False:
-      # todo: error type
-      raise ValueError(f'no productions defined for nonterminal {nonterminal}')
 
   def visit_production(
     self,
@@ -275,7 +287,6 @@ class TokenDefNodeParserGenerator:
     self._idx_stack.append(0)
 
     # not using extend => force 1 production definition for each nonterminal
-    # self._productions[nonterminal] = visitor.visit(node[2])
     self.add_nonterminal(nonterminal, visitor.visit(node[2]))
 
     self._idx_stack.pop()
@@ -367,8 +378,7 @@ class TokenDefNodeParserGenerator:
           # term: <nonterminal>
           case 0:
             nonterminal = f'<{term[0][1].lexeme}>'
-
-            # todo: keep track of nonterminals
+            self._used_nonterminals.add(nonterminal)
             return nonterminal
     
           # term: <terminal>
@@ -384,6 +394,7 @@ class TokenDefNodeParserGenerator:
         auxiliary_nonterminal = f'{self._lhs_stack[-1]}:{self._idx_stack[-1]}'
         self._lhs_stack.append(auxiliary_nonterminal)
         self._idx_stack.append(0)
+        self._used_nonterminals.add(auxiliary_nonterminal)
    
         # node[1]: <body>
         self.add_nonterminal(auxiliary_nonterminal, visitor.visit(node[1]))

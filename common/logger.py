@@ -9,8 +9,8 @@ from .lib import total_ordering_by
 class LogLevel(Enum):
   NONE = 0
   ERROR = 1
-  DEBUG = 2
-  WARN = 3
+  WARN = 2
+  DEBUG = 3
   TRACE = 4
 
 
@@ -69,11 +69,11 @@ class Log:
 Log.define('trace', LogLevel.TRACE)
 Log.define('t', LogLevel.TRACE)
 
-Log.define('warn', LogLevel.WARN)
-Log.define('w', LogLevel.WARN)
-
 Log.define('debug', LogLevel.DEBUG)
 Log.define('d', LogLevel.DEBUG)
+
+Log.define('warn', LogLevel.WARN)
+Log.define('w', LogLevel.WARN)
 
 Log.define('error', LogLevel.ERROR)
 Log.define('e', LogLevel.ERROR)

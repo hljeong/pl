@@ -48,6 +48,13 @@ class TokenMatcherDefinition:
       definition.generate_token,
     )
 
+# todo: finish this thought...
+@dataclass(eq=False, match_args=False)
+class TokenDefinition:
+  token_matcher: re.Pattern
+  literal_parser: Callable[[str], Any] = None
+  generate_token: bool = True
+
 builtin_tokens = {
   'identifier': TokenPatternDefinition(
     r'[A-Za-z_$][A-Za-z0-9_$]*',

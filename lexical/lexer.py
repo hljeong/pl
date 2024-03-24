@@ -112,6 +112,14 @@ class Lexer:
         self._current_cursor = Cursor(self._current_cursor.line + 1, 1)
 
       else:
+        # todo: do this more elegantly
+        Log.begin_e()
+        Log.e(f'invalid character \'{self.__peek()}\' encountered at {self._current_cursor.to_string()}:')
+        lines: list[str] = self._source.split('\n')
+        Log.e(f'  {lines[self._current_cursor.line - 1]}')
+        Log.e(f'  {" " * (self._current_cursor.column - 1)}^')
+        Log.end_e()
+
         raise ValueError(f'invalid character \'{self.__peek()}\' encountered at {self._current_cursor.to_string()}')
 
       token = None

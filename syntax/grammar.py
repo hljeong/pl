@@ -225,14 +225,9 @@ class TokenDefNodeParserGenerator:
     self._productions = defaultdict(list[ExpressionTerm])
     self._lhs_stack: list[str] = []
     self._idx_stack: list[int] = []
-    self._nonterminals = set()
-    self._terminals = set()
-    self._token_defs: dict[str, TokenPatternDefinition]
-    self._node_parsers: dict[str, Callable[[Parser, Optional[bool]], Optional[ASTNode]]]
-    self._token_defs, self._node_parsers = Visitor(
-      ast,
-      node_visitors,
-    ).ret
+    self._token_defs: dict[str, TokenPatternDefinition] = {}
+    self._node_parsers: dict[str, Callable[[Parser, Optional[bool]], Optional[ASTNode]]] = {}
+    Visitor(ast, node_visitors)
 
   @property
   def token_defs(self) -> dict[str, TokenPatternDefinition]:
@@ -241,6 +236,20 @@ class TokenDefNodeParserGenerator:
   @property
   def node_parsers(self) -> dict[str, Callable[[Parser, Optional[bool]], Optional[ASTNode]]]:
     return self._node_parsers
+
+  def add_terminal(self, terminal: str) -> None:
+    if terminal not in self._token_defs:
+      self._token_defs[terminal] = builtin_tokens.get(
+        terminal,
+        TokenPatternDefinition.make_temp(terminal),
+      )
+
+    if terminal not in self._node_parsers:
+      self._node_parsers[terminal] = Parser.generate_terminal_parser(terminal)
+
+  def add_nonterminal(self, nonterminal: str, body: list[list[ExpressionTerm]]) -> None:
+    if nonterminal not in self._node_parsers:
+      self._node_parsers[nonterminal] = Parser.generate_nonterminal_parser(nonterminal, body)
 
   def visit_xbnf(
     self,
@@ -252,35 +261,10 @@ class TokenDefNodeParserGenerator:
     for production in node[0]:
       visitor.visit(production)
 
-    token_defs = {}
-    node_parsers = {}
-
-    # generate token definitions and node parsers for terminals
-    for terminal in self._terminals:
-      token_defs[terminal] = builtin_tokens.get(
-        terminal,
-        # todo: temp fix (doesnt even work)
-        # TokenPatternDefinition.make_plain(terminal),
-        TokenPatternDefinition.make_temp(terminal),
-      )
-      node_parsers[terminal] = Parser.generate_terminal_parser(terminal)
-
-    # generate node parsers for nonterminals
-    Log.begin_d()
-    Log.d('generating nonterminal parsers:')
-    for nonterminal, body in self._productions.items():
-      node_parsers[nonterminal] = Parser.generate_nonterminal_parser(nonterminal, body)
-
-      Log.d(f'  {nonterminal} -> {body}')
-    Log.end_d()
-
-    # check if all nonterminals have a parser
-    for nonterminal in self._nonterminals:
-      if nonterminal not in node_parsers:
-        # todo: error type
-        raise ValueError(f'no productions defined for nonterminal {nonterminal}')
-
-    return (token_defs, node_parsers)
+    # todo: check if all nonterminals have a parser
+    if False:
+      # todo: error type
+      raise ValueError(f'no productions defined for nonterminal {nonterminal}')
 
   def visit_production(
     self,
@@ -293,7 +277,8 @@ class TokenDefNodeParserGenerator:
     self._idx_stack.append(0)
 
     # not using extend => force 1 production definition for each nonterminal
-    self._productions[nonterminal] = visitor.visit(node[2])
+    # self._productions[nonterminal] = visitor.visit(node[2])
+    self.add_nonterminal(nonterminal, visitor.visit(node[2]))
 
     self._idx_stack.pop()
     self._lhs_stack.pop()
@@ -312,17 +297,13 @@ class TokenDefNodeParserGenerator:
 
     # multiple productions
     else:
-      # self._nonterminals.add(self._lhs_stack[-1])
 
       auxiliary_nonterminal = f'{self._lhs_stack[-1]}~{self._idx_stack[-1]}'
-      # self._nonterminals.add(auxiliary_nonterminal)
-      # productions.append([ExpressionTerm(auxiliary_nonterminal)])
       self._lhs_stack.append(auxiliary_nonterminal)
       self._idx_stack.append(0)
 
       # node[0]: <expression>
       productions.append(visitor.visit(node[0]))
-      # self._productions[auxiliary_nonterminal] = [visitor.visit(node[0])]
 
       self._idx_stack.pop()
       self._lhs_stack.pop()
@@ -332,13 +313,10 @@ class TokenDefNodeParserGenerator:
     # or_production: "\|" <expression>
     for or_production in node[1]:
       auxiliary_nonterminal = f'{self._lhs_stack[-1]}~{self._idx_stack[-1]}'
-      # self._nonterminals.add(auxiliary_nonterminal)
-      # productions.append([ExpressionTerm(auxiliary_nonterminal)])
       self._lhs_stack.append(auxiliary_nonterminal)
       self._idx_stack.append(0)
 
       # or_production[1]: <expression>
-      # self._productions[auxiliary_nonterminal] = [visitor.visit(or_production[1])]
       productions.append(visitor.visit(or_production[1]))
 
       self._idx_stack.pop()
@@ -392,7 +370,7 @@ class TokenDefNodeParserGenerator:
           case 0:
             nonterminal = f'<{term[0][1].lexeme}>'
 
-            self._nonterminals.add(nonterminal)
+            # todo: keep track of nonterminals
             return nonterminal
     
           # term: <terminal>
@@ -400,7 +378,7 @@ class TokenDefNodeParserGenerator:
             # term[0]: "e" | escaped_string | identifier
             terminal = term[0][0].lexeme
     
-            self._terminals.add(terminal)
+            self.add_terminal(terminal)
             return terminal
     
       # node: "\(" <body> "\)"
@@ -408,10 +386,9 @@ class TokenDefNodeParserGenerator:
         auxiliary_nonterminal = f'{self._lhs_stack[-1]}:{self._idx_stack[-1]}'
         self._lhs_stack.append(auxiliary_nonterminal)
         self._idx_stack.append(0)
-        self._nonterminals.add(auxiliary_nonterminal)
    
         # node[1]: <body>
-        self._productions[auxiliary_nonterminal] = visitor.visit(node[1])
+        self.add_nonterminal(auxiliary_nonterminal, visitor.visit(node[1]))
     
         self._idx_stack.pop()
         self._lhs_stack.pop()

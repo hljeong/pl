@@ -8,9 +8,10 @@ from .lib import total_ordering_by
 @total_ordering_by(lambda level: level.value)
 class LogLevel(Enum):
   NONE = 0
-  DEBUG = 1
-  WARN = 2
-  TRACE = 3
+  ERROR = 1
+  DEBUG = 2
+  WARN = 3
+  TRACE = 4
 
 
 
@@ -73,6 +74,11 @@ Log.define('w', LogLevel.WARN)
 
 Log.define('debug', LogLevel.DEBUG)
 Log.define('d', LogLevel.DEBUG)
+
+Log.define('error', LogLevel.ERROR)
+Log.define('e', LogLevel.ERROR)
+
+
 
 def log_use(f: Callable[..., Any]) -> Callable[..., Any]:
 

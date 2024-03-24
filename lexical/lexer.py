@@ -2,7 +2,7 @@ from __future__ import annotations
 from copy import copy
 import re
 
-from common import Cursor, CursorRange
+from common import Cursor, CursorRange, Log
 
 from .token import Token, TokenPatternDefinition, TokenMatcherDefinition
 
@@ -32,6 +32,7 @@ class Lexer:
     self,
     grammar: Grammar,
   ):
+    Log.d(grammar.token_defs)
     self._token_defs: dict[str, TokenMatcherDefinition] = {
       token_type: TokenMatcherDefinition.from_token_pattern_definition(definition) \
         for token_type, definition in grammar.token_defs.items()
@@ -119,8 +120,8 @@ class Lexer:
       longest_match_token_type = max(token_matches, key=lambda token_type: len(token_matches[token_type]))
       self.__advance(len(token_matches[longest_match_token_type]))
       # todo: fix this hack
-      if self._source[self._start : self._current] in token_matches:
-        longest_match_token_type = self._source[self._start : self._current]
+      if f'"{self._source[self._start : self._current]}"' in token_matches:
+        longest_match_token_type = f'"{self._source[self._start : self._current]}"'
 
       token = self.__make_token(longest_match_token_type)
 

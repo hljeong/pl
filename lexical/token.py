@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from enum import Enum
 import re
 
+from common import log_use
+
 @dataclass(eq=False, match_args=False)
 class TokenPatternDefinition:
   token_pattern: str
@@ -15,6 +17,21 @@ class TokenPatternDefinition:
       None,
       True,
     )
+
+  # todo: temp fix
+  def make_temp(pattern: str) -> TokenPatternDefinition:
+    if pattern[0] == '"':
+      return TokenPatternDefinition(
+        pattern[1 : -1],
+        None,
+        True,
+      )
+    else:
+      return TokenPatternDefinition(
+        pattern,
+        None,
+        True,
+      )
 
 @dataclass(eq=False, match_args=False)
 class TokenMatcherDefinition:

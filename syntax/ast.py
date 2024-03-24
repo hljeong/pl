@@ -1,74 +1,88 @@
 from __future__ import annotations
+from abc import ABC, abstractmethod
+from typing import Iterator
 
+from common import log_use
 from lexical import Token
 
-class Node:
+class ASTNode(ABC):
   def __init__(
     self,
     node_type: str,
-    production: int,
   ):
     self._node_type: str = node_type
-    self._production: int = production
-    self._children: list[Union[Node, list[Node], Token]] = []
 
-  def add(self, child: Union[Node, Token]) -> None:
-    self._children.append(child)
+  def __repr__(self) -> str:
+    return f'{self.__class__.__name__}({str(self)})'
 
-  def get(self, idx: int) -> Union[Node, list[Node], Token]:
-    return self._children[idx]
+  @property
+  def node_type(self) -> str:
+    return self._node_type
+    
 
-  def __getitem__(self, key: int) -> Union[Node, list[Node], Token]:
+
+class NonterminalASTNode(ASTNode):
+  def __init__(
+    self,
+    node_type: str,
+  ):
+    super().__init__(node_type)
+    self._children: list[ASTNode] = []
+
+  def __getitem__(self, key: int) -> ASTNode:
     return self._children[key]
 
-  # todo: return type annotation
-  def __iter__(self) -> Any:
+  def __iter__(self) -> Iterator[ASTNode]:
     return iter(self.children)
 
   def __len__(self) -> int:
     return len(self.children)
 
-  @property
-  def node_type(self) -> str:
-    return self._node_type
-
-  @property
-  def production(self) -> int:
-    return self._production
-
-  @property
-  def children(self) -> tuple[Union[Node, list[Node], Token], ...]:
-    return tuple(self._children)
-
-  # todo: kinda bad hack for computing backtrack steps
-  @property
-  def tokens(self) -> tuple[Token, ...]:
-    token_list = []
-    for child in self._children:
-      if type(child) is list:
-        for child_node in child:
-          token_list.extend(child_node.tokens)
-
-      elif type(child) is Node:
-        token_list.extend(child.tokens)
-
-      elif type(child) is Token:
-        token_list.append(child)
-
-      else:
-        # todo: better error
-        raise ValueError('bad type')
-
-    return tuple(token_list)
+  def add(self, child: ASTNode) -> None:
+    self._children.append(child)
 
   def __str__(self) -> str:
-    def child_to_string(child: Union[Node, list[Node], Token]) -> str:
-      # todo: type annotation... list[Node] doesnt work
-      if type(child) is list:
-        return f'[{", ".join(map(str, child))}]'
-      else:
-        return str(child)
-    return f'{self._node_type}{{{", ".join(map(child_to_string, self._children))}}}'
+    return f'{self.node_type}{{{", ".join(map(str, self._children))}}}'
 
-  def __repr__(self) -> str:
-    return f'Node({self})'
+  @property
+  def children(self) -> tuple[ASTNode, ...]:
+    return tuple(self._children)
+
+
+
+class ChoiceNonterminalASTNode(NonterminalASTNode):
+  def __init__(
+    self,
+    node_type: str,
+    choice: int = 0,
+  ):
+    super().__init__(node_type)
+    self._choice = choice
+
+  @property
+  def choice(self) -> int:
+    return self._choice
+
+
+
+class TerminalASTNode(ASTNode):
+  def __init__(
+    self,
+    node_type: str,
+    token: Token,
+  ):
+    super().__init__(node_type)
+    self._token = token
+
+  def __str__(self) -> str:
+    return str(self._token)
+
+  # todo: how to decouple...
+  @property
+  def lexeme(self) -> str:
+    return self._token.lexeme
+
+  # todo: how to decouple...
+  @property
+  def literal(self) -> Union[str, int]:
+    return self._token.literal

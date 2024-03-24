@@ -12,12 +12,6 @@ class LogLevel(Enum):
   WARN = 2
   TRACE = 3
 
-  # def __eq__(self, other):
-  #   return isinstance(other, LogLevel) and self.value == other.value
-
-  # def __lt__(self, other):
-  #   return isinstance(other, LogLevel) and self.value < other.value
-
 
 
 class Log:
@@ -25,12 +19,18 @@ class Log:
   spaced = True
   _section = False
 
-  def begin_section() -> None:
+  def begin_section(level: LogLevel) -> None:
+    if Log.level < level:
+      return
+
     Log.w('already in section', Log._section)
 
     Log._section = True
 
-  def end_section() -> None:
+  def end_section(level: LogLevel) -> None:
+    if Log.level < level:
+      return
+
     Log.w('not in section', not Log._section)
 
     Log._section = False
@@ -38,23 +38,32 @@ class Log:
     if Log.spaced:
       print()
 
-  def log(level: LogLevel, msg: str) -> None:
-    if Log.level >= level:
+  def log(level: LogLevel, content: Any) -> None:
+    if Log.level < level:
+      return
 
-      for line in msg.split('\n'):
-        print(f'[{level.name}] {line}')
+    for line in str(content).split('\n'):
+      print(f'[{level.name}] {line}')
 
-      if Log.spaced and not Log._section:
-        print()
+    if Log.spaced and not Log._section:
+      print()
 
   # goofy reflection hack
   def define(name: str, level: LogLevel) -> None:
 
-    def logger(msg: str = '', condition: bool = True) -> None:
+    def logger(content: Any = '', condition: bool = True) -> None:
       if condition:
-        Log.log(level, msg)
+        Log.log(level, content)
+
+    def begin_section() -> None:
+      Log.begin_section(level)
+
+    def end_section() -> None:
+      Log.end_section(level)
 
     setattr(Log, name, staticmethod(logger))
+    setattr(Log, f'begin_{name}', staticmethod(begin_section))
+    setattr(Log, f'end_{name}', staticmethod(end_section))
 
 Log.define('trace', LogLevel.TRACE)
 Log.define('t', LogLevel.TRACE)
@@ -66,7 +75,7 @@ Log.define('debug', LogLevel.DEBUG)
 Log.define('d', LogLevel.DEBUG)
 
 def log_use(f: Callable[..., Any]) -> Callable[..., Any]:
-  
+
   def f_and_log_usage(*args: Any, **kwargs: Any) -> Any:
     args_str = ', '.join(map(repr, args))
     kwargs_str = ', '.join(map(lambda item: f'{item[0]}={repr(item[1])}', kwargs.items()))

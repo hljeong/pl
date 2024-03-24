@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from lexical import Lexer
-from syntax import Grammar, Parser, Visitor
+from syntax import XBNFGrammar, Parser, Visitor
 
 DEFAULT_MEM = 16 * 1024 * 1024
 

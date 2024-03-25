@@ -9,13 +9,11 @@ from common import log_use
 class TokenPatternDefinition:
   token_pattern: str
   literal_parser: Callable[[str], Any] = None
-  generate_token: bool = True
 
   def make_plain(plain_pattern: str) -> TokenPatternDefinition:
     return TokenPatternDefinition(
       plain_pattern,
       None,
-      True,
     )
 
   # todo: temp fix
@@ -24,13 +22,11 @@ class TokenPatternDefinition:
       return TokenPatternDefinition(
         pattern[1 : -1],
         None,
-        True,
       )
     else:
       return TokenPatternDefinition(
         pattern,
         None,
-        True,
       )
 
 @dataclass(eq=False, match_args=False)
@@ -45,7 +41,6 @@ class TokenMatcherDefinition:
     return TokenMatcherDefinition(
       re.compile(f'\\A{definition.token_pattern}'),
       definition.literal_parser,
-      definition.generate_token,
     )
 
 # todo: finish this thought...
@@ -59,17 +54,14 @@ builtin_tokens = {
   'identifier': TokenPatternDefinition(
     r'[A-Za-z_$][A-Za-z0-9_$]*',
     str,
-    True,
   ),
   'decimal_integer': TokenPatternDefinition(
     r'0|[1-9][0-9]*',
     int,
-    True,
   ),
   'escaped_string': TokenPatternDefinition(
     r'"(\.|[^\"])*"',
     lambda lexeme: lexeme[1 : -1],
-    True,
   ),
 }
 

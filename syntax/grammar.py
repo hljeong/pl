@@ -14,7 +14,8 @@ class Grammar:
     xbnf: Optional[str] = None,
     token_defs: Optional[dict[str, TokenPatternDefinition]] = None,
     node_parsers: Optional[dict[str, Callable[[Parser, Optional[bool]], Optional[ASTNode]]]] = None,
-    ignore: list[str] = [],
+    # todo: better way to encode regex vs exact match patterns
+    ignore: list[str] = ['[ \t]+'],
   ):
     if token_defs is None:
       if xbnf is None:
@@ -29,10 +30,11 @@ class Grammar:
 
       # parse grammar xbnf
       ast: Parser = Parser(xbnf_grammar, tokens).ast
-      Log.begin_d()
-      Log.d(f'ast for {name} grammar:')
-      Log.d(to_tree_string(ast))
-      Log.end_d()
+      # todo: delete
+      # Log.begin_d()
+      # Log.d(f'ast for {name} grammar:')
+      # Log.d(to_tree_string(ast))
+      # Log.end_d()
 
       # generate token definitions and node parsers
       token_defs: dict[str, TokenPatternDefinition]

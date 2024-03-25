@@ -22,7 +22,10 @@ class Grammar:
 
       ast: ASTNode = Monad(xbnf) \
         .then(Lexer(xbnf_grammar.vocabulary).lex) \
-        .then(Parser(xbnf_grammar).parse) \
+        .then(Parser(
+          xbnf_grammar.node_parsers,
+          xbnf_grammar.entry_point
+        ).parse) \
         .value
 
       # todo: delete
@@ -47,12 +50,13 @@ class Grammar:
   def vocabulary(self) -> Vocabulary:
     return self._vocabulary
 
-  def get_parser(self, node_type: str) -> Callable[[Parser, Optional[bool]], Optional[ASTNode]]:
-    return self._node_parsers[node_type]
+  @property
+  def node_parsers(self) -> dict[str: Callable[[Parser], Optional[ASTNode]]]:
+    return self._node_parsers
 
   @property
-  def entry_point_parser(self) -> Callable[[Parser, Optional[bool]], Optional[ASTNode]]:
-    return self._node_parsers[f'<{self._name}>']
+  def entry_point(self) -> str:
+    return f'<{self._name}>'
 
 xbnf_vocabulary = Vocabulary({
   '"<"': Vocabulary.Definition.make('<'),
@@ -200,7 +204,7 @@ xbnf_grammar: Grammar = Grammar(
 
 
 
-# todo
+# todo: add ignore patterns
 class VocabularyGenerator(Visitor):
   def __init__(self):
     super().__init__(

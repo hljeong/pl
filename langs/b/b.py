@@ -13,7 +13,10 @@ class BParser:
   def parse(self, prog: str):
     return Monad(prog) \
       .then(Lexer(b_grammar.vocabulary).lex) \
-      .then(Parser(b_grammar).parse) \
+      .then(Parser(
+        b_grammar.node_parsers,
+        b_grammar.entry_point,
+      ).parse) \
       .value
 
 

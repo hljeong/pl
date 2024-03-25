@@ -44,12 +44,14 @@ class Parser:
 
   def __init__(
     self,
-    grammar: Grammar,
+    node_parsers: dict[str, Callable[[Parser], Optional[ASTNode]]],
+    entry_point: str,
   ):
-    self._grammar: Grammar = grammar
+    self._node_parsers: dict[str, Callable[[Parser], Optional[ASTNode]]] = node_parsers
+    self._entry_point: str = entry_point
 
   def __parse(self) -> ASTNode:
-    parse_result: Parser.Result = self._grammar.entry_point_parser(self)
+    parse_result: Parser.Result = self._node_parsers[self._entry_point](self)
 
     # todo: ParseError
     if parse_result is None:
@@ -64,7 +66,7 @@ class Parser:
     Log.t(f'parsing {node_type}, next token (index {self._current}) is {self.__safe_peek()}')
 
     # todo: type annotation
-    parser: Any = self._grammar.get_parser(node_type)
+    parser: Any = self._node_parsers[node_type]
     parse_result: Optional[Parser.Result] = parser(self, False)
 
     Log.begin_t()

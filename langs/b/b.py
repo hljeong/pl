@@ -11,8 +11,8 @@ b_grammar = Grammar('b', b_xbnf)
 class BParser:
   @log_time
   def __init__(self, prog: str):
-    lexer = Lexer(b_grammar, prog)
-    parser = Parser(b_grammar, lexer.tokens)
+    tokens = Lexer(b_grammar).lex(prog)
+    parser = Parser(b_grammar, tokens)
     self._ast: Node = parser.ast
 
   @property

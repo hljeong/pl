@@ -4,8 +4,8 @@ from copy import copy
 class Cursor:
   def __init__(
     self,
-    line: int,
-    column: int,
+    line: int = 1,
+    column: int = 1,
   ):
     if line <= 0:
       raise ValueError(f'line number ({line}) has to be at least 1')
@@ -15,12 +15,20 @@ class Cursor:
     self._column = column
 
   @property
-  def line(self):
+  def line(self) -> int:
     return self._line
 
   @property
-  def column(self):
+  def column(self) -> int:
     return self._column
+
+  @property
+  def right(self) -> Cursor:
+    return Cursor(self._line, self._column + 1)
+
+  @property
+  def next_line(self) -> Cursor:
+    return Cursor(self._line + 1, 1)
 
   def to_string(self) -> str:
     return f'line {self._line} column {self._column}'
@@ -68,11 +76,11 @@ class CursorRange:
     return not self == other
 
   @property
-  def start(self):
+  def start(self) -> Cursor:
     return self._start
 
   @property
-  def end(self):
+  def end(self) -> Cursor:
     return self._end
 
   def to_string(self) -> str:

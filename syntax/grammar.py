@@ -15,7 +15,7 @@ class Grammar:
     token_defs: Optional[dict[str, TokenPatternDefinition]] = None,
     node_parsers: Optional[dict[str, Callable[[Parser, Optional[bool]], Optional[ASTNode]]]] = None,
     # todo: better way to encode regex vs exact match patterns
-    ignore: list[str] = ['[ \t]+'],
+    ignore: list[str] = ['[ \t\n]+'],
   ):
     if token_defs is None:
       if xbnf is None:
@@ -23,10 +23,7 @@ class Grammar:
         raise ValueError('provide either xbnf or both token_defs and node_parsers to generate a grammar')
 
       # lex grammar xbnf
-      tokens: list[Token] = Lexer(
-        xbnf_grammar,
-        xbnf,
-      ).tokens
+      tokens: list[Token] = Lexer(xbnf_grammar).lex(xbnf)
 
       # parse grammar xbnf
       ast: Parser = Parser(xbnf_grammar, tokens).ast

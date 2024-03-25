@@ -6,78 +6,80 @@ from common import Cursor, CursorRange, Log
 
 from .token import Token, TokenPatternDefinition, TokenMatcherDefinition
 
-matchers = {
-  '\n': re.compile('\\A\n'),
-}
-
 class Lexer:
+  class Position:
+    def __init__(self):
+      self._start: int = 0
+      self._start_cursor: Cursor = Cursor()
+      self._current: int = 0
+      self._current_cursor: Cursor = Cursor()
+
+    def advance(self, scanned: str) -> None:
+      for ch in scanned:
+        self._current += 1
+        self._lag_cursor = copy(self._current_cursor)
+        if ch == '\n':
+          self._current_cursor = self._current_cursor.next_line
+        else:
+          self._current_cursor = self._current_cursor.right
+
+    def advance_start(self) -> None:
+      self._start = self._current
+      self._start_cursor = copy(self._current_cursor)
+
+    @property
+    def start(self) -> int:
+      return self._start
+
+    @property
+    def current(self) -> int:
+      return self._current
+
+    @property
+    def cursor(self) -> int:
+      return self._current_cursor
+
+    @property
+    def range(self) -> CursorRange:
+      return CursorRange(self._start_cursor, self._lag_cursor)
+
   def __init__(
     self,
     grammar: Grammar,
-    source: str,
   ):
     self._ignore: list[re.Pattern] = []
-    self.__load_token_defs(grammar)
-    self._source: str = source
-    self._start: int = 0
-    self._start_cursor: Cursor = Cursor(1, 1)
-    self._current: int = 0
-    self._current_cursor: Cursor = Cursor(1, 1)
-    self._lag_cursor: Cursor = None
-    self._tokens: list[Token] = []
-
-    self.__lex()
-
-  def __load_token_defs(
-    self,
-    grammar: Grammar,
-  ):
     self._token_defs: dict[str, TokenMatcherDefinition] = {
       token_type: TokenMatcherDefinition.from_token_pattern_definition(definition) \
         for token_type, definition in grammar.token_defs.items()
     }
 
-    # todo: delete
     for pattern in grammar.ignore:
-      if False:
-        self._token_defs[pattern] = TokenMatcherDefinition(
-          re.compile(f'\\A{pattern}'),
-          None,
-          False,
-        )
-
       self._ignore.append(re.compile(f'\\A{pattern}'))
 
   def __at_end(self):
-    return self._current >= len(self._source)
+    return self._position.current >= len(self._source)
 
   def __peek(self) -> str:
     if self.__at_end():
-      return '\0'
+      self._peek = '\0'
     else:
-      return self._source[self._current]
+      self._peek = self._source[self._position.current]
 
-  def __advance(self, steps: int) -> None:
-    for _ in range(steps):
-      if not self.__at_end():
-        self._current += 1
-        self._lag_cursor = copy(self._current_cursor)
-        self._current_cursor = Cursor(self._current_cursor.line, self._current_cursor.column + 1)
-      else:
-        break
+  def __advance(self, scanned: str) -> None:
+    self._position.advance(scanned)
+    self.__peek()
 
   def __advance_start(self) -> None:
-    self._start = self._current
-    self._start_cursor = copy(self._current_cursor)
+    self._position.advance_start()
 
   # todo: efficiency
   def __match(self, matcher: re.Pattern) -> re.Match:
-    return matcher.match(self._source[self._current:])
+    return matcher.match(self._source[self._position.current:])
 
   def __consume_match(self, matcher_name: str) -> bool:
     match = self.__match(matchers[matcher_name])
     if match:
-      self.__advance(len(match.group()))
+      self.__advance(match.group())
       return True
     return False
 
@@ -88,40 +90,32 @@ class Lexer:
     if not self._token_defs[token_type].generate_token:
       return None
 
-    lexeme = self._source[self._start : self._current]
+    lexeme: str = self._source[self._position.start : self._position.current]
 
     literal_parser = self._token_defs[token_type].literal_parser
     literal = None
     if literal_parser:
       literal = literal_parser(lexeme)
-    
-    position = CursorRange(self._start_cursor, self._lag_cursor)
 
     return Token(
       token_type,
       lexeme,
       literal,
-      { 'position': position },
+      { 'range': self._position.range },
     )
 
-  # todo: move line counting logic to __advance? to account for newlines in lexemes and ignored patterns such as multiline comments; also eliminate global variable matchers
   def __consume_ignored(self) -> None:
     while not self.__at_end():
-      if self.__consume_match('\n'):
-        self._current_cursor = Cursor(self._current_cursor.line + 1, 1)
+      for matcher in self._ignore:
+        match = self.__match(matcher)
+        if match:
+          self.__advance(match.group())
+          break
 
       else:
-        for matcher in self._ignore:
-          match = self.__match(matcher)
-          if match:
-            # todo: this feels ugly
-            self.__advance(len(match.group()))
-            break
-
-        else:
-          # no ignored matches found
-          self.__advance_start()
-          return
+        # no ignored matches found
+        self.__advance_start()
+        return
 
   def __scan_token(self) -> Token:
     token_matches = {}
@@ -133,32 +127,38 @@ class Lexer:
     if len(token_matches) == 0:
       # todo: do this more elegantly
       Log.begin_e()
-      Log.e(f'invalid character \'{self.__peek()}\' encountered at {self._current_cursor.to_string()}:')
+      Log.e(f'invalid character \'{self._peek}\' encountered at {self._position.cursor.to_string()}:')
       lines: list[str] = self._source.split('\n')
-      Log.e(f'  {lines[self._current_cursor.line - 1]}')
-      Log.e(f'  {" " * (self._current_cursor.column - 1)}^')
+      Log.e(f'  {lines[self._position.cursor.line - 1]}')
+      Log.e(f'  {" " * (self._position.cursor.column - 1)}^')
       Log.end_e()
 
-      raise ValueError(f'invalid character \'{self.__peek()}\' encountered at {self._current_cursor.to_string()}')
+      raise ValueError(f'invalid character \'{self._peek}\' encountered at {self._position.cursor.to_string()}')
 
     else:
       longest_match_token_type = max(token_matches, key=lambda token_type: len(token_matches[token_type]))
-      # todo: this feels ugly
-      self.__advance(len(token_matches[longest_match_token_type]))
+      # todo: hopefully make this more elegant when no longer lexing with library regex engine
+      self.__advance(token_matches[longest_match_token_type])
       # todo: fix this hack
-      if f'"{self._source[self._start : self._current]}"' in token_matches:
-        longest_match_token_type = f'"{self._source[self._start : self._current]}"'
+      if f'"{self._source[self._position.start : self._position.current]}"' in token_matches:
+        longest_match_token_type = f'"{self._source[self._position.start : self._position.current]}"'
 
       token = self.__make_token(longest_match_token_type)
       self.__advance_start()
       return token
 
   def __lex(self):
+    self.__peek()
     self.__consume_ignored()
     while not self.__at_end():
       self._tokens.append(self.__scan_token() )
       self.__consume_ignored()
 
-  @property
-  def tokens(self) -> list[Token]:
+  def lex(self, source: str) -> list[Token]:
+    self._source: str = source
+    self._position = self.Position()
+    self._tokens: list[Token] = []
+
+    self.__lex()
+
     return self._tokens

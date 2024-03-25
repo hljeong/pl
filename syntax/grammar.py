@@ -2,28 +2,26 @@ from __future__ import annotations
 from collections import defaultdict
 
 from common import Monad, Log, to_tree_string
-from lexical import Token, TokenPatternDefinition, builtin_tokens, Lexer
+from lexical import Token, Vocabulary, Lexer
 
 from .parser import ExpressionTerm, Parser
-from .visitor import visit_it, Visitor
+from .visitor import Visitor
 
 class Grammar:
   def __init__(
     self,
     name: str,
     xbnf: Optional[str] = None,
-    token_defs: Optional[dict[str, TokenPatternDefinition]] = None,
+    vocabulary: Optional[Vocabulary] = None,
     node_parsers: Optional[dict[str, Callable[[Parser, Optional[bool]], Optional[ASTNode]]]] = None,
-    # todo: better way to encode regex vs exact match patterns
-    ignore: list[str] = ['[ \t\n]+'],
   ):
-    if token_defs is None:
+    if vocabulary is None:
       if xbnf is None:
         # error type
-        raise ValueError('provide either xbnf or both token_defs and node_parsers to generate a grammar')
+        raise ValueError('provide either xbnf or both vocabulary and node_parsers to generate a grammar')
 
       ast: ASTNode = Monad(xbnf) \
-        .then(Lexer(xbnf_grammar).lex) \
+        .then(Lexer(xbnf_grammar.vocabulary).lex) \
         .then(Parser(xbnf_grammar).parse) \
         .value
 
@@ -33,29 +31,21 @@ class Grammar:
       # Log.d(to_tree_string(ast))
       # Log.end_d()
 
-      # generate token definitions and node parsers
-      token_defs: dict[str, TokenPatternDefinition]
-      node_parsers: dict[str, Callable[[Parser, Optional[bool]], Optional[ASTNode]]]
-      token_def_node_parser_generator = TokenDefNodeParserGenerator(ast)
-      token_defs = token_def_node_parser_generator.token_defs
-      node_parsers = token_def_node_parser_generator.node_parsers
+      vocabulary = VocabularyGenerator().generate(ast)
+      # todo: implement this
+      node_parsers = NodeParsersGenerator().generate(ast)
 
     elif node_parsers is None:
-      raise ValueError('provide either xbnf or both token_defs and node_parsers to generate a grammar')
+      raise ValueError('provide either xbnf or both vocabulary and node_parsers to generate a grammar')
 
-    # validate input
+    # todo: validate input grammar
     self._name: str = name
-    self._token_defs: dict[str, TokenPatternDefinition] = token_defs
+    self._vocabulary: Vocabulary = vocabulary
     self._node_parsers: dict[str, Callable[[Parser, Optional[bool]], Optional[ASTNode]]] = node_parsers
-    self._ignore = ignore
 
   @property
-  def ignore(self) -> list[str]:
-    return self._ignore
-
-  @property
-  def token_defs(self) -> dict[str, TokenPatternDefinition]:
-    return self._token_defs
+  def vocabulary(self) -> Vocabulary:
+    return self._vocabulary
 
   def get_parser(self, node_type: str) -> Callable[[Parser, Optional[bool]], Optional[ASTNode]]:
     return self._node_parsers[node_type]
@@ -64,21 +54,20 @@ class Grammar:
   def entry_point_parser(self) -> Callable[[Parser, Optional[bool]], Optional[ASTNode]]:
     return self._node_parsers[f'<{self._name}>']
 
-# todo: temp solution
-xbnf_token_defs = {
-  '"<"': TokenPatternDefinition.make_temp('"<"'),
-  'identifier': builtin_tokens['identifier'],
-  '">"': TokenPatternDefinition.make_temp('">"'),
-  '"::="': TokenPatternDefinition.make_temp('"::="'),
-  '"\\+"': TokenPatternDefinition.make_temp('"\\+"'),
-  '";"': TokenPatternDefinition.make_temp('";"'),
-  'escaped_string': builtin_tokens['escaped_string'],
-  '"\\("': TokenPatternDefinition.make_temp('"\\("'),
-  '"\\?"': TokenPatternDefinition.make_temp('"\\?"'),
-  '"\\)"': TokenPatternDefinition.make_temp('"\\)"'),
-  '"\\*"': TokenPatternDefinition.make_temp('"\\*"'),
-  '"\\|"': TokenPatternDefinition.make_temp('"\\|"'),
-}
+xbnf_vocabulary = Vocabulary({
+  '"<"': Vocabulary.Definition.make('<'),
+  'identifier': Vocabulary.Definition.builtin['identifier'],
+  '">"': Vocabulary.Definition.make('>'),
+  '"::="': Vocabulary.Definition.make('::='),
+  '"\\+"': Vocabulary.Definition.make('\\+'),
+  '";"': Vocabulary.Definition.make(';'),
+  'escaped_string': Vocabulary.Definition.builtin['escaped_string'],
+  '"\\("': Vocabulary.Definition.make('\\('),
+  '"\\?"': Vocabulary.Definition.make('\\?'),
+  '"\\)"': Vocabulary.Definition.make('\\)'),
+  '"\\*"': Vocabulary.Definition.make('\\*'),
+  '"\\|"': Vocabulary.Definition.make('\\|'),
+})
 
 xbnf_node_parsers = {
   '<xbnf>': Parser.generate_nonterminal_parser(
@@ -205,67 +194,85 @@ xbnf_node_parsers = {
     
 xbnf_grammar: Grammar = Grammar(
   'xbnf',
-  token_defs=xbnf_token_defs,
+  vocabulary=xbnf_vocabulary,
   node_parsers=xbnf_node_parsers,
 )
 
-class TokenDefNodeParserGenerator:
-  def __init__(self, ast: ASTNode):
-    node_visitors: dict[str, Callable[[ASTNode, Visitor], Any]] = {
-      '<xbnf>': self.visit_xbnf,
-      '<production>': self.visit_production,
-      '<body>': self.visit_body,
-      '<expression>': self.visit_expression,
-      '<group>': self.visit_group,
-      '<multiplicity>': self.visit_multiplicity,
-    }
+
+
+# todo
+class VocabularyGenerator(Visitor):
+  def __init__(self):
+    super().__init__(
+      { 'escaped_string': self._visit_escaped_string },
+      Visitor.visit_all,
+    )
+
+  def generate(self, ast: ASTNode) -> Vocabulary:
+    self._dictionary: dict[str, Vocabulary.Definition] = {}
+    self.visit(ast)
+    return Vocabulary(self._dictionary)
+
+  def _visit_escaped_string(
+    self,
+    node: ASTNode,
+    visitor: Visitor,
+  ) -> None:
+      self._dictionary[node.lexeme] = Vocabulary.Definition.make(node.literal)
+
+
+
+class NodeParsersGenerator(Visitor):
+  def __init__(self):
+    super().__init__({
+      '<xbnf>': self._visit_xbnf,
+      '<production>': self._visit_production,
+      '<body>': self._visit_body,
+      '<expression>': self._visit_expression,
+      '<group>': self._visit_group,
+      '<multiplicity>': self._visit_multiplicity,
+    })
+
+  def generate(self, ast: ASTNode) -> dict[str, Callable[[Parser], Optional[ASTNode]]]:
     self._productions = defaultdict(list[ExpressionTerm])
+    # todo: this is ugly, move to call stack
     self._lhs_stack: list[str] = []
     self._idx_stack: list[int] = []
-    self._token_defs: dict[str, TokenPatternDefinition] = {}
-    self._used_nonterminals: set[str] = set()
-    # entry nonterminal is used
-    self._used_nonterminals.add(f'<{ast[0][0][0][1].lexeme}>')
+    self._used: set[str] = set()
+    # entry point is used
+    self._used.add(f'<{ast[0][0][0][1].lexeme}>')
     self._node_parsers: dict[str, Callable[[Parser, Optional[bool]], Optional[ASTNode]]] = {}
-    Visitor(node_visitors).visit(ast)
+    self.visit(ast)
 
-    for nonterminal in self._used_nonterminals:
-      if nonterminal not in self._node_parsers:
-        Log.e(f'no productions defined for {nonterminal}')
+    for node_type in self._used:
+      if node_type not in self._node_parsers:
+        # todo: assert node_type is a nontemrinal
+        Log.e(f'no productions defined for {node_type}')
         # todo: error type
-        raise ValueError(f'no productions defined for {nonterminal}')
+        raise ValueError(f'no productions defined for {node_type}')
 
     # todo: analyze tree from entry nonterminal to determine disconnected components
     # todo: currently this does not detect <x> ::= <y>; <y> ::= <x>;
     for node_type in self._node_parsers:
-      if node_type not in self._token_defs and node_type not in self._used_nonterminals:
-        Log.w(f'productions are defined for {node_type} but not used')
-
-  @property
-  def token_defs(self) -> dict[str, TokenPatternDefinition]:
-    return self._token_defs
-
-  @property
-  def node_parsers(self) -> dict[str, Callable[[Parser, Optional[bool]], Optional[ASTNode]]]:
-    return self._node_parsers
-
-  def add_terminal(self, terminal: str) -> None:
-    if terminal not in self._token_defs:
-      self._token_defs[terminal] = builtin_tokens.get(
-        terminal,
-        TokenPatternDefinition.make_temp(terminal),
+      Log.w(
+        f'parsers are generated for {node_type} but not used',
+        node_type not in self._used
       )
 
+    return self._node_parsers
+
+  def _add_terminal(self, terminal: str) -> None:
     if terminal not in self._node_parsers:
+      self._used.add(terminal)
       self._node_parsers[terminal] = Parser.generate_terminal_parser(terminal)
 
-  def add_nonterminal(self, nonterminal: str, body: list[list[ExpressionTerm]]) -> None:
+  def _add_nonterminal(self, nonterminal: str, body: list[list[ExpressionTerm]]) -> None:
     if nonterminal not in self._node_parsers:
       self._node_parsers[nonterminal] = Parser.generate_nonterminal_parser(nonterminal, body)
     else:
       Log.w(f'multiple production definitions for {nonterminal} are disregarded')
 
-  def visit_xbnf(
+  def _visit_xbnf(
     self,
     node: ASTNode,
     visitor: Visitor,
@@ -275,7 +282,7 @@ class TokenDefNodeParserGenerator:
     for production in node[0]:
       visitor.visit(production)
 
-  def visit_production(
+  def _visit_production(
     self,
     node: ASTNode,
     visitor: Visitor,
@@ -286,12 +293,12 @@ class TokenDefNodeParserGenerator:
     self._idx_stack.append(0)
 
     # not using extend => force 1 production definition for each nonterminal
-    self.add_nonterminal(nonterminal, visitor.visit(node[2]))
+    self._add_nonterminal(nonterminal, visitor.visit(node[2]))
 
     self._idx_stack.pop()
     self._lhs_stack.pop()
 
-  def visit_body(
+  def _visit_body(
     self,
     node: ASTNode,
     visitor: Visitor,
@@ -333,7 +340,7 @@ class TokenDefNodeParserGenerator:
 
     return productions
 
-  def visit_expression(
+  def _visit_expression(
     self,
     node: ASTNode,
     visitor: Visitor,
@@ -360,7 +367,7 @@ class TokenDefNodeParserGenerator:
 
     return ret
 
-  def visit_group(
+  def _visit_group(
     self,
     node: ASTNode,
     visitor: Visitor,
@@ -377,7 +384,7 @@ class TokenDefNodeParserGenerator:
           # term: <nonterminal>
           case 0:
             nonterminal = f'<{term[0][1].lexeme}>'
-            self._used_nonterminals.add(nonterminal)
+            self._used.add(nonterminal)
             return nonterminal
     
           # term: <terminal>
@@ -385,7 +392,7 @@ class TokenDefNodeParserGenerator:
             # term[0]: escaped_string | identifier
             terminal = term[0][0].lexeme
     
-            self.add_terminal(terminal)
+            self._add_terminal(terminal)
             return terminal
     
       # node: "\(" <body> "\)"
@@ -393,10 +400,10 @@ class TokenDefNodeParserGenerator:
         auxiliary_nonterminal = f'{self._lhs_stack[-1]}:{self._idx_stack[-1]}'
         self._lhs_stack.append(auxiliary_nonterminal)
         self._idx_stack.append(0)
-        self._used_nonterminals.add(auxiliary_nonterminal)
+        self._used.add(auxiliary_nonterminal)
    
         # node[1]: <body>
-        self.add_nonterminal(auxiliary_nonterminal, visitor.visit(node[1]))
+        self._add_nonterminal(auxiliary_nonterminal, visitor.visit(node[1]))
     
         self._idx_stack.pop()
         self._lhs_stack.pop()
@@ -404,7 +411,7 @@ class TokenDefNodeParserGenerator:
     
         return auxiliary_nonterminal
 
-  def visit_multiplicity(
+  def _visit_multiplicity(
     self,
     node: ASTNode,
     visitor: Visitor,
@@ -416,4 +423,4 @@ class TokenDefNodeParserGenerator:
     
       # node: decimal_integer
       case 1:
-        return node[0].xliteral
+        return node[0].literal

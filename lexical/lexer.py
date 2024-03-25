@@ -45,16 +45,9 @@ class Lexer:
 
   def __init__(
     self,
-    grammar: Grammar,
+    vocabulary: Vocabulary,
   ):
-    self._ignore: list[re.Pattern] = []
-    self._token_defs: dict[str, TokenMatcherDefinition] = {
-      token_type: TokenMatcherDefinition.from_token_pattern_definition(definition) \
-        for token_type, definition in grammar.token_defs.items()
-    }
-
-    for pattern in grammar.ignore:
-      self._ignore.append(re.compile(f'\\A{pattern}'))
+    self._vocabulary = vocabulary
 
   def __at_end(self):
     return self._position.current >= len(self._source)
@@ -87,15 +80,9 @@ class Lexer:
     self,
     token_type: str,
   ) -> Token:
-    if not self._token_defs[token_type].generate_token:
-      return None
-
     lexeme: str = self._source[self._position.start : self._position.current]
 
-    literal_parser = self._token_defs[token_type].literal_parser
-    literal = None
-    if literal_parser:
-      literal = literal_parser(lexeme)
+    literal: Any = self._vocabulary[token_type].literal_generator(lexeme)
 
     return Token(
       token_type,
@@ -106,7 +93,7 @@ class Lexer:
 
   def __consume_ignored(self) -> None:
     while not self.__at_end():
-      for matcher in self._ignore:
+      for matcher in self._vocabulary.ignore:
         match = self.__match(matcher)
         if match:
           self.__advance(match.group())
@@ -119,8 +106,8 @@ class Lexer:
 
   def __scan_token(self) -> Token:
     token_matches = {}
-    for token_type in self._token_defs:
-      token_match = self.__match(self._token_defs[token_type].token_matcher)
+    for token_type in self._vocabulary:
+      token_match = self.__match(self._vocabulary[token_type].matcher)
       if token_match:
         token_matches[token_type] = token_match.group()
 

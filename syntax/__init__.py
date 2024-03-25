@@ -1,4 +1,4 @@
 from .ast import ASTNode
 from .grammar import Grammar
 from .parser import ExpressionTerm, Parser
-from .visitor import Visitor, visit_it, telescope
+from .visitor import Visitor

@@ -1,9 +1,9 @@
 from enum import Enum
 from functools import total_ordering
-from typing import Type, Callable, Any, Optional, TypeVar
+from typing import Type, Callable, Any, Optional
 from time import time
 
-from .lib import total_ordering_by
+from .lib import R, total_ordering_by
 
 @total_ordering_by(lambda level: level.value)
 class LogLevel(Enum):
@@ -80,24 +80,29 @@ Log.define('e', LogLevel.ERROR)
 
 
 
+def arglist_str(args: tuple[...], kwargs: dict[str, Any]) -> str:
+  args_str = ', '.join(map(repr, args))
+  kwargs_str = ', '.join(map(lambda item: f'{item[0]}={repr(item[1])}', kwargs.items()))
+
+  if len(args_str) == 0:
+    return kwargs_str
+
+  elif len(kwargs_str) == 0:
+    return args_str
+
+  else:
+    return f'{args_str}, {kwargs_str}'
+
 def log_use(f: Callable[..., Any]) -> Callable[..., Any]:
 
   def f_and_log_usage(*args: Any, **kwargs: Any) -> Any:
-    args_str = ', '.join(map(repr, args))
-    kwargs_str = ', '.join(map(lambda item: f'{item[0]}={repr(item[1])}', kwargs.items()))
+    global arglist_str
 
-    if len(args_str) == 0:
-      arglist_str = kwargs_str
-    elif len(kwargs_str) == 0:
-      arglist_str = args_str
-    else:
-      arglist_str = f'{args_str}, {kwargs_str}'
-
-    Log.d(f'calling {f.__qualname__}({arglist_str})')
+    Log.d(f'calling {f.__qualname__}({arglist_str(args, kwargs)})')
 
     ret = f(*args, **kwargs)
 
-    Log.d(f'{f.__qualname__}({arglist_str}) returned {repr(ret)}')
+    Log.d(f'{f.__qualname__}({arglist_str(args, kwargs)}) returned {repr(ret)}')
 
     return ret
 
@@ -106,56 +111,41 @@ def log_use(f: Callable[..., Any]) -> Callable[..., Any]:
 
 
 # todo: type annotation
-def log_time(f: Callable[..., Any]) -> Callable[..., Any]:
-
-  def f_and_log_time(*args: Any, **kwargs: Any) -> Any: 
-    args_str = ', '.join(map(repr, args))
-    kwargs_str = ', '.join(map(lambda item: f'{item[0]}={repr(item[1])}', kwargs.items()))
-
-    if len(args_str) == 0:
-      arglist_str = kwargs_str
-    elif len(kwargs_str) == 0:
-      arglist_str = args_str
-    else:
-      arglist_str = f'{args_str}, {kwargs_str}'
-
-    start_time = round(time() * 1000)
-
-    ret = f(*args, **kwargs)
-
-    end_time = round(time() * 1000)
-    delta_time = end_time - start_time
-
-    Log.d(f'{f.__qualname__}({arglist_str}) took {delta_time} ms')
-
-    return ret
-
-  return f_and_log_time
-
-R = TypeVar('R')
-
-def log_timed(
-  f: Callable[[], R],
+def log_time(
   description: Optional[str] = None,
   n: int = 1,
-) -> R:
-  start_time = round(time() * 1000)
+) -> Callable[[Callable[..., R]], Callable[..., R]]:
 
-  for _ in range(n):
-    ret = f()
+  def decorator(f: Callable[..., R]) -> Callable[..., R]:
 
-  end_time = round(time() * 1000)
-  delta_time = end_time - start_time
-  average_time = round(delta_time // n)
-  
-  msg = f'took {average_time} ms'
+    def f_and_log_time(*args: Any, **kwargs: Any) -> R: 
+      global arglist_str
 
-  if description is not None:
-    msg = f'{description} {msg}'
+      start_time = time() * 1000
 
-  if n > 1:
-    msg = f'{msg} on average over {n} runs'
 
-  Log.d(msg)
+      for _ in range(n):
+        ret = f(*args, **kwargs)
 
-  return ret
+      end_time = time() * 1000
+      delta_time = end_time - start_time
+      average_time = delta_time / n
+
+      msg = f'took {average_time:.2f} ms'
+
+      if description:
+        msg = f'{description} {msg}'
+
+      else:
+        msg = f'{f.__qualname__}({arglist_str(args, kwargs)}) {msg}'
+
+      if n > 1:
+        msg = f'{msg} on average over {n} runs'
+
+      Log.d(msg)
+
+      return ret
+
+    return f_and_log_time
+
+  return decorator

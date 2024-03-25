@@ -1,7 +1,22 @@
-from typing import Protocol, TypeVar, Type, Callable, Any
+from __future__ import annotations
+from typing import Protocol, TypeVar, Type, Callable, Any, Generic
 from functools import total_ordering
 
 T = TypeVar('T')
+R = TypeVar('R')
+
+class Monad(Generic[T]):
+  def __init__(self, value: T):
+    self._value: T = value
+
+  def then(self, f: Callable[[T], R]) -> Monad[R]:
+    return Monad(f(self._value))
+
+  @property
+  def value(self) -> T:
+    return self._value
+
+
 
 def Comparable(Protocol):
   def __eq__(self, other: 'Comparable') -> bool:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Generic, TypeVar
 
-from common import Log, log_time
+from common import Monad, Log, log_time
 from lexical import Lexer
 from syntax import Grammar, Parser, Visitor, visit_it, telescope
 
@@ -9,67 +9,46 @@ with open('langs/b/spec/b.xbnf') as b_xbnf_f:
   b_xbnf = ''.join(b_xbnf_f.readlines())
 b_grammar = Grammar('b', b_xbnf)
 
-# todo: temporary, move this elsewhere if sticking with using this
-T = TypeVar('T')
-R = TypeVar('R')
-class Monad(Generic[T]):
-  def __init__(self, value: T):
-    self._value: T = value
-
-  def then(self, f: Callable[[T], R]) -> Monad[R]:
-    return Monad(f(self._value))
-
 class BParser:
-  @log_time
-  def __init__(self, prog: str):
-    tokens = Lexer(b_grammar).lex(prog)
-    self._ast: ASTNode = Parser(b_grammar).parse(tokens)
-
-  @property
-  def ast(self) -> Node:
-    return self._ast
-
-  def parse(prog: str):
+  def parse(self, prog: str):
     return Monad(prog) \
       .then(Lexer(b_grammar).lex) \
-      .then(Parser(b_grammar).parser)
+      .then(Parser(b_grammar).parse) \
+      .value
 
 
 
-class BPrinter:
-  tab = '  '
+class BPrinter(Visitor[str]):
+  _tab = '  '
 
-  def __init__(self, ast: Node):
-    node_visitors: dict[str, Callable[[Node, Visitor], Any]] = {
-      '<b>': self.visit_b,
-      '<block>': self.visit_block,
-      '<statement>': self.visit_statement,
-      '<expression>': self.visit_expression,
-    }
+  def __init__(self):
+    super().__init__(
+      {
+        '<b>': self._visit_b,
+        '<block>': self._visit_block,
+        '<statement>': self._visit_statement,
+        '<expression>': self._visit_expression,
+      },
+      lambda terminal_node, _: terminal_node.lexeme,
+    )
     self._tab_stop = 0
-    self._str: str = Visitor(
-      ast,
-      node_visitors,
-      lambda terminal_node, _: terminal_node.lexeme
-    ).ret
 
-  @property
-  def str(self) -> str:
-    return self._str
+  def print(self, ast: ASTNode) -> str:
+    return self.visit(ast)
 
-  def visit_b(
+  def _visit_b(
     self,
-    node: Node,
-    visitor: Visitor,
-  ) -> Any:
+    node: ASTNode,
+    visitor: Visitor[str],
+  ) -> str:
     prog: str = '\n'.join(visitor.visit(child) for child in node[0])
     return prog
 
-  def visit_block(
+  def _visit_block(
     self,
-    node: Node,
-    visitor: Visitor,
-  ) -> Any:
+    node: ASTNode,
+    visitor: Visitor[str],
+  ) -> str:
     match node.choice:
       # <block> ::= <statement>;
       case 0:
@@ -83,35 +62,35 @@ class BPrinter:
 
         self._tab_stop -= 1
 
-        return '\n'.join(['{', inner_prog, f'{self._tab_stop * BPrinter.tab}}}'])
+        return '\n'.join(['{', inner_prog, f'{self._tab_stop * BPrinter._tab}}}'])
 
-  def visit_statement(
+  def _visit_statement(
     self,
     node: Node,
-    visitor: Visitor,
-  ) -> Any:
+    visitor: Visitor[str],
+  ) -> str:
     match node.choice:
       # <statement> ::= <variable> "=" (<operand> | <expression> | <string>) ";" |
       case 0:
-        return f'{self._tab_stop * BPrinter.tab}{visitor.visit(node[0])} = {visitor.visit(node[2][0])};'
+        return f'{self._tab_stop * BPrinter._tab}{visitor.visit(node[0])} = {visitor.visit(node[2][0])};'
 
       # <statement> ::= ("print" | "printi" | "read" | "readi") "\(" <variable> "\)" ";" |
       case 1:
-        return f'{self._tab_stop * BPrinter.tab}{telescope(node[0]).lexeme}({visitor.visit(node[2][0])})'
+        return f'{self._tab_stop * BPrinter._tab}{telescope(node[0]).lexeme}({visitor.visit(node[2][0])})'
 
       # <statement> ::= "while" "\(" <expression> "\)" <block> |
       case 2:
-        return f'{self._tab_stop * BPrinter.tab}while ({visitor.visit(node[2])}) {visitor.visit(node[4])}'
+        return f'{self._tab_stop * BPrinter._tab}while ({visitor.visit(node[2])}) {visitor.visit(node[4])}'
 
       # <statement> ::= "if" "\(" <expression> "\)" <block>;
       case 3:
-        return f'{self._tab_stop * BPrinter.tab}if ({visitor.visit(node[2])}) {visitor.visit(node[4])}'
+        return f'{self._tab_stop * BPrinter._tab}if ({visitor.visit(node[2])}) {visitor.visit(node[4])}'
 
-  def visit_expression(
+  def _visit_expression(
     self,
     node: Node,
-    visitor: Visitor,
-  ) -> Any:
+    visitor: Visitor[str],
+  ) -> str:
     match node.choice:
       # <expression> ::= <unary_operator> <operand>;
       case 0:
@@ -136,10 +115,7 @@ class BAllocator:
     }
     self._alloc: dict[str, int] = {}
     self._next: int = 0
-    Visitor(
-      ast,
-      node_visitors,
-    ).ret
+    Visitor(node_visitors).visit(ast)
 
   @property
   def alloc(self) -> dict[str, int]:

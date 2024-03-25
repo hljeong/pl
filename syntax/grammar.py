@@ -1,7 +1,7 @@
 from __future__ import annotations
 from collections import defaultdict
 
-from common import Log, to_tree_string
+from common import Monad, Log, to_tree_string
 from lexical import Token, TokenPatternDefinition, builtin_tokens, Lexer
 
 from .parser import ExpressionTerm, Parser
@@ -22,11 +22,11 @@ class Grammar:
         # error type
         raise ValueError('provide either xbnf or both token_defs and node_parsers to generate a grammar')
 
-      # lex grammar xbnf
-      tokens: list[Token] = Lexer(xbnf_grammar).lex(xbnf)
+      ast: ASTNode = Monad(xbnf) \
+        .then(Lexer(xbnf_grammar).lex) \
+        .then(Parser(xbnf_grammar).parse) \
+        .value
 
-      # parse grammar xbnf
-      ast: ASTNode = Parser(xbnf_grammar).parse(tokens)
       # todo: delete
       # Log.begin_d()
       # Log.d(f'ast for {name} grammar:')
@@ -227,7 +227,7 @@ class TokenDefNodeParserGenerator:
     # entry nonterminal is used
     self._used_nonterminals.add(f'<{ast[0][0][0][1].lexeme}>')
     self._node_parsers: dict[str, Callable[[Parser, Optional[bool]], Optional[ASTNode]]] = {}
-    Visitor(ast, node_visitors)
+    Visitor(node_visitors).visit(ast)
 
     for nonterminal in self._used_nonterminals:
       if nonterminal not in self._node_parsers:

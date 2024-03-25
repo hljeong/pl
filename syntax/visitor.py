@@ -1,7 +1,8 @@
 from __future__ import annotations
 from collections import defaultdict
+from typing import Generic
 
-from common import Log, log_use
+from common import Monad, Log, log_use, R
 from lexical import Token
 
 from .ast import TerminalASTNode
@@ -20,23 +21,17 @@ def telescope(node: ASTNode) -> TerminalASTNode:
     node = node[0]
   return node
 
-class Visitor:
+class Visitor(Generic[R]):
   def __init__(
     self,
-    ast: Node,
     node_visitors: dict[str, Callable[[ASTNode, Visitor], Any]],
     default_terminal_node_visitor: Callable[[TerminalASTNode], Any] = visit_and_do_nothing,
   ):
     self._node_visitors: defaultdict[str, Callable[[ASTNode, Any, Visitor], Any]] = defaultdict(lambda: lambda node, _: default_terminal_node_visitor(telescope(node), self))
     self._node_visitors.update(node_visitors)
-    self._ret: Any = self.visit(ast)
 
   def visit(
     self,
     node: ASTNode,
-  ) -> Any:
+  ) -> R:
     return self._node_visitors[node.node_type](node, self)
-
-  @property
-  def ret(self) -> Any:
-    return self._ret

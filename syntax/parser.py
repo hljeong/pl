@@ -45,12 +45,8 @@ class Parser:
   def __init__(
     self,
     grammar: Grammar,
-    tokens: list[Token],
   ):
     self._grammar: Grammar = grammar
-    self._tokens: list[Token] = tokens
-    self._current: int = 0
-    self._root: ASTNode = self.__parse()
 
   def __parse(self) -> ASTNode:
     parse_result: Parser.Result = self._grammar.entry_point_parser(self)
@@ -64,7 +60,7 @@ class Parser:
 
     return parse_result.node
 
-  def parse(self, node_type: str, backtrack: bool = False) -> Optional[Parser.Result]:
+  def parse_node(self, node_type: str, backtrack: bool = False) -> Optional[Parser.Result]:
     Log.t(f'parsing {node_type}, next token (index {self._current}) is {self.__safe_peek()}')
 
     # todo: type annotation
@@ -122,9 +118,10 @@ class Parser:
   def __backtrack(self, to: int) -> None:
     self._current = to
 
-  @property
-  def ast(self) -> ASTNode:
-    return self._root
+  def parse(self, tokens: list[Token]) -> ASTNode:
+    self._tokens: list[Token] = tokens
+    self._current: int = 0
+    return self.__parse()
 
   def generate_nonterminal_parser(
     nonterminal: str,
@@ -132,7 +129,6 @@ class Parser:
   ) -> Callable[[Parser], Optional[ChoiceNonterminalASTNode]]:
 
     def nonterminal_parser(parser: Parser, entry_point = True) -> Optional[ChoiceNonterminalASTNode]:
-
       choices = {}
 
       for idx, expression_terms in enumerate(body):
@@ -146,7 +142,7 @@ class Parser:
           match expression_term.multiplicity:
             # exactly 1 (default)
             case 1:
-              child_parse_result: Parser.Result = parser.parse(expression_term.node_type)
+              child_parse_result: Parser.Result = parser.parse_node(expression_term.node_type)
 
               if child_parse_result is not None:
                 child_node: ASTNode
@@ -165,7 +161,7 @@ class Parser:
               child: NonterminalASTNode = NonterminalASTNode(f'{nonterminal}:{expression_term_idx}{expression_term.multiplicity}')
 
               for _ in range(expression_term.multiplicity):
-                grandchild_parse_result: Parser.Result = parser.parse(expression_term.node_type)
+                grandchild_parse_result: Parser.Result = parser.parse_node(expression_term.node_type)
 
                 if grandchild_parse_result is not None:
                   grandchild_node: ASTNode
@@ -188,7 +184,7 @@ class Parser:
             # optional
             case '?':
               child: NonterminalASTNode = NonterminalASTNode(f'{nonterminal}:{expression_term_idx}{expression_term.multiplicity}')
-              grandchild_parse_result: Parser.Result = parser.parse(expression_term.node_type)
+              grandchild_parse_result: Parser.Result = parser.parse_node(expression_term.node_type)
 
               if grandchild_parse_result is not None:
                 grandchild_node: ASTNode
@@ -205,7 +201,7 @@ class Parser:
               child: NonterminalASTNode = NonterminalASTNode(f'{nonterminal}:{expression_term_idx}{expression_term.multiplicity}')
 
               while True:
-                grandchild_parse_result: Parser.Result = parser.parse(expression_term.node_type)
+                grandchild_parse_result: Parser.Result = parser.parse_node(expression_term.node_type)
 
                 if grandchild_parse_result is not None:
                   grandchild_node: ASTNode
@@ -224,7 +220,7 @@ class Parser:
             case '+':
               child: NonterminalASTNode = NonterminalASTNode(f'{nonterminal}:{expression_term_idx}{expression_term.multiplicity}')
 
-              grandchild_parse_result: Parser.Result = parser.parse(expression_term.node_type)
+              grandchild_parse_result: Parser.Result = parser.parse_node(expression_term.node_type)
               if grandchild_parse_result is not None:
                 grandchild_node: ASTNode
                 grandchild_n_tokens_consumed: int
@@ -238,7 +234,7 @@ class Parser:
                 break
 
               while True:
-                grandchild_parse_result: Parser.Result = parser.parse(expression_term.node_type)
+                grandchild_parse_result: Parser.Result = parser.parse_node(expression_term.node_type)
 
                 if grandchild_parse_result is not None:
                   grandchild_node: ASTNode

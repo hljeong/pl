@@ -26,7 +26,7 @@ class Grammar:
       tokens: list[Token] = Lexer(xbnf_grammar).lex(xbnf)
 
       # parse grammar xbnf
-      ast: Parser = Parser(xbnf_grammar, tokens).ast
+      ast: ASTNode = Parser(xbnf_grammar).parse(tokens)
       # todo: delete
       # Log.begin_d()
       # Log.d(f'ast for {name} grammar:')

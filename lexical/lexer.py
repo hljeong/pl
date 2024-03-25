@@ -156,7 +156,7 @@ class Lexer:
 
   def lex(self, source: str) -> list[Token]:
     self._source: str = source
-    self._position = self.Position()
+    self._position = Lexer.Position()
     self._tokens: list[Token] = []
 
     self.__lex()

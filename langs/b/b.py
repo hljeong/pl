@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Generic, TypeVar
 
 from common import Log, log_time
 from lexical import Lexer
@@ -8,16 +9,30 @@ with open('langs/b/spec/b.xbnf') as b_xbnf_f:
   b_xbnf = ''.join(b_xbnf_f.readlines())
 b_grammar = Grammar('b', b_xbnf)
 
+# todo: temporary, move this elsewhere if sticking with using this
+T = TypeVar('T')
+R = TypeVar('R')
+class Monad(Generic[T]):
+  def __init__(self, value: T):
+    self._value: T = value
+
+  def then(self, f: Callable[[T], R]) -> Monad[R]:
+    return Monad(f(self._value))
+
 class BParser:
   @log_time
   def __init__(self, prog: str):
     tokens = Lexer(b_grammar).lex(prog)
-    parser = Parser(b_grammar, tokens)
-    self._ast: Node = parser.ast
+    self._ast: ASTNode = Parser(b_grammar).parse(tokens)
 
   @property
   def ast(self) -> Node:
     return self._ast
+
+  def parse(prog: str):
+    return Monad(prog) \
+      .then(Lexer(b_grammar).lex) \
+      .then(Parser(b_grammar).parser)
 
 
 

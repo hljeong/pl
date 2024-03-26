@@ -28,14 +28,7 @@ class Grammar:
         ).parse) \
         .value
 
-      # todo: delete
-      # Log.begin_d()
-      # Log.d(f'ast for {name} grammar:')
-      # Log.d(to_tree_string(ast))
-      # Log.end_d()
-
       vocabulary = VocabularyGenerator().generate(ast)
-      # todo: implement this
       node_parsers = NodeParsersGenerator().generate(ast)
 
     elif node_parsers is None:
@@ -222,6 +215,7 @@ class VocabularyGenerator(Visitor):
     node: ASTNode,
     visitor: Visitor,
   ) -> None:
+    if node.lexeme not in self._dictionary:
       self._dictionary[node.lexeme] = Vocabulary.Definition.make(node.literal)
 
 

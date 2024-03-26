@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Protocol, TypeVar, Type, Callable, Any, Generic
 from functools import total_ordering
+from time import sleep
 
 T = TypeVar('T')
 R = TypeVar('R')
@@ -59,5 +60,18 @@ def total_ordering_by(key: Callable[[T], Comparable]):
     setattr(cls, '__lt__', lt_by_key)
 
     return total_ordering(cls)
+
+  return decorator
+
+def slowdown(delay_ms: int) -> Callable[[Callable[..., R]], Callable[..., R]]:
+
+  def decorator(f: Callable[..., R]) -> Callable[..., R]:
+
+    def f_with_slowdown(*args: Any, **kwargs: Any) -> R:
+      ret: R = f(*args, **kwargs)
+      sleep(delay_ms / 1000)
+      return ret
+
+    return f_with_slowdown
 
   return decorator

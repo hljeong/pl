@@ -1,67 +1,8 @@
 from __future__ import annotations
-from dataclasses import dataclass
 from enum import Enum
 import re
 
-@dataclass(eq=False, match_args=False)
-class TokenPatternDefinition:
-  token_pattern: str
-  literal_parser: Callable[[str], Any] = None
-
-  def make_plain(plain_pattern: str) -> TokenPatternDefinition:
-    return TokenPatternDefinition(
-      plain_pattern,
-      None,
-    )
-
-  # todo: temp fix
-  def make_temp(pattern: str) -> TokenPatternDefinition:
-    if pattern[0] == '"':
-      return TokenPatternDefinition(
-        pattern[1 : -1],
-        None,
-      )
-    else:
-      return TokenPatternDefinition(
-        pattern,
-        None,
-      )
-
-@dataclass(eq=False, match_args=False)
-class TokenMatcherDefinition:
-  token_matcher: re.Pattern
-  literal_parser: Callable[[str], Any] = None
-  generate_token: bool = True
-
-  def from_token_pattern_definition(
-    definition: TokenPatternDefinition
-  ) -> TokenMatcherDefinition:
-    return TokenMatcherDefinition(
-      re.compile(f'\\A{definition.token_pattern}'),
-      definition.literal_parser,
-    )
-
-# todo: finish this thought...
-@dataclass(eq=False, match_args=False)
-class TokenDefinition:
-  token_matcher: re.Pattern
-  literal_parser: Callable[[str], Any] = None
-  generate_token: bool = True
-
-builtin_tokens = {
-  'identifier': TokenPatternDefinition(
-    r'[A-Za-z_$][A-Za-z0-9_$]*',
-    str,
-  ),
-  'decimal_integer': TokenPatternDefinition(
-    r'0|[1-9][0-9]*',
-    int,
-  ),
-  'escaped_string': TokenPatternDefinition(
-    r'"(\.|[^\"])*"',
-    lambda lexeme: lexeme[1 : -1],
-  ),
-}
+from .vocabulary import Vocabulary
 
 class Token:
   def __init__(
@@ -103,7 +44,7 @@ class Token:
 
   def __str__(self) -> str:
     # builtin token type
-    if self._token_type in builtin_tokens:
+    if self._token_type in Vocabulary.Definition.builtin:
       return f'{self._token_type}(\'{self._lexeme}\')'
 
     else:

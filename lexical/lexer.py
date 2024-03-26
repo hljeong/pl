@@ -4,7 +4,7 @@ import re
 
 from common import Cursor, CursorRange, Log
 
-from .token import Token, TokenPatternDefinition, TokenMatcherDefinition
+from .token import Token
 
 class Lexer:
   class Position:

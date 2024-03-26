@@ -2,7 +2,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Generic
 
-from common import Monad, Log, log_use
+from common import Monad, Log
 from lexical import Token
 
 from .ast import TerminalASTNode

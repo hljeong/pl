@@ -3,8 +3,6 @@ from dataclasses import dataclass
 from enum import Enum
 import re
 
-from common import log_use
-
 @dataclass(eq=False, match_args=False)
 class TokenPatternDefinition:
   token_pattern: str

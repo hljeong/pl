@@ -2,7 +2,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Iterator
 
-from common import log_use
 from lexical import Token
 
 class ASTNode(ABC):

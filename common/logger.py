@@ -85,6 +85,61 @@ class Log:
     setattr(Log, f'begin_{name}', staticmethod(begin_section))
     setattr(Log, f'end_{name}', staticmethod(end_section))
 
+  def usage(f: Callable[..., Any]) -> Callable[..., Any]:
+
+    def f_and_log_usage(*args: Any, **kwargs: Any) -> Any:
+      global arglist_str
+
+      Log.d(f'calling {f.__qualname__}({arglist_str(args, kwargs)})')
+
+      ret = f(*args, **kwargs)
+
+      Log.d(f'{f.__qualname__}({arglist_str(args, kwargs)}) returned {repr(ret)}')
+
+      return ret
+
+    return f_and_log_usage
+
+  # todo: type annotation
+  def runtime(
+    description: Optional[str] = None,
+    n: int = 1,
+  ) -> Callable[[Callable[..., R]], Callable[..., R]]:
+
+    def decorator(f: Callable[..., R]) -> Callable[..., R]:
+
+      def f_and_log_time(*args: Any, **kwargs: Any) -> R: 
+        global arglist_str
+
+        start_time = time() * 1000
+
+
+        for _ in range(n):
+          ret = f(*args, **kwargs)
+
+        end_time = time() * 1000
+        delta_time = end_time - start_time
+        average_time = delta_time / n
+
+        msg = f'took {average_time:.2f} ms'
+
+        if description:
+          msg = f'{description} {msg}'
+
+        else:
+          msg = f'{f.__qualname__}({arglist_str(args, kwargs)}) {msg}'
+
+        if n > 1:
+          msg = f'{msg} on average over {n} runs'
+
+        Log.d(msg)
+
+        return ret
+
+      return f_and_log_time
+
+    return decorator
+
 Log.define('trace', LogLevel.TRACE)
 Log.define('t', LogLevel.TRACE)
 
@@ -111,60 +166,3 @@ def arglist_str(args: tuple[...], kwargs: dict[str, Any]) -> str:
 
   else:
     return f'{args_str}, {kwargs_str}'
-
-def log_use(f: Callable[..., Any]) -> Callable[..., Any]:
-
-  def f_and_log_usage(*args: Any, **kwargs: Any) -> Any:
-    global arglist_str
-
-    Log.d(f'calling {f.__qualname__}({arglist_str(args, kwargs)})')
-
-    ret = f(*args, **kwargs)
-
-    Log.d(f'{f.__qualname__}({arglist_str(args, kwargs)}) returned {repr(ret)}')
-
-    return ret
-
-  return f_and_log_usage
-
-
-
-# todo: type annotation
-def log_time(
-  description: Optional[str] = None,
-  n: int = 1,
-) -> Callable[[Callable[..., R]], Callable[..., R]]:
-
-  def decorator(f: Callable[..., R]) -> Callable[..., R]:
-
-    def f_and_log_time(*args: Any, **kwargs: Any) -> R: 
-      global arglist_str
-
-      start_time = time() * 1000
-
-
-      for _ in range(n):
-        ret = f(*args, **kwargs)
-
-      end_time = time() * 1000
-      delta_time = end_time - start_time
-      average_time = delta_time / n
-
-      msg = f'took {average_time:.2f} ms'
-
-      if description:
-        msg = f'{description} {msg}'
-
-      else:
-        msg = f'{f.__qualname__}({arglist_str(args, kwargs)}) {msg}'
-
-      if n > 1:
-        msg = f'{msg} on average over {n} runs'
-
-      Log.d(msg)
-
-      return ret
-
-    return f_and_log_time
-
-  return decorator

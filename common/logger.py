@@ -2,6 +2,8 @@ from enum import Enum
 from functools import total_ordering
 from typing import Type, Callable, Any, Optional
 from time import time
+from rich.console import Console
+from rich.markup import escape
 
 from .lib import R, total_ordering_by
 
@@ -19,6 +21,7 @@ class Log:
   level = LogLevel.NONE
   spaced = True
   _section = False
+  _console = Console(highlight=False)
 
   def begin_section(level: LogLevel) -> None:
     if Log.level < level:
@@ -37,24 +40,39 @@ class Log:
     Log._section = False
 
     if Log.spaced:
-      print()
+      Log._console.print()
 
-  def log(level: LogLevel, content: Any) -> None:
+  def log(
+    level: LogLevel,
+    content: Any,
+    color: str = 'white',
+    formatted: bool = False,
+  ) -> None:
     if Log.level < level:
       return
 
     for line in str(content).split('\n'):
-      print(f'[{level.name}] {line}')
+      if not formatted:
+        line = escape(line)
+      Log._console.print(f'[{color}][{level.name}][/{color}] {line}')
 
     if Log.spaced and not Log._section:
-      print()
+      Log._console.print()
 
   # goofy reflection hack
-  def define(name: str, level: LogLevel) -> None:
+  def define(
+    name: str,
+    level: LogLevel,
+    color: str = 'white',
+  ) -> None:
 
     def logger(content: Any = '', condition: bool = True) -> None:
       if condition:
-        Log.log(level, content)
+        Log.log(level, content, color, False)
+
+    def loggerf(content: Any = '', condition: bool = True) -> None:
+      if condition:
+        Log.log(level, content, color, True)
 
     def begin_section() -> None:
       Log.begin_section(level)
@@ -63,20 +81,21 @@ class Log:
       Log.end_section(level)
 
     setattr(Log, name, staticmethod(logger))
+    setattr(Log, f'{name}f', staticmethod(loggerf))
     setattr(Log, f'begin_{name}', staticmethod(begin_section))
     setattr(Log, f'end_{name}', staticmethod(end_section))
 
 Log.define('trace', LogLevel.TRACE)
 Log.define('t', LogLevel.TRACE)
 
-Log.define('debug', LogLevel.DEBUG)
-Log.define('d', LogLevel.DEBUG)
+Log.define('debug', LogLevel.DEBUG, 'blue')
+Log.define('d', LogLevel.DEBUG, 'blue')
 
-Log.define('warn', LogLevel.WARN)
-Log.define('w', LogLevel.WARN)
+Log.define('warn', LogLevel.WARN, 'yellow')
+Log.define('w', LogLevel.WARN, 'yellow')
 
-Log.define('error', LogLevel.ERROR)
-Log.define('e', LogLevel.ERROR)
+Log.define('error', LogLevel.ERROR, 'red')
+Log.define('e', LogLevel.ERROR, 'red')
 
 
 

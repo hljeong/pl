@@ -116,8 +116,9 @@ class Lexer:
       Log.begin_e()
       Log.e(f'invalid character \'{self._peek}\' encountered at {str(self._position.cursor)}:')
       lines: list[str] = self._source.split('\n')
-      Log.e(f'  {lines[self._position.cursor.line - 1]}')
-      Log.e(f'  {" " * (self._position.cursor.column - 1)}^')
+      line: str = lines[self._position.cursor.line - 1]
+      column: int = self._position.cursor.column - 1
+      Log.ef(f'  {line[:column]}[red]{line[column]}[/red]{line[column + 1:]}')
       Log.end_e()
 
       raise ValueError(f'invalid character \'{self._peek}\' encountered at {str(self._position.cursor)}')

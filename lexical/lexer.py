@@ -57,7 +57,7 @@ class Lexer:
     vocabulary: Optional[Vocabulary] = None,
   ):
     if grammar is not None and vocabulary is not None:
-      Log.w('more than sufficient arguments provided')
+      Log.w('more than sufficient arguments provided', tag='Lexer')
 
     if vocabulary is None:
       if grammar is None:

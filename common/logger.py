@@ -63,6 +63,7 @@ class Log:
   def log(
     level: Level,
     content: Any,
+    tag: Optional[str] = None,
     formatted: bool = False,
     before: Callable[[...], None] = lambda: None,
     before_arglist: Arglist = Arglist(),
@@ -79,7 +80,12 @@ class Log:
     for line in str(content).split('\n'):
       if not formatted:
         line = escape(line)
-      Log._console.print(f'[{Log._colors[level]}][{level.name}][/{Log._colors[level]}] {line}', **kwargs)
+
+      if tag is None:
+        Log._console.print(f'[{Log._colors[level]}][{level.name}][/{Log._colors[level]}] {line}', **kwargs)
+      else:
+        Log._console.print(f'[{Log._colors[level]}][{level.name}][/{Log._colors[level]}] <{tag}> {line}', **kwargs)
+        
 
     if not Log._section:
       after(*after_arglist.args, **after_arglist.kwargs)
@@ -142,13 +148,14 @@ class Log:
     def logger(
       content: Any = '',
       condition: bool = True,
+      tag: Optional[str] = None,
       before_arglist: Arglist = Arglist(),
       after_arglist: Arglist = Arglist(),
       **kwargs: Any,
     ) -> bool:
       if condition:
         return Log.log(
-          level, content, False,
+          level, content, tag, False,
           before, before_arglist,
           after, after_arglist,
           **kwargs,
@@ -158,13 +165,14 @@ class Log:
     def loggerf(
       content: Any = '',
       condition: bool = True,
+      tag: Optional[str] = None,
       before_arglist: Arglist = Arglist(),
       after_arglist: Arglist = Arglist(),
       **kwargs: Any,
     ) -> bool:
       if condition:
         return Log.log(
-          level, content, True,
+          level, content, tag, True,
           before, before_arglist,
           after, after_arglist,
           **kwargs,
@@ -188,7 +196,7 @@ class Log:
     def f_and_log_usage(*args: Any, **kwargs: Any) -> Any:
       global arglist_str
 
-      Log.d(f'calling {f.__qualname__}({arglist_str(args, kwargs)})')
+      Log.d(f'calling {f.__qualname__}({arglist_str(args, kwargs)})', tag='usage')
 
       ret = f(*args, **kwargs)
 
@@ -230,7 +238,7 @@ class Log:
         if n > 1:
           msg = f'{msg} on average over {n} runs'
 
-        Log.d(msg)
+        Log.d(msg, tag='runtime')
 
         return ret
 

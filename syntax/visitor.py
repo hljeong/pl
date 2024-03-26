@@ -40,6 +40,6 @@ class Visitor:
   # todo: change to telescope until multiple children?
   def telescope(node: NonterminalASTNode) -> TerminalASTNode:
     while type(node) is not TerminalASTNode:
-      Log.w(f'telescoping node ({node}) with multiple children', len(node) > 1)
+      Log.w(f'telescoping node ({node}) with multiple children', len(node) > 1, tag='Visitor')
       node = node[0]
     return node

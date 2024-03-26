@@ -53,7 +53,7 @@ class Parser:
     entry_point: Optional[str] = None,
   ):
     if grammar is not None and (node_parsers is not None or entry_point is not None):
-      Log.w('more than sufficient arguments provided')
+      Log.w('more than sufficient arguments provided', tag='Parser')
       
     if node_parsers is None:
       if grammar is None:
@@ -94,7 +94,7 @@ class Parser:
     return parse_result.node
 
   def parse_node(self, node_type: str, backtrack: bool = False) -> Optional[Parser.Result]:
-    Log.t(f'parsing {node_type}, next token (index {self._current}) is {self.__safe_peek()}')
+    Log.t(f'parsing {node_type}, next token (index {self._current}) is {self.__safe_peek()}', tag='Parser')
 
     # todo: type annotation
     parser: Any = self._node_parsers[node_type]
@@ -102,11 +102,11 @@ class Parser:
 
     Log.begin_t()
     if parse_result is None:
-      Log.t(f'unable to parse {node_type}')
+      Log.t(f'unable to parse {node_type}', tag='Parser')
     else:
-      Log.t(f'parsed {node_type}')
+      Log.t(f'parsed {node_type}', tag='Parser')
 
-    Log.t(f'next token (index {self._current}) is {self.__safe_peek()}')
+    Log.t(f'next token (index {self._current}) is {self.__safe_peek()}', tag='Parser')
     Log.end_t()
 
     return parse_result
@@ -128,14 +128,14 @@ class Parser:
     return self.__safe_peek()
 
   def expect(self, token_type: str) -> Optional[Token]:
-    Log.t(f'expecting {token_type}')
+    Log.t(f'expecting {token_type}', tag='Parser')
 
     if self.at_end():
-      Log.t(f'got EOF')
+      Log.t(f'got EOF', tag='Parser')
       return None
 
     token: Token = self.__peek()
-    Log.t(f'got {token.token_type}')
+    Log.t(f'got {token.token_type}', tag='Parser')
     if token.token_type != token_type:
       return None
 

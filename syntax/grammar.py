@@ -16,7 +16,7 @@ class Grammar:
     node_parsers: Optional[dict[str, Callable[[Parser, Optional[bool]], Optional[ASTNode]]]] = None,
   ):
     if xbnf is not None and (vocabulary is not None or node_parsers is not None):
-      Log.w('more than sufficient arguments provided')
+      Log.w('more than sufficient arguments provided', tag='Grammar')
 
     if vocabulary is None:
       if xbnf is None:
@@ -261,7 +261,8 @@ class NodeParsersGenerator(Visitor):
     for node_type in self._node_parsers:
       Log.w(
         f'parsers are generated for {node_type} but not used',
-        node_type not in self._used
+        node_type not in self._used,
+        tag='Grammar',
       )
 
     return self._node_parsers
@@ -275,7 +276,7 @@ class NodeParsersGenerator(Visitor):
     if nonterminal not in self._node_parsers:
       self._node_parsers[nonterminal] = Parser.generate_nonterminal_parser(nonterminal, body)
     else:
-      Log.w(f'multiple production definitions for {nonterminal} are disregarded')
+      Log.w(f'multiple production definitions for {nonterminal} are disregarded', tag='Grammar')
 
   def _visit_xbnf(
     self,

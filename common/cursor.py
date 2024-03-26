@@ -2,6 +2,8 @@ from __future__ import annotations
 from copy import copy
 from functools import total_ordering
 
+from .logger import Log
+
 @total_ordering
 class Cursor:
   def __init__(
@@ -9,10 +11,10 @@ class Cursor:
     line: int = 1,
     column: int = 1,
   ):
-    if line <= 0:
+    if not Log.e(f'cursor error: line number ({line}) has to be at least 1', line <= 0):
       raise ValueError(f'line number ({line}) has to be at least 1')
 
-    if column <= 0:
+    if not Log.e(f'cursor error: column number ({column}) has to be at least 1', column <= 0):
       raise ValueError(f'column number ({column}) has to be at least 1')
 
     self._line = line

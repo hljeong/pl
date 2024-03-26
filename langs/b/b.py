@@ -12,11 +12,8 @@ b_grammar = Grammar('b', b_xbnf)
 class BParser:
   def parse(self, prog: str):
     return Monad(prog) \
-      .then(Lexer(b_grammar.vocabulary).lex) \
-      .then(Parser(
-        b_grammar.node_parsers,
-        b_grammar.entry_point,
-      ).parse) \
+      .then(Lexer(b_grammar).lex) \
+      .then(Parser(b_grammar).parse) \
       .value
 
 

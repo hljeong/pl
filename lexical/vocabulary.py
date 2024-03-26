@@ -55,7 +55,6 @@ class Vocabulary:
       return self._dictionary[key]
 
     else:
-      # todo: error type?
       # todo: add 'do you mean...'?
       raise KeyError(f'\'{key}\' does not exist in dictionary')
 

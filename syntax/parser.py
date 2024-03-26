@@ -2,7 +2,7 @@ from __future__ import annotations
 from copy import copy
 from typing import NamedTuple
 
-from common import Log, slowdown
+from common import Log, Arglist, slowdown
 from lexical import Token
 
 from .ast import ASTNode, NonterminalASTNode, ChoiceNonterminalASTNode, TerminalASTNode
@@ -14,8 +14,8 @@ class ExpressionTerm:
     node_type: str,
     multiplicity: Union[str, int] = 1,
   ):
-    self._node_type = node_type
-    self._multiplicity = multiplicity
+    self._node_type: str = node_type
+    self._multiplicity: Union[str, int] = multiplicity
 
   @property
   def node_type(self) -> str:
@@ -41,24 +41,55 @@ class Parser:
   class Result(NamedTuple):
     node: ASTNode
     n_tokens_consumed: int
+    
+  class ParseError(Exception):
+    def __init__(self, msg: str = 'an error occured'):
+      super().__init__(msg)
 
   def __init__(
     self,
-    node_parsers: dict[str, Callable[[Parser], Optional[ASTNode]]],
-    entry_point: str,
+    grammar: Optional[Grammar] = None,
+    node_parsers: Optional[dict[str, Callable[[Parser], Optional[ASTNode]]]] = None,
+    entry_point: Optional[str] = None,
   ):
-    self._node_parsers: dict[str, Callable[[Parser], Optional[ASTNode]]] = node_parsers
-    self._entry_point: str = entry_point
+    if grammar is not None and (node_parsers is not None or entry_point is not None):
+      Log.w('more than sufficient arguments provided')
+      
+    if node_parsers is None:
+      if grammar is None:
+        error: ValueError = ValueError('provide either grammar or both node_parsers and entry_point to create a parser')
+        if not Log.ef('[red]ValueError:[/red] provide either grammar or both node_parsers and entry_point to create a parser'):
+          raise error
+
+      self._grammar_name: str = grammar.name
+      self._node_parsers: dict[str, Callable[[Parser], Optional[ASTNode]]] = grammar.node_parsers
+      self._entry_point: str = grammar.entry_point
+
+    elif entry_point is None:
+      error: ValueError = ValueError('provide either grammar or both node_parsers and entry_point to create a parser')
+      if not Log.ef('[red]ValueError:[/red] provide either grammar or both node_parsers and entry_point to create a parser'):
+        raise error
+
+      self._grammar_name: str = 'none'
+      self._node_parsers: dict[str, Callable[[Parser], Optional[ASTNode]]] = node_parsers
+      self._entry_point: str = entry_point
+      
+
+  def __repr__(self) -> str:
+    return f'Parser(grammar={self._grammar_name})'
 
   def __parse(self) -> ASTNode:
     parse_result: Parser.Result = self._node_parsers[self._entry_point](self)
 
-    # todo: ParseError
     if parse_result is None:
-      raise ValueError('failed to parse')
+      error: Parser.ParseError = Parser.ParseError('failed to parse')
+      if not Log.ef('[red]ParseError:[/red] failed to parse'):
+        raise error
 
     elif not self.at_end():
-      raise ValueError('did not parse to end of file')
+      error: Parser.ParseError = Parser.ParseError('did not parse to end of file')
+      if not Log.ef('[red]ParseError:[/red] did not parse to end of file'):
+        raise error
 
     return parse_result.node
 

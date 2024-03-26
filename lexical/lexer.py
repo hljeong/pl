@@ -2,7 +2,7 @@ from __future__ import annotations
 from copy import copy
 import re
 
-from common import Cursor, CursorRange, Log
+from common import Cursor, CursorRange, Log, Arglist
 
 from .token import Token
 
@@ -43,11 +43,37 @@ class Lexer:
     def range(self) -> CursorRange:
       return CursorRange(self._start_cursor, self._lag_cursor)
 
+
+
+  class LexError(Exception):
+    def __init__(self, msg: str = 'an error occurred'):
+      super().__init__(msg)
+
+
+
   def __init__(
     self,
-    vocabulary: Vocabulary,
+    grammar: Optional[Grammar] = None,
+    vocabulary: Optional[Vocabulary] = None,
   ):
-    self._vocabulary = vocabulary
+    if grammar is not None and vocabulary is not None:
+      Log.w('more than sufficient arguments provided')
+
+    if vocabulary is None:
+      if grammar is None:
+        error: ValueError = ValueError('provide either grammar or vocabulary to create a lexer')
+        if not Log.ef('[red]ValueError:[/red] provide either grammar or vocabulary to create a lexer'):
+          raise error
+
+      self._grammar_name: str = grammar.name
+      self._vocabulary: Vocabulary = grammar.vocabulary
+
+    else:
+      self._grammar_name: str = 'none'
+      self._vocabulary: Vocabulary = vocabulary
+
+  def __repr__(self) -> str:
+    return f'Lexer({self._grammar_name})'
 
   def __at_end(self):
     return self._position.current >= len(self._source)
@@ -113,15 +139,18 @@ class Lexer:
 
     if len(token_matches) == 0:
       # todo: do this more elegantly
-      Log.begin_e()
-      Log.e(f'invalid character \'{self._peek}\' encountered at {str(self._position.cursor)}:')
-      lines: list[str] = self._source.split('\n')
-      line: str = lines[self._position.cursor.line - 1]
-      column: int = self._position.cursor.column - 1
-      Log.ef(f'  {line[:column]}[red]{line[column]}[/red]{line[column + 1:]}')
-      Log.end_e()
+      error: Lexer.LexError = Lexer.LexError(f'invalid character \'{self._peek}\' encountered at {str(self._position.cursor)}')
 
-      raise ValueError(f'invalid character \'{self._peek}\' encountered at {str(self._position.cursor)}')
+      if Log.begin_e():
+        Log.ef(f'[red]LexError:[/red] invalid character \'{self._peek}\' encountered at {str(self._position.cursor)}:')
+        lines: list[str] = self._source.split('\n')
+        line: str = lines[self._position.cursor.line - 1]
+        column: int = self._position.cursor.column - 1
+        Log.ef(f'  {line[:column]}[red]{line[column]}[/red]{line[column + 1:]}', highlight=False)
+        Log.end_e()
+
+      else:
+        raise error
 
     else:
       longest_match_token_type = max(token_matches, key=lambda token_type: len(token_matches[token_type]))

@@ -23,6 +23,21 @@ class Monad(Generic[T]):
 
 
 
+class Arglist:
+  def __init__(self, *args: Any, **kwargs: Any):
+    self._args: tuple[...] = args
+    self._kwargs: dict[str, Any] = kwargs
+
+  @property
+  def args(self) -> tuple[...]:
+    return self._args
+
+  @property
+  def kwargs(self) -> dict[str, Any]:
+    return self._kwargs
+
+
+
 def Comparable(Protocol):
   def __eq__(self, other: 'Comparable') -> bool:
     ...
@@ -62,6 +77,8 @@ def total_ordering_by(key: Callable[[T], Comparable]):
     return total_ordering(cls)
 
   return decorator
+
+
 
 def slowdown(delay_ms: int) -> Callable[[Callable[..., R]], Callable[..., R]]:
 

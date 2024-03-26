@@ -15,29 +15,36 @@ class Grammar:
     vocabulary: Optional[Vocabulary] = None,
     node_parsers: Optional[dict[str, Callable[[Parser, Optional[bool]], Optional[ASTNode]]]] = None,
   ):
+    if xbnf is not None and (vocabulary is not None or node_parsers is not None):
+      Log.w('more than sufficient arguments provided')
+
     if vocabulary is None:
       if xbnf is None:
-        # error type
-        raise ValueError('provide either xbnf or both vocabulary and node_parsers to generate a grammar')
+        error: ValueError = ValueError('provide either xbnf or both vocabulary and node_parsers to create a grammar')
+        if not Log.ef('[red]ValueError:[/red] provide either xbnf or both vocabulary and node_parsers to create a grammar'):
+          raise error
 
       ast: ASTNode = Monad(xbnf) \
-        .then(Lexer(xbnf_grammar.vocabulary).lex) \
-        .then(Parser(
-          xbnf_grammar.node_parsers,
-          xbnf_grammar.entry_point
-        ).parse) \
+        .then(Lexer(xbnf_grammar).lex) \
+        .then(Parser(xbnf_grammar).parse) \
         .value
 
       vocabulary = VocabularyGenerator().generate(ast)
       node_parsers = NodeParsersGenerator().generate(ast)
 
     elif node_parsers is None:
-      raise ValueError('provide either xbnf or both vocabulary and node_parsers to generate a grammar')
+      error: ValueError = ValueError('provide either xbnf or both vocabulary and node_parsers to create a grammar')
+      if not Log.ef('[red]ValueError:[/red] provide either xbnf or both vocabulary and node_parsers to create a grammar'):
+        raise error
 
     # todo: validate input grammar
     self._name: str = name
     self._vocabulary: Vocabulary = vocabulary
     self._node_parsers: dict[str, Callable[[Parser, Optional[bool]], Optional[ASTNode]]] = node_parsers
+
+  @property
+  def name(self) -> str:
+    return self._name
 
   @property
   def vocabulary(self) -> Vocabulary:
@@ -245,9 +252,9 @@ class NodeParsersGenerator(Visitor):
     for node_type in self._used:
       if node_type not in self._node_parsers:
         # todo: assert node_type is a nontemrinal
-        Log.e(f'no productions defined for {node_type}')
-        # todo: error type
-        raise ValueError(f'no productions defined for {node_type}')
+        error: ValueError = ValueError(f'no productions defined for {node_type}')
+        if not Log.ef(f'[red]ValueError:[/red] no productions defined for {node_type}'):
+          raise error
 
     # todo: analyze tree from entry nonterminal to determine disconnected components
     # todo: currently this does not detect <x> ::= <y>; <y> ::= <x>;

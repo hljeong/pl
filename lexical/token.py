@@ -1,6 +1,4 @@
 from __future__ import annotations
-from enum import Enum
-import re
 
 from .vocabulary import Vocabulary
 
@@ -51,4 +49,4 @@ class Token:
       return f'\'{self._lexeme}\''
 
   def __repr__(self) -> str:
-    return f'Token({self})'
+    return f'Token({str(self)})'

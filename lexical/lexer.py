@@ -114,13 +114,13 @@ class Lexer:
     if len(token_matches) == 0:
       # todo: do this more elegantly
       Log.begin_e()
-      Log.e(f'invalid character \'{self._peek}\' encountered at {self._position.cursor.to_string()}:')
+      Log.e(f'invalid character \'{self._peek}\' encountered at {str(self._position.cursor)}:')
       lines: list[str] = self._source.split('\n')
       Log.e(f'  {lines[self._position.cursor.line - 1]}')
       Log.e(f'  {" " * (self._position.cursor.column - 1)}^')
       Log.end_e()
 
-      raise ValueError(f'invalid character \'{self._peek}\' encountered at {self._position.cursor.to_string()}')
+      raise ValueError(f'invalid character \'{self._peek}\' encountered at {str(self._position.cursor)}')
 
     else:
       longest_match_token_type = max(token_matches, key=lambda token_type: len(token_matches[token_type]))

@@ -41,9 +41,11 @@ def Comparable(Protocol):
   def __ge__(self, other: 'Comparable') -> bool:
     ...
 
+
+
 def total_ordering_by(key: Callable[[T], Comparable]):
 
-  # cls should the type T...
+  # cls should be the type T...
   def decorator(cls):
     # todo: messy type annotations
     def eq_by_key(self, other: Any) -> bool:

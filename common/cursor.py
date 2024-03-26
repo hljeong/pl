@@ -1,6 +1,8 @@
 from __future__ import annotations
 from copy import copy
+from functools import total_ordering
 
+@total_ordering
 class Cursor:
   def __init__(
     self,
@@ -9,10 +11,26 @@ class Cursor:
   ):
     if line <= 0:
       raise ValueError(f'line number ({line}) has to be at least 1')
+
     if column <= 0:
       raise ValueError(f'column number ({column}) has to be at least 1')
+
     self._line = line
     self._column = column
+
+  def __str__(self) -> str:
+    return f'line {self._line} column {self._column}'
+
+  def __copy__(self) -> Cursor:
+    return Cursor(self._line, self._column)
+
+  def __lt__(self, other: Cursor) -> bool:
+    return self._line < other._line or \
+           self._line == other._line and \
+           self._column < other._column
+
+  def __ne__(self, other: Cursor) -> bool:
+    return self < other or other < self
 
   @property
   def line(self) -> int:
@@ -30,28 +48,7 @@ class Cursor:
   def next_line(self) -> Cursor:
     return Cursor(self._line + 1, 1)
 
-  def to_string(self) -> str:
-    return f'line {self._line} column {self._column}'
 
-  def __lt__(self, other: Cursor) -> bool:
-    return self._line < other._line or \
-           self._line == other._line and \
-           self._column < other._column
-
-  def __ne__(self, other: Cursor) -> bool:
-    return self < other or other < self
-
-  def __eq__(self, other: Cursor) -> bool:
-    return not self != other
-
-  def __le__(self, other: Cursor) -> bool:
-    return self < other or self == other
-
-  def __gt__(self, other: Cursor) -> bool:
-    return other < self
-
-  def __ge__(self, other: Cursor) -> bool:
-    return other <= self
 
 class CursorRange:
   def __init__(
@@ -60,13 +57,22 @@ class CursorRange:
     end: Cursor
   ):
     if end < start:
-      raise ValueError(f'end ({end.to_string()}) cannot come before start ({start.to_string()})')
+      raise ValueError(f'end ({str(end)}) cannot come before start ({str(start)})')
 
     self._start = copy(start)
     self._end = copy(end)
 
+  def __str__(self) -> str:
+    if self._start.line == self._end.line:
+      if self._start.column == self._end.column:
+        return str(self._start)
+      else:
+        return f'{str(self._start)}-{self._end.column}'.replace('column', 'columns')
+    else:
+      return f'{str(self._start)} - {str(self._end)}'
+
   def __copy__(self) -> CursorRange:
-    return CursorRange(self._start, self._end)
+    return CursorRange(copy(self._start), copy(self._end))
 
   def __eq__(self, other: CursorRange) -> bool:
     return self._start == other._start and \
@@ -82,12 +88,3 @@ class CursorRange:
   @property
   def end(self) -> Cursor:
     return self._end
-
-  def to_string(self) -> str:
-    if self._start.line == self._end.line:
-      if self._start.column == self._end.column:
-        return self._start.to_string()
-      else:
-        return f'{self.start.to_string(verbose)}-{self.end.column}'.replace('column', 'columns')
-    else:
-      return f'{self.start.to_string(True)} - {self.end.to_string(True)}'

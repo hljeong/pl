@@ -427,6 +427,7 @@ class NodeParsersGenerator(Visitor):
       case 0 | 1 | 2:
         return node[0].lexeme
     
+      # todo: why do i have this, this is stupid, remove
       # node: decimal_integer
       case 1:
         return node[0].literal

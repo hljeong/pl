@@ -1,17 +1,37 @@
-<xbnf> ::= <production>+;
+<xbnf> ::= <production> <definition>*;
 
-<production> ::= <nonterminal> "::=" <body> ";";
+<production> ::= <nonterminal> '::=' <body> ';';
 
-<nonterminal> ::= "<" identifier ">";
+<nonterminal> ::= '<' identifier '>';
 
-<body> ::= <expression> ("\|" <expression>)*;
+identifier := /[A-Za-z_][A-Za-z0-9_]*/;
+
+<body> ::= <expression> ('|' <expression>)*;
 
 <expression> ::= (<group> <multiplicity>?)+;
 
-<group> ::= <term> | "\(" <body> "\)";
+<group> ::= <term> | '(' <body> ')';
 
 <term> ::= <nonterminal> | <terminal>;
 
-<terminal> ::= escaped_string | identifier;
+<terminal> ::= unescaped_nonempty_string | identifier;
 
-<multiplicity> ::= "\?" | "\*" | "\+" | decimal_integer;
+unescaped_nonempty_string := /'{character}+'/;
+
+<multiplicity> ::= '?' | '*' | '+' | decimal_integer;
+
+decimal_integer := /[1-9][0-9]*/;
+
+regex := /\/{regex_group}(\|{regex_group})*\//;
+
+regex_group := /(({unit}(\*|\+|\?)?)+|\({regex}\)(\*|\+|\?)?)/;
+
+unit := /{character}|\[\^?{character_set}+\]/;
+
+character_set := /{character}(\-{character})?|\./;
+
+character := /[A-Za-z0-9_`~!@#$%&=,:;'"<> ]|\\\{|\\\}|\\\||\\\(|\\\)|\\\*|\\\+|\\\?|\\\[|\\\^|\\\]|\\\-|\\\.|\\\\|\\\//;
+
+<definition> ::= <production> | <pattern_definition>;
+
+<pattern_definition> ::= identifier ':=' regex ';';

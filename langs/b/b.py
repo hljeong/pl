@@ -77,7 +77,7 @@ class BPrinter(Visitor):
 
       # <statement> ::= ("print" | "printi" | "read" | "readi") "\(" <variable> "\)" ";" |
       case 1:
-        return f'{self._tab_stop * BPrinter._tab}{Visitor.telescope(node[0]).lexeme}({visitor.visit(node[2][0])})'
+        return f'{self._tab_stop * BPrinter._tab}{Visitor.telescope(node[0]).lexeme}({visitor.visit(node[2][0])});'
 
       # <statement> ::= "while" "\(" <expression> "\)" <block> |
       case 2:
@@ -93,12 +93,16 @@ class BPrinter(Visitor):
     visitor: Visitor,
   ) -> str:
     match node.choice:
-      # <expression> ::= <unary_operator> <operand>;
+      # <expression> ::= <operand>;
       case 0:
+        return visitor.visit(node[0])
+
+      # <expression> ::= <unary_operator> <operand>;
+      case 1:
         return f'{visitor.visit(node[0])}{visitor.visit(node[1])}'
 
       # <expression> ::= <operand> <binary_operator> <operand>;
-      case 1:
+      case 2:
         return f'{visitor.visit(node[0])} {visitor.visit(node[1])} {visitor.visit(node[2])}'
 
 
@@ -141,20 +145,11 @@ class BAllocator:
     match node.choice:
       # <block> ::= <statement>;
       case 0:
-        return visitor.visit(node[0])
+        return f'{visitor.visit(node[0])};'
 
       # <block> ::= "{" <statements> "}";
       case 1:
         visitor.visit(node[1])
-
-  def visit_statements(
-    self,
-    node: Node,
-    visitor: Visitor,
-  ) -> Any:
-    visitor.visit(node[0])
-    if node.choice == 0:
-      visitor.visit(node[1])
 
   def visit_statement(
     self,
@@ -164,7 +159,7 @@ class BAllocator:
     match node.choice:
       # <statement> ::= <variable> "=" <operand> ";";
       # <statement> ::= <variable> "=" <expression> ";";
-      case 0 | 1:
+      case 0:
         varname: str = node[0][0].lexeme
         if varname not in self._alloc:
           self._alloc[varname] = self._next

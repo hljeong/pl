@@ -14,6 +14,8 @@
 
 <expression> ::=
 
+  <operand> |
+
   <unary_operator> <operand> |
 
   <operand> <binary_operator> <operand>;

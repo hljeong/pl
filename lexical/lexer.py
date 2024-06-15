@@ -137,10 +137,11 @@ class Lexer:
       if token_match:
         token_matches[token_type] = token_match.group()
 
+    # todo: panic mode
     if len(token_matches) == 0:
-      # todo: do this more elegantly
       error: Lexer.LexError = Lexer.LexError(f'invalid character \'{self._peek}\' encountered at {str(self._position.cursor)}')
 
+      # todo: do this more elegantly
       if Log.begin_e():
         Log.ef(f'[red]LexError:[/red] invalid character \'{self._peek}\' encountered at {str(self._position.cursor)}:')
         lines: list[str] = self._source.split('\n')

@@ -67,6 +67,7 @@ class Vocabulary:
 Vocabulary.Definition.builtin: dict[str, Definition] = {
   'identifier': Vocabulary.Definition.make(
     r'[A-Za-z_$][A-Za-z0-9_$]*',
+    # todo: this is wrong; escape sequences are not escaped
     str,
   ),
   'decimal_integer': Vocabulary.Definition.make(

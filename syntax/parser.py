@@ -1,6 +1,6 @@
 from __future__ import annotations
 from copy import copy
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 from common import Log, Arglist, slowdown
 from lexical import Token
@@ -41,7 +41,7 @@ class Parser:
   class Result(NamedTuple):
     node: ASTNode
     n_tokens_consumed: int
-    
+
   class ParseError(Exception):
     def __init__(self, msg: str = 'an error occured'):
       super().__init__(msg)
@@ -54,7 +54,7 @@ class Parser:
   ):
     if grammar is not None and (node_parsers is not None or entry_point is not None):
       Log.w('more than sufficient arguments provided', tag='Parser')
-      
+
     if node_parsers is None:
       if grammar is None:
         error: ValueError = ValueError('provide either grammar or both node_parsers and entry_point to create a parser')
@@ -73,7 +73,6 @@ class Parser:
       self._grammar_name: str = 'none'
       self._node_parsers: dict[str, Callable[[Parser], Optional[ASTNode]]] = node_parsers
       self._entry_point: str = entry_point
-      
 
   def __repr__(self) -> str:
     return f'Parser(grammar={self._grammar_name})'
@@ -261,7 +260,7 @@ class Parser:
 
                 child.add(grandchild_node)
                 n_tokens_consumed += grandchild_n_tokens_consumed
-              
+
               else:
                 good = False
                 break
@@ -276,7 +275,7 @@ class Parser:
 
                   child.add(grandchild_node)
                   n_tokens_consumed += grandchild_n_tokens_consumed
-                
+
                 else:
                   break
 
@@ -288,7 +287,7 @@ class Parser:
 
       if len(choices) == 0:
         return None
-      
+
       longest_match_idx = max(choices, key=lambda idx: choices[idx].n_tokens_consumed)
 
       parser.__advance(choices[longest_match_idx].n_tokens_consumed)

@@ -1,9 +1,11 @@
 from __future__ import annotations
 from collections import defaultdict
+from typing import Optional, Callable, Union, Any
 
-from common import Monad, Log, to_tree_string
-from lexical import Token, Vocabulary, Lexer
+from common import Monad, Log
+from lexical import Vocabulary, Lexer
 
+from .ast import ASTNode
 from .parser import ExpressionTerm, Parser
 from .visitor import Visitor
 
@@ -14,6 +16,7 @@ class Grammar:
     xbnf: Optional[str] = None,
     vocabulary: Optional[Vocabulary] = None,
     node_parsers: Optional[dict[str, Callable[[Parser, Optional[bool]], Optional[ASTNode]]]] = None,
+    ignore: list[str] = [],
   ):
     if xbnf is not None and (vocabulary is not None or node_parsers is not None):
       Log.w('more than sufficient arguments provided', tag='Grammar')
@@ -29,7 +32,7 @@ class Grammar:
         .then(Parser(xbnf_grammar).parse) \
         .value
 
-      vocabulary = VocabularyGenerator().generate(ast)
+      vocabulary = VocabularyGenerator(ignore).generate(ast)
       node_parsers = NodeParsersGenerator().generate(ast)
 
     elif node_parsers is None:
@@ -195,7 +198,7 @@ xbnf_node_parsers = {
   '"\\+"': Parser.generate_terminal_parser('"\\+"'),
   'decimal_integer': Parser.generate_terminal_parser('decimal_integer'),
 }
-    
+
 xbnf_grammar: Grammar = Grammar(
   'xbnf',
   vocabulary=xbnf_vocabulary,
@@ -204,23 +207,24 @@ xbnf_grammar: Grammar = Grammar(
 
 
 
-# todo: add ignore patterns
 class VocabularyGenerator(Visitor):
-  def __init__(self):
+  def __init__(self, ignore: list[str] = []):
     super().__init__(
       { 'escaped_string': self._visit_escaped_string },
       Visitor.visit_all,
     )
+    self._ignore: list[str] = Vocabulary.DEFAULT_IGNORE
+    self._ignore.extend(ignore)
 
   def generate(self, ast: ASTNode) -> Vocabulary:
     self._dictionary: dict[str, Vocabulary.Definition] = {}
     self.visit(ast)
-    return Vocabulary(self._dictionary)
+    return Vocabulary(self._dictionary, ignore = self._ignore)
 
   def _visit_escaped_string(
     self,
     node: ASTNode,
-    visitor: Visitor,
+    _: Visitor,
   ) -> None:
     if node.lexeme not in self._dictionary:
       self._dictionary[node.lexeme] = Vocabulary.Definition.make(node.literal)
@@ -385,36 +389,36 @@ class NodeParsersGenerator(Visitor):
         term = node[0]
 
         self._idx_stack[-1] += 1
-    
+
         match term.choice:
           # term: <nonterminal>
           case 0:
             nonterminal = f'<{term[0][1].lexeme}>'
             self._used.add(nonterminal)
             return nonterminal
-    
+
           # term: <terminal>
           case 1:
             # term[0]: escaped_string | identifier
             terminal = term[0][0].lexeme
-    
+
             self._add_terminal(terminal)
             return terminal
-    
+
       # node: "\(" <body> "\)"
       case 1:
         auxiliary_nonterminal = f'{self._lhs_stack[-1]}:{self._idx_stack[-1]}'
         self._lhs_stack.append(auxiliary_nonterminal)
         self._idx_stack.append(0)
         self._used.add(auxiliary_nonterminal)
-   
+
         # node[1]: <body>
         self._add_nonterminal(auxiliary_nonterminal, visitor.visit(node[1]))
-    
+
         self._idx_stack.pop()
         self._lhs_stack.pop()
         self._idx_stack[-1] += 1
-    
+
         return auxiliary_nonterminal
 
   def _visit_multiplicity(
@@ -426,7 +430,7 @@ class NodeParsersGenerator(Visitor):
       # node: "\?" | "\*" | "\+"
       case 0 | 1 | 2:
         return node[0].lexeme
-    
+
       # node: decimal_integer
       case 1:
         return node[0].literal

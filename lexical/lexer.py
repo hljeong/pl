@@ -2,7 +2,7 @@ from __future__ import annotations
 from copy import copy
 import re
 
-from common import Cursor, CursorRange, Log, Arglist
+from common import Cursor, CursorRange, Log
 
 from .token import Token
 
@@ -36,7 +36,7 @@ class Lexer:
       return self._current
 
     @property
-    def cursor(self) -> int:
+    def cursor(self) -> Cursor:
       return self._current_cursor
 
     @property
@@ -78,7 +78,7 @@ class Lexer:
   def __at_end(self):
     return self._position.current >= len(self._source)
 
-  def __peek(self) -> str:
+  def __peek(self) -> None:
     if self.__at_end():
       self._peek = '\0'
     else:

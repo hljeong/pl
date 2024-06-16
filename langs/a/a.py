@@ -1,90 +1,61 @@
 from __future__ import annotations
+from typing import Any
 
+from common import Monad, Log
 from lexical import Lexer
-from syntax import XBNFGrammar, Parser, Visitor
+from syntax import Grammar, Parser, Visitor, ASTNode
 
 DEFAULT_MEM = 16 * 1024 * 1024
 
-with open('langs/a/spec/a.cbnf') as a_cbnf_f:
-  a_cbnf = ''.join(a_cbnf_f.readlines())
-a_grammar = Grammar('a', a_cbnf, ignore=[r'#[^\n]*'])
+with open('langs/a/spec/a.xbnf') as a_xbnf_f:
+  a_xbnf = ''.join(a_xbnf_f.readlines())
+
+# todo: gotta define comments somewhere else... this is ugly
+a_grammar = Grammar('a', a_xbnf, ignore=[r'#[^\n]*'])
 
 class AParser:
-  def __init__(self, prog: str):
-    lexer = Lexer(a_grammar, prog)
-    parser = Parser(b_grammar, lexer.tokens)
-    self._ast: Node = parser.ast
-
-  @property
-  def ast(self) -> Node:
-    return self._ast
+  def parse(self, prog: str):
+    return Monad(prog) \
+      .then(Lexer(a_grammar).lex) \
+      .then(Parser(a_grammar).parse) \
+      .value
 
 
 
-class APrinter:
-  def __init__(self, ast: Node):
-    node_visitors: dict[str, Callable[[Node, Visitor], Any]] = {
-      'a': self.visit_a,
-      'instruction': self.visit_instruction,
-    }
-    self._str: str = Visitor(
-      ast,
-      node_visitors,
-    ).ret
+class APrinter(Visitor):
+  def __init__(self):
+    super().__init__(
+      {
+        '<a>': self._visit_a,
+        '<instruction>': self._visit_instruction,
+      },
+      default_nonterminal_node_visitor=Visitor.visit_telescope,
+      default_terminal_node_visitor=lambda terminal_node, _: terminal_node.lexeme,
+    )
 
-  @property
-  def str(self) -> str:
-    return self._str
+  def print(self, ast: ASTNode) -> str:
+    return self.visit(ast)
 
-def a_printer_visit_a(
-  node: Node,
-  visitor: Visitor,
-) -> Any:
-  prog = visitor.visit(node.get(0))
-  if node.production == 0:
-    prog = '\n'.join([prog, visitor.visit(node.get(1))])
-  return prog
+  def _visit_a(
+    self,
+    node: ASTNode,
+    visitor: Visitor,
+  ):
+    prog: str = '\n'.join(visitor.visit(child) for child in node[0])
+    return prog
 
-def a_printer_visit_instruction(
-  node: Node,
-  visitor: Visitor,
-) -> Any:
-  match node.production:
-    # 3 operands
-    case 0:
-      return ' '.join([
-        node.get(0).get(0).lexeme,
-        node.get(1).get(0).lexeme,
-        node.get(2).get(0).lexeme,
-        node.get(3).get(0).lexeme,
-      ])
-
-    # 2 operands
-    case 1:
-      return ' '.join([
-        node.get(0).get(0).lexeme,
-        node.get(1).get(0).lexeme,
-        node.get(2).get(0).lexeme,
-      ])
-
-    # 1 operand
-    case 2:
-      return ' '.join([
-        node.get(0).get(0).lexeme,
-        node.get(1).get(0).lexeme,
-      ])
-
-a_printer_node_visitors = {
-  'a': a_printer_visit_a,
-  'instruction': a_printer_visit_instruction,
-}
-    
-
+  def _visit_instruction(
+    self,
+    node: ASTNode,
+    visitor: Visitor
+  ) -> str:
+    return ' '.join(visitor.visit(child) for child in node)
 
 class AInterpreter:
-  def __init__(self, ast: Node, mem: int = DEFAULT_MEM):
-    self._imem = Visitor(ast, a_loader_node_visitors).ret
-    self._dmem = [0] * mem
+  def __init__(self, mem_size: int = DEFAULT_MEM):
+    self._mem_size = mem_size
+    self._imem = []
+    self._dmem = [0] * self._mem_size
     self._pc = 0
 
   def __at_end(self) -> bool:
@@ -99,7 +70,11 @@ class AInterpreter:
   def __advance(self) -> None:
     self._pc += 1
 
-  def interpret(self) -> None:
+  def interpret(self, ast: ASTNode) -> None:
+    self._imem = ALoader().load(ast)
+    self._dmem = [0] * self._mem_size
+    self._pc = 0
+
     while not self.__at_end():
       ins: tuple = self.__get()
       advance: bool = True
@@ -225,42 +200,32 @@ class AInterpreter:
       if advance:
         self.__advance()
 
-  def visit_a(
+
+
+class ALoader(Visitor):
+  def __init__(self):
+    super().__init__(
+      {
+        '<a>': self._visit_a,
+        '<instruction>': self._visit_instruction,
+      },
+      default_nonterminal_node_visitor=Visitor.visit_telescope,
+      default_terminal_node_visitor=lambda terminal_node, _: terminal_node.literal,
+    )
+
+  def load(self, ast: ASTNode) -> list[tuple]:
+    return self.visit(ast)
+
+  def _visit_a(
     self,
-    node: Node,
+    node: ASTNode,
     visitor: Visitor,
   ) -> Any:
-    instructions = [visitor.visit(node.get(0))]
-    if node.production == 0:
-      instructions.extend(visitor.visit(node.get(1)))
-    return instructions
+    return [visitor.visit(child) for child in node[0]]
 
-  def visit_instruction(
+  def _visit_instruction(
     self,
-    node: Node,
+    node: ASTNode,
     visitor: Visitor,
   ) -> Any:
-    match node.production:
-      # 3 operands
-      case 0:
-        return (
-          node.get(0).get(0).literal,
-          node.get(1).get(0).literal,
-          node.get(2).get(0).literal,
-          node.get(3).get(0).literal,
-        )
-
-      # 2 operands
-      case 1:
-        return (
-          node.get(0).get(0).literal,
-          node.get(1).get(0).literal,
-          node.get(2).get(0).literal,
-        )
-
-      # 1 operand
-      case 2:
-        return (
-          node.get(0).get(0).literal,
-          node.get(1).get(0).literal,
-        )
+    return tuple(visitor.visit(child) for child in node)

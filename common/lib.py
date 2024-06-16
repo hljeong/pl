@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Protocol, TypeVar, Type, Callable, Any, Generic
+from typing import Protocol, TypeVar, Callable, Any, Generic
 from functools import total_ordering
 from time import sleep
 
@@ -25,11 +25,11 @@ class Monad(Generic[T]):
 
 class Arglist:
   def __init__(self, *args: Any, **kwargs: Any):
-    self._args: tuple[...] = args
+    self._args: tuple = args
     self._kwargs: dict[str, Any] = kwargs
 
   @property
-  def args(self) -> tuple[...]:
+  def args(self) -> tuple:
     return self._args
 
   @property
@@ -39,23 +39,17 @@ class Arglist:
 
 
 def Comparable(Protocol):
-  def __eq__(self, other: 'Comparable') -> bool:
-    ...
+  def __eq__(self, other: 'Comparable') -> bool: ...
 
-  def __ne__(self, other: 'Comparable') -> bool:
-    ...
+  def __ne__(self, other: 'Comparable') -> bool: ...
 
-  def __lt__(self, other: 'Comparable') -> bool:
-    ...
+  def __lt__(self, other: 'Comparable') -> bool: ...
 
-  def __le__(self, other: 'Comparable') -> bool:
-    ...
+  def __le__(self, other: 'Comparable') -> bool: ...
 
-  def __gt__(self, other: 'Comparable') -> bool:
-    ...
+  def __gt__(self, other: 'Comparable') -> bool: ...
 
-  def __ge__(self, other: 'Comparable') -> bool:
-    ...
+  def __ge__(self, other: 'Comparable') -> bool: ...
 
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Generic, TypeVar
 
-from common import Monad, Log
+from common import Monad
 from lexical import Lexer
 from syntax import Grammar, Parser, Visitor
 

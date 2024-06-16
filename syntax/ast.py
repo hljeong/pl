@@ -1,6 +1,6 @@
 from __future__ import annotations
-from abc import ABC, abstractmethod
-from typing import Iterator
+from abc import ABC
+from typing import Iterator, Union
 
 from lexical import Token
 
@@ -17,7 +17,7 @@ class ASTNode(ABC):
   @property
   def node_type(self) -> str:
     return self._node_type
-    
+
 
 
 class NonterminalASTNode(ASTNode):

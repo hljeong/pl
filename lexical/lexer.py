@@ -151,10 +151,20 @@ class Lexer:
                 lines: list[str] = self._source.split("\n")
                 line: str = lines[self._position.cursor.line - 1]
                 column: int = self._position.cursor.column - 1
+                if self._position.cursor.line > 1:
+                    Log.ef(
+                        f"[yellow]{self._position.cursor.line - 1}[/yellow] {lines[self._position.cursor.line - 2]}",
+                        highlight=False,
+                    )
                 Log.ef(
-                    f"  {line[:column]}[red]{line[column]}[/red]{line[column + 1:]}",
+                    f"[yellow]{self._position.cursor.line}[/yellow] {line[:column]}[red]{line[column]}[/red]{line[column + 1:]}",
                     highlight=False,
                 )
+                if self._position.cursor.line <= len(lines):
+                    Log.ef(
+                        f"[yellow]{self._position.cursor.line + 1}[/yellow] {lines[self._position.cursor.line]}",
+                        highlight=False,
+                    )
                 Log.end_e()
 
             else:

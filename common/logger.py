@@ -25,7 +25,7 @@ class Log:
         DEBUG = 3
         TRACE = 4
 
-    level: Level = Level.NONE
+    level: Level = Level.ERROR
     spaced: bool = True
     traceback: bool = False
     _section: bool = False

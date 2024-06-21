@@ -18,11 +18,30 @@ $ make test
 
 ## run code
 ```sh
-$ python a.py <file.a>
+$ ./pl <language> <program>
+
+# alternatively,
+$ python pl <language> <program>
 ```
 
-```sh
-$ python b.py <file.b>
-```
+try these examples:
 
-try these examples: [echo.a](./langs/a/code/echo.a), [fact.a](./langs/a/code/fact.a), [fact.b](./langs/b/code/fact.b), [fizz.b](./langs/b/code/fizz.b)
+- [echo.a](./langs/a/code/echo.a):
+    ```sh
+    $ ./pl a ./langs/a/code/echo.a
+    ```
+
+- [fact.a](./langs/a/code/fact.a)
+    ```sh
+    $ ./pl a ./langs/a/code/fact.a
+    ```
+
+- [fact.b](./langs/b/code/fact.b)
+    ```sh
+    $ ./pl b ./langs/b/code/fact.b
+    ```
+
+- [fizz.b](./langs/b/code/fizz.b)
+    ```sh
+    $ ./pl b ./langs/b/code/fizz.b
+    ```

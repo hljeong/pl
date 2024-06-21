@@ -5,7 +5,7 @@ from common import Monad, Log
 from lexical import Lexer
 from syntax import Grammar, Parser, Visitor, ASTNode
 
-DEFAULT_MEM = 16 * 1024 * 1024
+DEFAULT_MEM = 2 * 1024 * 1024
 
 with open("langs/a/spec/a.xbnf") as a_xbnf_f:
     a_xbnf = "".join(a_xbnf_f.readlines())
@@ -61,7 +61,7 @@ class AInterpreter:
         return self._imem[self._pc]
 
     def __jump(self, line: int) -> None:
-        self._pc = line
+        self._pc += line
 
     def __advance(self) -> None:
         self._pc += 1

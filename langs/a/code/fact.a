@@ -8,8 +8,8 @@ setv 1 3      # 1: &fact = 3
 readi 0       # 2: read_int(&n)
 setv 3 1      # 3: fact = 1
 eqv 4 2 0     # 4: flg = (n == 0)
-jumpvif 9 4   # 5: if (flag) goto 9
+jumpvif 4 4   # 5: if (flag) goto 9
 mul 3 3 2     # 6: fact = fact * n
 subv 2 2 1    # 7: n = n - 1
-jumpv 4       # 8: goto 4
+jumpv -4      # 8: goto 4
 printi 1      # 9: print_int(&fact)

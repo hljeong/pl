@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Iterable
+from typing import Iterable, Union
 
 
 # an internal node by duck typing must have node_type, __iter__, and __len__
@@ -44,3 +44,18 @@ def to_tree_string(
 
     else:
         return f"{use_prefix}{str(node)}"
+
+
+def join(lines_or_line: Union[Iterable[str], str], *rest_lines: str):
+    if len(rest_lines) == 0:
+        return "\n".join(lines_or_line)
+    else:
+        return "\n".join([lines_or_line, *rest_lines])
+
+
+def tabbed(text: str, tab: int = 2):
+    return join(map(lambda line: f'{" " * tab}{line}', text.split("\n")))
+
+
+def count_lines(text: str):
+    return text.count("\n") + 1

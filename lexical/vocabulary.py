@@ -42,7 +42,7 @@ class Vocabulary:
             str,
         ),
         "decimal_integer": Definition.make(
-            r"0|[1-9][0-9]*",
+            r"-?(0|[1-9][0-9]*)",
             int,
         ),
         "escaped_string": Definition.make(

@@ -8,7 +8,7 @@ from rich.console import Console, ConsoleOptions
 from rich.markup import escape
 from rich.traceback import install, Trace, Traceback
 
-install(show_locals=True)
+install(show_locals=False)
 
 from .lib import R, Arglist, total_ordering_by
 
@@ -27,7 +27,7 @@ class Log:
 
     level: Level = Level.NONE
     spaced: bool = True
-    trace: bool = False
+    traceback: bool = False
     _section: bool = False
     _colors: DefaultDict[Level, str] = defaultdict(lambda: "white")
     _console: Console = Console()
@@ -106,7 +106,7 @@ class Log:
     # weird hack from https://github.com/Textualize/rich/discussions/1531#discussioncomment-6409446
     @staticmethod
     def before_error() -> None:
-        if not Log.trace:
+        if not Log.traceback:
             return
 
         traceback_type: Optional[TracebackType] = None

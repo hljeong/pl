@@ -1,0 +1,21 @@
+setv r14 1  # 0: &input = 1
+sysv 1      # 1: read(&input)
+setv r14 1  # 2: &input = 1
+sysv 0      # 3: print(&input)
+exitv 0     # 4: return 0
+
+# r0: hard wired 0
+# r1: return addr
+# r2: stack ptr
+# r3-13: tmp
+# r14-19: arg
+# r20-31: saved
+#
+# ra: r1
+# sp: r2
+# t0: r3
+# t10: r13
+# a0: r14
+# a5: r19
+# s0: r20
+# s11: r31

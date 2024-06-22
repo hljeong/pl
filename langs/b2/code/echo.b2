@@ -1,0 +1,2 @@
+read(input);
+print(input);

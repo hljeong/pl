@@ -1,0 +1,35 @@
+<b2> ::= <block>*;
+
+<block> ::= <statement> | "{" <statement>* "}";
+
+<statement> ::=
+
+  <variable> "=" (<operand> | <expression> | <string>) ";" |
+
+  ("print" | "printi" | "read" | "readi") "\(" <variable> "\)" ";" |
+
+  "while" "\(" <expression> "\)" <block> |
+
+  "if" "\(" <expression> "\)" <block>;
+
+<expression> ::=
+
+  <unary_operator> <operand> |
+
+  <operand> <binary_operator> <operand>;
+
+<operand> ::= <variable> | decimal_integer;
+
+<unary_operator> ::= "!";
+
+<binary_operator> ::=
+
+  "\+" | "-"  | "\*" | "\|" |
+
+  "&"  | "==" | "!=" | ">"  |
+
+  ">=" | "<"  | "<=";
+
+<variable> ::= identifier;
+
+<string> ::= escaped_string;

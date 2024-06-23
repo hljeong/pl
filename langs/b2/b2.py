@@ -361,14 +361,13 @@ class B2Compiler(Visitor):
             # <statement> ::= "while" "\(" <expression> "\)" <block>;
             case 2:
                 payload: str = tabbed(v.visit(n[4]))
-                jailable_offense: B2Printer = B2Printer()
                 preamble: str = join(
-                    f"{v.visit(n[2]).format(self._a['#tmp'])}        # while ({jailable_offense._visit_expression(n[2], jailable_offense)})",
+                    f"{v.visit(n[2]).format(self._a['#tmp'])}        # while ({B2Printer().visit(n[2])})",
                     f"eqv {self._a['#tmp']} {self._a['#tmp']} 0",
                     f"jumpifv {count_lines(payload) + 2} {self._a['#tmp' ]}",
                 )
                 epilogue: str = (
-                    f"jumpv {-(count_lines(payload) + 3)}        # end while ({jailable_offense._visit_expression(n[2], jailable_offense)})"
+                    f"jumpv {-(count_lines(payload) + 3)}        # end while ({B2Printer().visit(n[2])})"
                 )
 
                 return join(preamble, payload, epilogue)
@@ -376,9 +375,8 @@ class B2Compiler(Visitor):
             # <statement> ::= "if" "\(" <expression> "\)" <block>;
             case 3:
                 payload: str = tabbed(v.visit(n[4]))
-                jailable_offense: B2Printer = B2Printer()
                 preamble: str = join(
-                    f"{v.visit(n[2]).format(self._a['#tmp'])}        # if ({jailable_offense._visit_expression(n[2], jailable_offense)})",
+                    f"{v.visit(n[2]).format(self._a['#tmp'])}        # if ({B2Printer().visit(n[2])})",
                     f"eqv {self._a['#tmp']} {self._a['#tmp']} 0",
                     f"jumpifv {count_lines(payload) + 1} {self._a['#tmp' ]}",
                 )

@@ -1,11 +1,11 @@
 from __future__ import annotations
 from collections import defaultdict
-from typing import Optional, Callable, Union, Any
+from typing import cast, Optional, Callable, Union, Any
 
 from common import Monad, Log
 from lexical import Vocabulary, Lexer
 
-from .ast import ASTNode
+from .ast import ASTNode, TerminalASTNode, NonterminalASTNode
 from .parser import ExpressionTerm, Parser
 from .visitor import Visitor
 
@@ -59,6 +59,10 @@ class Grammar:
         self._node_parsers: dict[
             str, Callable[[Parser, Optional[bool]], Optional[ASTNode]]
         ] = node_parsers
+
+    # todo: does this make sense
+    def __repr__(self) -> str:
+        return f"Grammar(name='{self._name}', vocabulary={self._vocabulary}, nonterminals={list(filter(lambda node: node.startswith('<'), self._node_parsers.keys()))})"
 
     @property
     def name(self) -> str:
@@ -217,23 +221,27 @@ class VocabularyGenerator(Visitor):
     def __init__(self, ignore: list[str] = []):
         super().__init__(
             {"escaped_string": self._visit_escaped_string},
-            Visitor.visit_all,
         )
         self._ignore: list[str] = Vocabulary.DEFAULT_IGNORE
         self._ignore.extend(ignore)
 
     def generate(self, ast: ASTNode) -> Vocabulary:
         self._dictionary: dict[str, Vocabulary.Definition] = {}
+        from common import to_tree_string
+
+        # Log.d(to_tree_string(ast))
         self.visit(ast)
         return Vocabulary(self._dictionary, ignore=self._ignore)
 
     def _visit_escaped_string(
         self,
-        node: ASTNode,
-        _: Visitor,
+        n: ASTNode,
     ) -> None:
-        if node.lexeme not in self._dictionary:
-            self._dictionary[node.lexeme] = Vocabulary.Definition.make(node.literal)
+        # todo: duplicate casts look ugly
+        if cast(TerminalASTNode, n).lexeme not in self._dictionary:
+            self._dictionary[cast(TerminalASTNode, n).lexeme] = (
+                Vocabulary.Definition.make(cast(TerminalASTNode, n).literal)
+            )
 
 
 class NodeParsersGenerator(Visitor):
@@ -306,41 +314,38 @@ class NodeParsersGenerator(Visitor):
 
     def _visit_xbnf(
         self,
-        node: ASTNode,
-        visitor: Visitor,
+        n: ASTNode,
     ) -> Any:
         # node[0]: <production>+
         # production: <production>
-        for production in node[0]:
-            visitor.visit(production)
+        for production in n[0]:
+            self.visit(production)
 
     def _visit_production(
         self,
-        node: ASTNode,
-        visitor: Visitor,
+        n: ASTNode,
     ) -> Any:
-        nonterminal: str = f"<{node[0][1].lexeme}>"
+        nonterminal: str = f"<{n[0][1].lexeme}>"
 
         self._lhs_stack.append(nonterminal)
         self._idx_stack.append(0)
 
         # not using extend => force 1 production definition for each nonterminal
-        self._add_nonterminal(nonterminal, visitor.visit(node[2]))
+        self._add_nonterminal(nonterminal, self.visit(n[2]))
 
         self._idx_stack.pop()
         self._lhs_stack.pop()
 
     def _visit_body(
         self,
-        node: ASTNode,
-        visitor: Visitor,
+        n: ASTNode,
     ) -> list[list[ExpressionTerm]]:
         productions: list[list[ExpressionTerm]] = []
 
         # only 1 production
-        if len(node[1]) == 0:
+        if len(n[1]) == 0:
             # node[0]: <expression>
-            productions.append(visitor.visit(node[0]))
+            productions.append(self.visit(n[0]))
 
         # multiple productions
         else:
@@ -350,7 +355,7 @@ class NodeParsersGenerator(Visitor):
             self._idx_stack.append(0)
 
             # node[0]: <expression>
-            productions.append(visitor.visit(node[0]))
+            productions.append(self.visit(n[0]))
 
             self._idx_stack.pop()
             self._lhs_stack.pop()
@@ -358,13 +363,13 @@ class NodeParsersGenerator(Visitor):
 
         # node[1]: ("\|" <expression>)*
         # or_production: "\|" <expression>
-        for or_production in node[1]:
+        for or_production in n[1]:
             auxiliary_nonterminal = f"{self._lhs_stack[-1]}~{self._idx_stack[-1]}"
             self._lhs_stack.append(auxiliary_nonterminal)
             self._idx_stack.append(0)
 
             # or_production[1]: <expression>
-            productions.append(visitor.visit(or_production[1]))
+            productions.append(self.visit(or_production[1]))
 
             self._idx_stack.pop()
             self._lhs_stack.pop()
@@ -374,26 +379,25 @@ class NodeParsersGenerator(Visitor):
 
     def _visit_expression(
         self,
-        node: ASTNode,
-        visitor: Visitor,
+        n: ASTNode,
     ) -> list[ExpressionTerm]:
         ret = []
 
         # node[0]: (<group> <multiplicity>?)+
         # expression_term: <group> <multiplicity>?
-        for expression_term in node[0]:
+        for expression_term in n[0]:
             # multiplicity: <multiplicity>?
-            optional_multiplicity: ListNonterminalASTNode = expression_term[1]
+            optional_multiplicity: NonterminalASTNode = expression_term[1]
 
             # default multiplicity is 1
             if len(optional_multiplicity) == 0:
                 multiplicity: Union[str, int] = 1
 
             else:
-                multiplicity: Union[str, int] = visitor.visit(optional_multiplicity[0])
+                multiplicity: Union[str, int] = self.visit(optional_multiplicity[0])
 
             # expression_term[0]: <group>
-            group: str = visitor.visit(expression_term[0])
+            group: str = self.visit(expression_term[0])
 
             ret.append(ExpressionTerm(group, multiplicity))
 
@@ -401,14 +405,13 @@ class NodeParsersGenerator(Visitor):
 
     def _visit_group(
         self,
-        node: ASTNode,
-        visitor: Visitor,
+        n: ASTNode,
     ) -> str:
-        match node.choice:
+        match n.choice:
             # node: <term>
             case 0:
                 # term: <nonterminal> | <terminal>
-                term = node[0]
+                term = n[0]
 
                 self._idx_stack[-1] += 1
 
@@ -435,7 +438,7 @@ class NodeParsersGenerator(Visitor):
                 self._used.add(auxiliary_nonterminal)
 
                 # node[1]: <body>
-                self._add_nonterminal(auxiliary_nonterminal, visitor.visit(node[1]))
+                self._add_nonterminal(auxiliary_nonterminal, self.visit(n[1]))
 
                 self._idx_stack.pop()
                 self._lhs_stack.pop()
@@ -445,14 +448,13 @@ class NodeParsersGenerator(Visitor):
 
     def _visit_multiplicity(
         self,
-        node: ASTNode,
-        visitor: Visitor,
+        n: ASTNode,
     ) -> Union[str, int]:
-        match node.choice:
+        match n.choice:
             # node: "\?" | "\*" | "\+"
             case 0 | 1 | 2:
-                return node[0].lexeme
+                return n[0].lexeme
 
             # node: decimal_integer
             case 1:
-                return node[0].literal
+                return n[0].literal

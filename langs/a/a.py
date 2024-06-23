@@ -1,9 +1,9 @@
 from __future__ import annotations
-from typing import Any
+from typing import Any, cast
 
-from common import Monad, Log
+from common import Monad
 from lexical import Lexer
-from syntax import Grammar, Parser, Visitor, ASTNode
+from syntax import Grammar, Parser, Visitor, ASTNode, NonterminalASTNode
 
 DEFAULT_MEM = 2 * 1024 * 1024
 
@@ -28,8 +28,8 @@ class APrinter(Visitor):
                 "<a>": self._visit_a,
                 "<instruction>": self._visit_instruction,
             },
-            default_nonterminal_node_visitor=Visitor.visit_telescope,
-            default_terminal_node_visitor=lambda terminal_node, _: terminal_node.lexeme,
+            default_nonterminal_node_visitor=Visitor.visit_telescope(self),
+            default_terminal_node_visitor=lambda n: n.lexeme,
         )
 
     def print(self, ast: ASTNode) -> str:
@@ -38,12 +38,11 @@ class APrinter(Visitor):
     def _visit_a(
         self,
         node: ASTNode,
-        visitor: Visitor,
     ):
         prog: str = "\n".join(visitor.visit(child) for child in node[0])
         return prog
 
-    def _visit_instruction(self, node: ASTNode, visitor: Visitor) -> str:
+    def _visit_instruction(self, node: ASTNode) -> str:
         return " ".join(visitor.visit(child) for child in node)
 
 
@@ -216,8 +215,8 @@ class ALoader(Visitor):
                 "<a>": self._visit_a,
                 "<instruction>": self._visit_instruction,
             },
-            default_nonterminal_node_visitor=Visitor.visit_telescope,
-            default_terminal_node_visitor=lambda terminal_node, _: terminal_node.literal,
+            default_nonterminal_node_visitor=Visitor.visit_telescope(self),
+            default_terminal_node_visitor=lambda n: n.literal,
         )
 
     def load(self, ast: ASTNode) -> list[tuple]:
@@ -225,14 +224,13 @@ class ALoader(Visitor):
 
     def _visit_a(
         self,
-        node: ASTNode,
-        visitor: Visitor,
+        n: NonterminalASTNode,
     ) -> Any:
-        return [visitor.visit(child) for child in node[0]]
+        # todo: review cast
+        return [self.visit(c) for c in cast(NonterminalASTNode, n[0])]
 
     def _visit_instruction(
         self,
-        node: ASTNode,
-        visitor: Visitor,
+        n: NonterminalASTNode,
     ) -> Any:
-        return tuple(visitor.visit(child) for child in node)
+        return tuple(self.visit(c) for c in n)

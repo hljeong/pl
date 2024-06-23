@@ -2,6 +2,8 @@ from __future__ import annotations
 import re
 from typing import Callable, Any, Iterator
 
+from common import Log
+
 
 class Vocabulary:
 
@@ -13,6 +15,9 @@ class Vocabulary:
         ):
             self._matcher = matcher
             self._literal_generator = literal_generator
+
+        def __repr__(self) -> str:
+            return f"Definition({self._matcher})"
 
         @property
         def matcher(self) -> re.Pattern:
@@ -64,6 +69,9 @@ class Vocabulary:
         self._ignore: list[re.Pattern] = list(
             map(lambda pattern: re.compile(f"\\A{pattern}"), ignore)
         )
+
+    def __repr__(self) -> str:
+        return f"Vocabulary(dictionary={self._dictionary}, ignore={self._ignore})"
 
     def __iter__(self) -> Iterator[str]:
         return iter(self._dictionary)

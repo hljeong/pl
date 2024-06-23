@@ -28,7 +28,7 @@ class BPrinter(Visitor):
                 "<statement>": self._visit_statement,
                 "<expression>": self._visit_expression,
             },
-            default_terminal_node_visitor=lambda terminal_node, _: terminal_node.lexeme,
+            default_terminal_node_visitor=lambda n: n.lexeme,
         )
 
     def print(self, ast: ASTNode) -> str:
@@ -37,24 +37,22 @@ class BPrinter(Visitor):
     def _visit_b(
         self,
         n: ASTNode,
-        v: Visitor,
     ) -> str:
-        prog: str = join(v.visit(child) for child in n[0])
+        prog: str = join(self.visit(c) for c in n[0])
         return prog
 
     def _visit_block(
         self,
         n: ASTNode,
-        v: Visitor,
     ) -> str:
         match n.choice:
             # <block> ::= <statement>;
             case 0:
-                return v.visit(n[0])
+                return self.visit(n[0])
 
             # <block> ::= "{" <statements> "}";
             case 1:
-                inner_prog: str = tabbed(join(v.visit(child) for child in n[1]))
+                inner_prog: str = tabbed(join(self.visit(c) for c in n[1]))
 
                 return join("{", inner_prog, "}")
 
@@ -63,16 +61,15 @@ class BPrinter(Visitor):
     def _visit_statement(
         self,
         n: ASTNode,
-        v: Visitor,
     ) -> str:
         match n.choice:
             # <statement> ::= <variable> "=" (<operand> | <expression> | <string>) ";" |
             case 0:
-                return f"{v.visit(n[0])} = {v.visit(n[2][0])};"
+                return f"{self.visit(n[0])} = {self.visit(n[2][0])};"
 
             # <statement> ::= ("print" | "printi" | "read" | "readi") "\(" <variable> "\)" ";" |
             case 1:
-                return f"{Visitor.telescope(n[0]).lexeme}({v.visit(n[2][0])})"
+                return f"{Visitor.telescope(n[0]).lexeme}({self.visit(n[2][0])})"
 
             # <statement> ::= "while" "\(" <expression> "\)" <block>;
             case 2:
@@ -81,14 +78,14 @@ class BPrinter(Visitor):
                     # <block> ::= <statement>;
                     case 0:
                         return join(
-                            f"while ({v.visit(n[2])}) {{",
-                            tabbed(v.visit(n[4])),
+                            f"while ({self.visit(n[2])}) {{",
+                            tabbed(self.visit(n[4])),
                             "}",
                         )
 
                     # <block> ::= "{" <statement>* "}";
                     case 1:
-                        return f"while ({v.visit(n[2])}) {v.visit(n[4])}"
+                        return f"while ({self.visit(n[2])}) {self.visit(n[4])}"
 
             # <statement> ::= "if" "\(" <expression> "\)" <block>;
             case 3:
@@ -97,30 +94,29 @@ class BPrinter(Visitor):
                     # <block> ::= <statement>;
                     case 0:
                         return join(
-                            f"if ({v.visit(n[2])}) {{",
-                            tabbed(v.visit(n[4])),
+                            f"if ({self.visit(n[2])}) {{",
+                            tabbed(self.visit(n[4])),
                             "}",
                         )
 
                     # <block> ::= "{" <statement>* "}";
                     case 1:
-                        return f"if ({v.visit(n[2])}) {v.visit(n[4])}"
+                        return f"if ({self.visit(n[2])}) {self.visit(n[4])}"
 
         assert False
 
     def _visit_expression(
         self,
         n: ASTNode,
-        v: Visitor,
     ) -> str:
         match n.choice:
             # <expression> ::= <unary_operator> <operand>;
             case 0:
-                return f"{v.visit(n[0])}{v.visit(n[1])}"
+                return f"{self.visit(n[0])}{self.visit(n[1])}"
 
             # <expression> ::= <operand> <binary_operator> <operand>;
             case 1:
-                return f"{v.visit(n[0])} {v.visit(n[1])} {v.visit(n[2])}"
+                return f"{self.visit(n[0])} {self.visit(n[1])} {self.visit(n[2])}"
 
         assert False
 
@@ -161,40 +157,37 @@ class BAllocator(Visitor):
     def _visit_b(
         self,
         n: Node,
-        v: Visitor,
     ) -> Any:
-        for child in n[0]:
-            v.visit(child)
+        for c in n[0]:
+            self.visit(c)
 
     def _visit_block(
         self,
         n: Node,
-        v: Visitor,
     ) -> Any:
         match n.choice:
             # <block> ::= <statement>;
             case 0:
-                v.visit(n[0])
+                self.visit(n[0])
 
             # <block> ::= "{" <statements> "}";
             case 1:
-                for child in n[1]:
-                    v.visit(child)
+                for c in n[1]:
+                    self.visit(c)
 
     def _visit_statement(
         self,
         n: ASTNode,
-        v: Visitor,
     ) -> Any:
         match n.choice:
             # <statement> ::= <variable> "=" (<operand> | <expression> | <string>) ";";
             case 0:
-                v.visit(n[0])
+                self.visit(n[0])
 
                 match n[2].choice:
                     # <operand> | <expression>
                     case 0 | 1:
-                        v.visit(n[2][0])
+                        self.visit(n[2][0])
 
                     # <string>
                     case 2:
@@ -217,21 +210,21 @@ class BAllocator(Visitor):
 
             # <statement> ::= "while" "\(" <expression> "\)" <block> | "if" "\(" <expression> "\)" <block>;
             case 2 | 3:
-                v.visit(n[2])
-                v.visit(n[4])
+                self.visit(n[2])
+                self.visit(n[4])
 
-    def _visit_expression(self, n: ASTNode, v: Visitor) -> Any:
+    def _visit_expression(self, n: ASTNode) -> Any:
         match n.choice:
             # <expression> ::= <unary_operator> <operand>;
             case 0:
-                v.visit(n[1])
+                self.visit(n[1])
 
             # <expression> ::= <operand> <binary_operator> <operand>;
             case 1:
-                v.visit(n[0])
-                v.visit(n[2])
+                self.visit(n[0])
+                self.visit(n[2])
 
-    def _visit_variable(self, n: ASTNode, v: Visitor) -> Any:
+    def _visit_variable(self, n: ASTNode) -> Any:
         self._var(n[0].lexeme)
 
 
@@ -254,28 +247,25 @@ class BCompiler(Visitor):
     def _visit_b(
         self,
         n: Node,
-        v: Visitor,
     ) -> Any:
-        return join(v.visit(child) for child in n[0])
+        return join(self.visit(c) for c in n[0])
 
     def _visit_block(
         self,
         n: Node,
-        v: Visitor,
     ) -> Any:
         match n.choice:
             # <block> ::= <statement>;
             case 0:
-                return v.visit(n[0])
+                return self.visit(n[0])
 
             # <block> ::= "{" <statements> "}";
             case 1:
-                return tabbed(join(v.visit(child) for child in n[1]))
+                return tabbed(join(self.visit(c) for c in n[1]))
 
     def _visit_statement(
         self,
         n: Node,
-        v: Visitor,
     ) -> Any:
         match n.choice:
             # <statement> ::= <variable> "=" (<operand> | <expression> | <string>) ";"
@@ -284,11 +274,11 @@ class BCompiler(Visitor):
                 match n[2].choice:
                     # <operand>
                     case 0:
-                        return f"set{'' if n[2][0].choice == 0 else 'v'} {self._a[varname]} {v.visit(n[2][0])}"
+                        return f"set{'' if n[2][0].choice == 0 else 'v'} {self._a[varname]} {self.visit(n[2][0])}"
 
                     # <expression>
                     case 1:
-                        return v.visit(n[2][0]).format(self._a[varname])
+                        return self.visit(n[2][0]).format(self._a[varname])
 
                     # <string>
                     case 2:
@@ -327,9 +317,9 @@ class BCompiler(Visitor):
 
             # <statement> ::= "while" "\(" <expression> "\)" <block>;
             case 2:
-                payload: str = tabbed(v.visit(n[4]))
+                payload: str = tabbed(self.visit(n[4]))
                 preamble: str = join(
-                    v.visit(n[2]).format(self._a["#tmp"]),
+                    self.visit(n[2]).format(self._a["#tmp"]),
                     f"eqv {self._a['#tmp']} {self._a['#tmp']} 0",
                     f"jumpvif {count_lines(payload) + 2} {self._a['#tmp' ]}",
                 )
@@ -339,28 +329,28 @@ class BCompiler(Visitor):
 
             # <statement> ::= "if" "\(" <expression> "\)" <block>;
             case 3:
-                payload: str = tabbed(v.visit(n[4]))
+                payload: str = tabbed(self.visit(n[4]))
                 preamble: str = join(
-                    v.visit(n[2]).format(self._a["#tmp"]),
+                    self.visit(n[2]).format(self._a["#tmp"]),
                     f"eqv {self._a['#tmp']} {self._a['#tmp']} 0",
                     f"jumpvif {count_lines(payload) + 1} {self._a['#tmp' ]}",
                 )
 
                 return join(preamble, payload)
 
-    def _visit_expression(self, n: ASTNode, v: Visitor) -> Any:
+    def _visit_expression(self, n: ASTNode) -> Any:
         match n.choice:
             # <unary_operator> <operand>
             case 0:
                 # constant expression optimization
                 if n[1].choice == 1:
-                    val: int = int(v.visit(n[1]))
+                    val: int = int(self.visit(n[1]))
                     val = 1 if val == 0 else 0
                     return f"setv {{}} {val}"
 
                 # minimize instructions
                 else:
-                    return f"neqv {{}} {v.visit(n[1])} 0"
+                    return f"neqv {{}} {self.visit(n[1])} 0"
 
             # <operand> <binary_operator> <operand>
             case 1:
@@ -396,8 +386,8 @@ class BCompiler(Visitor):
                         10: lambda x, y: x <= y,
                     }[n[1].choice]
 
-                    lop_val: int = int(v.visit(lop))
-                    rop_val: int = int(v.visit(rop))
+                    lop_val: int = int(self.visit(lop))
+                    rop_val: int = int(self.visit(rop))
                     val: int = binop(lop_val, rop_val)
                     return f"setv {{}} {val}"
 
@@ -432,13 +422,13 @@ class BCompiler(Visitor):
                     if lop_choice == 1:
                         lop, rop = rop, lop
 
-                    return f"{inst}v {{}} {v.visit(lop)} {v.visit(rop)}"
+                    return f"{inst}v {{}} {self.visit(lop)} {self.visit(rop)}"
 
                 # both operands are variables
                 else:
-                    return f"{inst} {{}} {v.visit(lop)} {v.visit(rop)}"
+                    return f"{inst} {{}} {self.visit(lop)} {self.visit(rop)}"
 
-    def _visit_operand(self, n: ASTNode, v: Visitor) -> Any:
+    def _visit_operand(self, n: ASTNode) -> Any:
         # <operand> ::= <variable> | decimal_integer;
         match n.choice:
             # <operand> ::= <variable>;

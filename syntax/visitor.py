@@ -29,7 +29,7 @@ DEFAULT_DEFAULT_TERMINAL_AST_NODE_VISITOR: TerminalASTNodeVisitor = lambda _: No
 class Visitor:
     @staticmethod
     def visit_all(v: Visitor) -> NonterminalASTNodeVisitor:
-        return lambda n: tuple(v.visit(c) for c in n)
+        return lambda n: v.visit(n[0]) if len(n) == 1 else tuple(v.visit(c) for c in n)
 
     @staticmethod
     def visit_telescope(v: Visitor) -> NonterminalASTNodeVisitor:

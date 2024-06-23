@@ -10,6 +10,7 @@ from syntax import (
     ASTNode,
     NonterminalASTNode,
     ChoiceNonterminalASTNode,
+    TerminalASTNode,
 )
 from syntax.visitor import NonterminalASTNodeVisitor
 
@@ -34,6 +35,7 @@ class B2Printer(Visitor):
                 "<block>": self._visit_block,
                 "<statement>": self._visit_statement,
                 "<expression>": self._visit_expression,
+                "<mem_access>": self._visit_mem_access,
             },
             default_terminal_node_visitor=lambda n: n.lexeme,
         )
@@ -74,7 +76,7 @@ class B2Printer(Visitor):
         n: ChoiceNonterminalASTNode,
     ) -> str:
         match n.choice:
-            # <statement> ::= <variable> "=" (<operand> | <expression> | <string>) ";" |
+            # <statement> ::= <variable> "=" (<operand> | <expression> | <string> | <mem_access>) ";" |
             case 0:
                 # todo: review cast
                 return f"{self.visit(n[0])} = {self.visit(cast(NonterminalASTNode, n[2])[0])};"
@@ -118,6 +120,10 @@ class B2Printer(Visitor):
                     case 1:
                         return f"if ({self.visit(n[2])}) {self.visit(n[4])}"
 
+            # <statement> ::= <mem_access> "=" <variable> ";";
+            case 4:
+                return f"{self.visit(n[0])} = {self.visit(n[2])};"
+
         assert False
 
     # todo: casting from here down
@@ -135,6 +141,12 @@ class B2Printer(Visitor):
                 return f"{self.visit(n[0])} {self.visit(n[1])} {self.visit(n[2])}"
 
         assert False
+
+    def _visit_mem_access(
+        self,
+        n: ASTNode,
+    ) -> str:
+        return f"[{self.visit(n[1])} + {self.visit(n[3])}]"
 
 
 class B2Allocator(Visitor):
@@ -205,7 +217,7 @@ class B2Allocator(Visitor):
         n: ASTNode,
     ) -> Any:
         match n.choice:
-            # <statement> ::= <variable> "=" (<operand> | <expression> | <string>) ";";
+            # <statement> ::= <variable> "=" (<operand> | <expression> | <string> | <mem_access>) ";";
             case 0:
                 self.visit(n[0])
 
@@ -217,6 +229,10 @@ class B2Allocator(Visitor):
                     # <string>
                     case 2:
                         self._var(n[0][0].lexeme, vartype=1)
+
+                    # <mem_access> ::= "\[" <variable> "+" decimal_integer "\]";
+                    case 3:
+                        self.visit(n[2][0][1])
 
             # <statement> ::= ("print" | "printi" | "read" | "readi") "\(" <variable> "\)" ";";
             case 1:
@@ -235,6 +251,10 @@ class B2Allocator(Visitor):
             case 2 | 3:
                 self.visit(n[2])
                 self.visit(n[4])
+
+            case 4:
+                self.visit(n[0][1])
+                self.visit(n[2])
 
     def _visit_expression(self, n: ASTNode) -> Any:
         match n.choice:
@@ -296,17 +316,18 @@ class B2Compiler(Visitor):
         n: Node,
     ) -> Any:
         match n.choice:
-            # <statement> ::= <variable> "=" (<operand> | <expression> | <string>) ";"
+            # <statement> ::= <variable> "=" (<operand> | <expression> | <string> | <mem_access>) ";"
             case 0:
                 varname: str = n[0][0].lexeme
+                reg: str = self._a[varname]
                 match n[2].choice:
                     # <operand>
                     case 0:
-                        return f"set{'' if n[2][0].choice == 0 else 'v'} {self._a[varname]} {self.visit(n[2][0])}"
+                        return f"set{'' if n[2][0].choice == 0 else 'v'} {reg} {self.visit(n[2][0])}"
 
                     # <expression>
                     case 1:
-                        return self.visit(n[2][0]).format(self._a[varname])
+                        return self.visit(n[2][0]).format(reg)
 
                     # <string>
                     case 2:
@@ -320,12 +341,16 @@ class B2Compiler(Visitor):
                             join(
                                 join(
                                     f"setv {self._a['#tmp']} {ord(literal[i])} # store '{literal[i]}' in temp var",
-                                    f"store {self._a['#tmp']} {self._a[varname]} {i} # store it at ({varname} + {i})",
+                                    f"store {self._a['#tmp']} {reg} {i} # store it at ({varname} + {i})",
                                 )
                                 for i in range(len(literal))
                             ),
-                            f"store r0 {self._a[varname]} {len(literal)}",
+                            f"store r0 {reg} {len(literal)}",
                         )
+
+                    # <mem_access> ::= "\[" <variable> "+" decimal_integer "\]";
+                    case 3:
+                        return f"load {reg} {self._a[n[2][0][1][0].lexeme]} {n[2][0][3].lexeme}"
 
             # <statement> ::= ("print" | "printi" | "read" | "readi") "\(" <variable> "\)" ";";
             case 1:
@@ -387,6 +412,10 @@ class B2Compiler(Visitor):
                 )
 
                 return join(preamble, payload)
+
+            # <statement> ::= <mem_access> "=" <variable> ";";
+            case 4:
+                return f"store {self._a[n[2][0].lexeme]} {self._a[n[0][1][0].lexeme]} {n[0][3].lexeme}"
 
     def _visit_expression(self, n: ASTNode) -> Any:
         match n.choice:

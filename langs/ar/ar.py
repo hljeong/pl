@@ -11,6 +11,7 @@ SysCall = Callable[[], None]
 
 DEFAULT_REGFILE_SIZE: int = 32
 DEFAULT_MEM_SIZE: int = 2 * 1024 * 1024
+DEFAULT_STACK_SIZE: int = 16 * 1024
 USE_DEFAULT_SYSCALL: dict[int, SysCall] = {}
 
 
@@ -19,6 +20,7 @@ class Machine:
         self,
         regfile_size: int = DEFAULT_REGFILE_SIZE,
         mem_size: int = DEFAULT_MEM_SIZE,
+        stack_size: int = DEFAULT_STACK_SIZE,
         syscall: dict[int, SysCall] = USE_DEFAULT_SYSCALL,
     ):
         self._r: RegFile = {f"r{i}": 0 for i in range(regfile_size)}
@@ -35,8 +37,10 @@ class Machine:
         self._syscall = syscall
         self._pc: int = 0
         self._next_pc: int = 1
-        # dont allocate nullptr (0)
-        self._next_mem_alloc: int = 1
+        # skip nullptr
+        self._r["r1"] = 1
+        self._stack_limit: int = stack_size
+        self._next_mem_alloc: int = mem_size
 
     def _print(self) -> None:
         i: int = self._r["r14"]
@@ -101,142 +105,190 @@ class Machine:
     # todo: better allocator
     def _alloc(self) -> None:
         size: int = self._r["r14"]
-        self._r["r14"] = self._next_mem_alloc
-        self._next_mem_alloc += size
+        self._r["r14"] = self._next_mem_alloc - size
+        self._next_mem_alloc -= size
 
+    # no op for now
     # todo: better allocator
     def _free(self) -> None:
         self._r["r14"] = 0
 
     # todo: implement imem and keep pc internal
     def clk(self) -> int:
+        if self._r["r1"] >= self._stack_limit:
+            raise RuntimeError("stack overflow")
         self._pc = self._next_pc
         self._next_pc = self._pc + 1
         return self._pc
 
     def jump(self, delta_r: str) -> None:
+        Log.t(f"{delta_r} = {self._r[delta_r]}")
         self._next_pc = self._pc + self._r[delta_r]
 
     def jumpv(self, delta_v: int) -> None:
         self._next_pc = self._pc + delta_v
 
     def sys(self, id_r: str) -> None:
+        Log.t(f"{id_r} = {self._r[id_r]}")
         self._syscall[self._r[id_r]]()
 
     def sysv(self, id_v: int) -> None:
         self._syscall[id_v]()
 
     def exit(self, val_r: str) -> int:
+        Log.t(f"{val_r} = {self._r[val_r]}")
         return self._r[val_r]
 
     def exitv(self, val_v: int) -> int:
         return val_v
 
     def not_(self, dst_r: str, op_r: str) -> None:
+        Log.t(f"{op_r} = {self._r[op_r]}")
         self._r[dst_r] = 1 if self._r[op_r] else 0
 
     def set_(self, dst_r: str, src_r: str) -> None:
+        Log.t(f"{src_r} = {self._r[src_r]}")
         self._r[dst_r] = self._r[src_r]
 
     def setv(self, dst_r: str, src_v: int) -> None:
         self._r[dst_r] = src_v
 
     def jumpif(self, delta_r: str, cond_r: str) -> None:
+        Log.t(f"{delta_r} = {self._r[delta_r]}, {cond_r} = {self._r[cond_r]}")
         if self._r[cond_r] != 0:
             self._next_pc = self._pc + self._r[delta_r]
 
     def jumpifv(self, delta_v: int, cond_r: str) -> None:
+        Log.t(f"{cond_r} = {self._r[cond_r]}")
         if self._r[cond_r] != 0:
             self._next_pc = self._pc + delta_v
 
     def load(self, dst_r: str, src_r: str, off_v: int) -> None:
-        self._r[dst_r] = self._m[self._r[src_r] + off_v]
+        loc: int = self._r[src_r] + off_v
+        if loc < 0 or loc >= len(self._m):
+            # todo: better exceptions
+            raise RuntimeError(f"segment fault: {loc}")
+        Log.t(f"{src_r} = {self._r[src_r]}, [{src_r} + {off_v}] = {self._m[loc]}")
+        self._r[dst_r] = self._m[loc]
 
     def store(self, src_r: str, dst_r: str, off_v: int) -> None:
-        self._m[self._r[dst_r] + off_v] = self._r[src_r]
+        Log.t(f"{src_r} = {self._r[src_r]}, {dst_r} = {self._r[dst_r]}")
+        loc: int = self._r[dst_r] + off_v
+        if loc < 0 or loc >= len(self._m):
+            # todo: better exceptions
+            raise RuntimeError(f"segment fault: {loc}")
+        self._m[loc] = self._r[src_r]
 
     def add(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
         self._r[dst_r] = self._r[op1_r] + self._r[op2_r]
 
     def addv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}")
         self._r[dst_r] = self._r[op1_r] + op2_v
 
     def sub(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
         self._r[dst_r] = self._r[op1_r] - self._r[op2_r]
 
     def subv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}")
         self._r[dst_r] = self._r[op1_r] - op2_v
 
     def mul(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
         self._r[dst_r] = self._r[op1_r] * self._r[op2_r]
 
     def mulv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}")
         self._r[dst_r] = self._r[op1_r] * op2_v
 
     def div(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
         self._r[dst_r] = self._r[op1_r] // self._r[op2_r]
 
     def divv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}")
         self._r[dst_r] = self._r[op1_r] // op2_v
 
     def mod(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
         self._r[dst_r] = self._r[op1_r] % self._r[op2_r]
 
     def modv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}")
         self._r[dst_r] = self._r[op1_r] % op2_v
 
     def or_(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
         self._r[dst_r] = self._r[op1_r] | self._r[op2_r]
 
     def orv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}")
         self._r[dst_r] = self._r[op1_r] | op2_v
 
     def and_(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
         self._r[dst_r] = self._r[op1_r] & self._r[op2_r]
 
     def andv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}")
         self._r[dst_r] = self._r[op1_r] & op2_v
 
     def xor(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
         self._r[dst_r] = self._r[op1_r] ^ self._r[op2_r]
 
     def xorv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}")
         self._r[dst_r] = self._r[op1_r] ^ op2_v
 
     def eq(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
         self._r[dst_r] = 1 if self._r[op1_r] == self._r[op2_r] else 0
 
     def eqv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}")
         self._r[dst_r] = 1 if self._r[op1_r] == op2_v else 0
 
     def neq(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
         self._r[dst_r] = 1 if self._r[op1_r] != self._r[op2_r] else 0
 
     def neqv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}")
         self._r[dst_r] = 1 if self._r[op1_r] != op2_v else 0
 
     def gt(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
         self._r[dst_r] = 1 if self._r[op1_r] > self._r[op2_r] else 0
 
     def gtv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}")
         self._r[dst_r] = 1 if self._r[op1_r] > op2_v else 0
 
     def geq(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
         self._r[dst_r] = 1 if self._r[op1_r] >= self._r[op2_r] else 0
 
     def geqv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}")
         self._r[dst_r] = 1 if self._r[op1_r] >= op2_v else 0
 
     def lt(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
         self._r[dst_r] = 1 if self._r[op1_r] < self._r[op2_r] else 0
 
     def ltv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}")
         self._r[dst_r] = 1 if self._r[op1_r] < op2_v else 0
 
     def leq(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
         self._r[dst_r] = 1 if self._r[op1_r] <= self._r[op2_r] else 0
 
     def leqv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        Log.t(f"{op1_r} = {self._r[op1_r]}")
         self._r[dst_r] = 1 if self._r[op1_r] <= op2_v else 0
 
 
@@ -261,9 +313,10 @@ class ARInterpreter:
                 f"program counter out of bounds: {pc}",
                 pc < 0 or pc >= len(instructions),
             ):
-                # todo
+                # todo: better exceptions
                 raise RuntimeError()
             i = instructions[pc]
+            Log.begin_t()
             Log.t(f"executing instruction {pc}: {' '.join(i)}")
             match i[0]:
                 case "jump":
@@ -391,6 +444,8 @@ class ARInterpreter:
 
             # todo: see Machine.clk
             pc = self._m.clk()
+
+            Log.end_t()
 
     # todo: ugly
     def _load(self) -> list[tuple]:

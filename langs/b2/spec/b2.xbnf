@@ -4,9 +4,9 @@
 
 <statement> ::=
 
-  <variable> "=" (<operand> | <expression> | <string> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)") ";" |
+  <variable> "=" (<operand> | <expression> | <string> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)") ";" |
 
-  ("print" | "printi" | "read" | "readi") "\(" <variable> "\)" ";" |
+  ("print" | "printi" | "read") "\(" <variable> "\)" ";" |
 
   "while" "\(" <expression> "\)" <block> |
 

@@ -159,7 +159,9 @@ def join(lines_or_line: Union[Iterable[str], str], *rest_lines: str):
         return "\n".join(lines_or_line)
     else:
         # todo: review cast
-        return "\n".join([cast(str, lines_or_line), *rest_lines])
+        lines: list[str] = [cast(str, lines_or_line), *rest_lines]
+        lines = list(filter(lambda line: len(line) > 0, lines))
+        return "\n".join(lines)
 
 
 def tabbed(text: str, tab: int = 2):

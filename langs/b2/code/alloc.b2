@@ -1,8 +1,0 @@
-s = 12;
-x = alloc(s);
-read(x);
-y = alloc(s);
-read(y);
-
-print(x);
-print(y);

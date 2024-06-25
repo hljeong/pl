@@ -76,15 +76,22 @@ class B2Printer(Visitor):
         n: ChoiceNonterminalASTNode,
     ) -> str:
         match n.choice:
-            # <statement> ::= <variable> "=" (<operand> | <expression> | <string> | <mem_access>) ";" |
+            # <statement> ::= <variable> "=" (<operand> | <expression> | <string> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)") ";" |
             case 0:
                 # todo: review cast
-                return f"{self.visit(n[0])} = {self.visit(cast(NonterminalASTNode, n[2])[0])};"
+                match cast(ChoiceNonterminalASTNode, n[2]).choice:
+                    case 0 | 1 | 2 | 3:
+                        # todo: review cast
+                        return f"{self.visit(n[0])} = {self.visit(cast(NonterminalASTNode, n[2])[0])};"
+
+                    case 4 | 5:
+                        # todo: annotation
+                        return f"{self.visit(n[0])} = {n[2][0].lexeme}({self.visit(n[2][2])});"
 
             # <statement> ::= ("print" | "printi" | "read" | "readi") "\(" <variable> "\)" ";" |
             case 1:
                 # todo: review casts
-                return f"{cast(TerminalASTNode, cast(NonterminalASTNode, n[0])[0]).lexeme}({self.visit(cast(NonterminalASTNode, n[2])[0])})"
+                return f"{cast(TerminalASTNode, cast(NonterminalASTNode, n[0])[0]).lexeme}({self.visit(cast(NonterminalASTNode, n[2])[0])});"
 
             # <statement> ::= "while" "\(" <expression> "\)" <block>;
             case 2:
@@ -217,7 +224,7 @@ class B2Allocator(Visitor):
         n: ASTNode,
     ) -> Any:
         match n.choice:
-            # <statement> ::= <variable> "=" (<operand> | <expression> | <string> | <mem_access>) ";";
+            # <statement> ::= <variable> "=" (<operand> | <expression> | <string> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)") ";" |
             case 0:
                 self.visit(n[0])
 
@@ -233,6 +240,10 @@ class B2Allocator(Visitor):
                     # <mem_access> ::= "\[" <variable> "+" decimal_integer "\]";
                     case 3:
                         self.visit(n[2][0][1])
+
+                    # "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)"
+                    case 4 | 5:
+                        self.visit(n[2][2])
 
             # <statement> ::= ("print" | "printi" | "read" | "readi") "\(" <variable> "\)" ";";
             case 1:
@@ -316,7 +327,7 @@ class B2Compiler(Visitor):
         n: Node,
     ) -> Any:
         match n.choice:
-            # <statement> ::= <variable> "=" (<operand> | <expression> | <string> | <mem_access>) ";"
+            # <statement> ::= <variable> "=" (<operand> | <expression> | <string> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)") ";" |
             case 0:
                 varname: str = n[0][0].lexeme
                 reg: str = self._a[varname]
@@ -351,6 +362,15 @@ class B2Compiler(Visitor):
                     # <mem_access> ::= "\[" <variable> "+" decimal_integer "\]";
                     case 3:
                         return f"load {reg} {self._a[n[2][0][1][0].lexeme]} {n[2][0][3].lexeme}"
+
+                    # "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)"
+                    case 4 | 5:
+                        # somehow using n[2].choice works here...
+                        return join(
+                            f"set r14 {self._a[n[2][2][0].lexeme]}",
+                            f"sysv {n[2].choice}",
+                            f"set {reg} r14",
+                        )
 
             # <statement> ::= ("print" | "printi" | "read" | "readi") "\(" <variable> "\)" ";";
             case 1:

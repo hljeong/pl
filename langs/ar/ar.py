@@ -3,94 +3,249 @@ from typing import Callable
 
 from common import Log
 
-regfile = dict[str, int]
-memory = list[int]
-
-
-def _syscall_print(r: regfile, m: memory) -> None:
-    i: int = r["r14"]
-    while i < len(m) and m[i] != 0:
-        print(chr(m[i]), end="")
-        i += 1
-
-    if i == len(m) and m[-1] != 0:
-        # error -> return 1
-        r["r14"] = 1
-        return
-
-    print()
-    # success -> return 0
-    r["r14"] = 0
-
-
-def _syscall_read(r: regfile, m: memory) -> None:
-    i: int = r["r14"]
-    read = input()
-    for j in range(len(read)):
-        if i + j >= len(m):
-            # error -> return 1
-            r["r14"] = 1
-            return
-
-        m[i + j] = ord(read[j])
-
-    if i + len(read) >= len(m):
-        # error -> return 1
-        r["r14"] = 1
-        return
-
-    # 0-terminate
-    m[i + len(read)] = 0
-
-    # success -> return 0
-    r["r14"] = 0
-
-
-def _stoi(r: regfile, m: memory) -> None:
-    i: int = r["r14"]
-    int_str: str = ""
-    while i < len(m) and m[i] != 0:
-        int_str += chr(m[i])
-        i += 1
-
-    if i == len(m) and m[-1] != 0:
-        # error -> return 1
-        r["r14"] = 1
-        return
-
-    # success -> return 0 and int value
-    r["r14"] = 0
-    r["r15"] = int(int_str)
-
-
-def _printi(r: regfile, m: memory) -> None:
-    print(r["r14"])
-
-    # success -> return 0
-    r["r14"] = 0
+# reorganize stuff not immediately concerning ar
+RegFile = dict[str, int]
+Memory = list[int]
+SysCall = Callable[[], None]
 
 
 DEFAULT_REGFILE_SIZE: int = 32
 DEFAULT_MEM_SIZE: int = 2 * 1024 * 1024
-# todo: create ProgramState class
-DEFAULT_SYSCALL: dict[int, Callable[[regfile, memory], None]] = {
-    0: _syscall_print,
-    1: _syscall_read,
-    2: _stoi,
-    3: _printi,
-}
+USE_DEFAULT_SYSCALL: dict[int, SysCall] = {}
+
+
+class Machine:
+    def __init__(
+        self,
+        regfile_size: int = DEFAULT_REGFILE_SIZE,
+        mem_size: int = DEFAULT_MEM_SIZE,
+        syscall: dict[int, SysCall] = USE_DEFAULT_SYSCALL,
+    ):
+        self._r: RegFile = {f"r{i}": 0 for i in range(regfile_size)}
+        self._m: Memory = [0] * mem_size
+        if syscall is USE_DEFAULT_SYSCALL:
+            syscall = {
+                0: self._print,
+                1: self._read,
+                2: self._stoi,
+                3: self._printi,
+                4: self._alloc,
+                5: self._free,
+            }
+        self._syscall = syscall
+        self._pc: int = 0
+        self._next_pc: int = 1
+        # dont allocate nullptr (0)
+        self._next_mem_alloc: int = 1
+
+    def _print(self) -> None:
+        i: int = self._r["r14"]
+        while i < len(self._m) and self._m[i] != 0:
+            print(chr(self._m[i]), end="")
+            i += 1
+
+        if i == len(self._m) and self._m[-1] != 0:
+            # error -> return 1
+            self._r["r14"] = 1
+            return
+
+        print()
+        # success -> return 0
+        self._r["r14"] = 0
+
+    def _read(self) -> None:
+        i: int = self._r["r14"]
+        read = input()
+        for j in range(len(read)):
+            if i + j >= len(self._m):
+                # error -> return 1
+                self._r["r14"] = 1
+                return
+
+            self._m[i + j] = ord(read[j])
+
+        if i + len(read) >= len(self._m):
+            # error -> return 1
+            self._r["r14"] = 1
+            return
+
+        # 0-terminate
+        self._m[i + len(read)] = 0
+
+        # success -> return 0
+        self._r["r14"] = 0
+
+    def _stoi(self) -> None:
+        i: int = self._r["r14"]
+        int_str: str = ""
+        while i < len(self._m) and self._m[i] != 0:
+            int_str += chr(self._m[i])
+            i += 1
+
+        if i == len(self._m) and self._m[-1] != 0:
+            # error -> return 1
+            self._r["r14"] = 1
+            return
+
+        # success -> return 0 and int value
+        self._r["r14"] = 0
+        self._r["r15"] = int(int_str)
+
+    def _printi(self) -> None:
+        print(self._r["r14"])
+
+        # success -> return 0
+        self._r["r14"] = 0
+
+    # todo: need to put string constants somewhere else so it doesnt fight w dynamic allocation
+    # todo: better allocator
+    def _alloc(self) -> None:
+        size: int = self._r["r14"]
+        self._r["r14"] = self._next_mem_alloc
+        self._next_mem_alloc += size
+
+    # todo: better allocator
+    def _free(self) -> None:
+        self._r["r14"] = 0
+
+    # todo: implement imem and keep pc internal
+    def clk(self) -> int:
+        self._pc = self._next_pc
+        self._next_pc = self._pc + 1
+        return self._pc
+
+    def jump(self, delta_r: str) -> None:
+        self._next_pc = self._pc + self._r[delta_r]
+
+    def jumpv(self, delta_v: int) -> None:
+        self._next_pc = self._pc + delta_v
+
+    def sys(self, id_r: str) -> None:
+        self._syscall[self._r[id_r]]()
+
+    def sysv(self, id_v: int) -> None:
+        self._syscall[id_v]()
+
+    def exit(self, val_r: str) -> int:
+        return self._r[val_r]
+
+    def exitv(self, val_v: int) -> int:
+        return val_v
+
+    def not_(self, dst_r: str, op_r: str) -> None:
+        self._r[dst_r] = 1 if self._r[op_r] else 0
+
+    def set_(self, dst_r: str, src_r: str) -> None:
+        self._r[dst_r] = self._r[src_r]
+
+    def setv(self, dst_r: str, src_v: int) -> None:
+        self._r[dst_r] = src_v
+
+    def jumpif(self, delta_r: str, cond_r: str) -> None:
+        if self._r[cond_r] != 0:
+            self._next_pc = self._pc + self._r[delta_r]
+
+    def jumpifv(self, delta_v: int, cond_r: str) -> None:
+        if self._r[cond_r] != 0:
+            self._next_pc = self._pc + delta_v
+
+    def load(self, dst_r: str, src_r: str, off_v: int) -> None:
+        self._r[dst_r] = self._m[self._r[src_r] + off_v]
+
+    def store(self, src_r: str, dst_r: str, off_v: int) -> None:
+        self._m[self._r[dst_r] + off_v] = self._r[src_r]
+
+    def add(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        self._r[dst_r] = self._r[op1_r] + self._r[op2_r]
+
+    def addv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        self._r[dst_r] = self._r[op1_r] + op2_v
+
+    def sub(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        self._r[dst_r] = self._r[op1_r] - self._r[op2_r]
+
+    def subv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        self._r[dst_r] = self._r[op1_r] - op2_v
+
+    def mul(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        self._r[dst_r] = self._r[op1_r] * self._r[op2_r]
+
+    def mulv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        self._r[dst_r] = self._r[op1_r] * op2_v
+
+    def div(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        self._r[dst_r] = self._r[op1_r] // self._r[op2_r]
+
+    def divv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        self._r[dst_r] = self._r[op1_r] // op2_v
+
+    def mod(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        self._r[dst_r] = self._r[op1_r] % self._r[op2_r]
+
+    def modv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        self._r[dst_r] = self._r[op1_r] % op2_v
+
+    def or_(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        self._r[dst_r] = self._r[op1_r] | self._r[op2_r]
+
+    def orv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        self._r[dst_r] = self._r[op1_r] | op2_v
+
+    def and_(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        self._r[dst_r] = self._r[op1_r] & self._r[op2_r]
+
+    def andv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        self._r[dst_r] = self._r[op1_r] & op2_v
+
+    def xor(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        self._r[dst_r] = self._r[op1_r] ^ self._r[op2_r]
+
+    def xorv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        self._r[dst_r] = self._r[op1_r] ^ op2_v
+
+    def eq(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        self._r[dst_r] = 1 if self._r[op1_r] == self._r[op2_r] else 0
+
+    def eqv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        self._r[dst_r] = 1 if self._r[op1_r] == op2_v else 0
+
+    def neq(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        self._r[dst_r] = 1 if self._r[op1_r] != self._r[op2_r] else 0
+
+    def neqv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        self._r[dst_r] = 1 if self._r[op1_r] != op2_v else 0
+
+    def gt(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        self._r[dst_r] = 1 if self._r[op1_r] > self._r[op2_r] else 0
+
+    def gtv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        self._r[dst_r] = 1 if self._r[op1_r] > op2_v else 0
+
+    def geq(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        self._r[dst_r] = 1 if self._r[op1_r] >= self._r[op2_r] else 0
+
+    def geqv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        self._r[dst_r] = 1 if self._r[op1_r] >= op2_v else 0
+
+    def lt(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        self._r[dst_r] = 1 if self._r[op1_r] < self._r[op2_r] else 0
+
+    def ltv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        self._r[dst_r] = 1 if self._r[op1_r] < op2_v else 0
+
+    def leq(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+        self._r[dst_r] = 1 if self._r[op1_r] <= self._r[op2_r] else 0
+
+    def leqv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
+        self._r[dst_r] = 1 if self._r[op1_r] <= op2_v else 0
 
 
 class ARInterpreter:
     def __init__(
         self,
-        regfile_size: int = DEFAULT_REGFILE_SIZE,
-        mem_size: int = DEFAULT_MEM_SIZE,
-        syscall: dict[int, Callable[[regfile, memory], None]] = DEFAULT_SYSCALL,
+        machine: Machine,
     ):
-        self._regfile_size = regfile_size
-        self._mem_size = mem_size
-        self._syscall = syscall
+        self._m = machine
 
     def interpret(
         self,
@@ -100,12 +255,7 @@ class ARInterpreter:
         self._prog: str = prog
         self._len: int = len(self._prog)
         instructions: list[tuple] = self._load()
-        # program counter
         pc: int = 0
-        # register file
-        r: dict[str, int] = {f"r{i}": 0 for i in range(self._regfile_size)}
-        # memory
-        m: list[int] = [0] * self._mem_size
         while True:
             if not Log.e(
                 f"program counter out of bounds: {pc}",
@@ -113,145 +263,134 @@ class ARInterpreter:
             ):
                 # todo
                 raise RuntimeError()
-            advance: bool = True
             i = instructions[pc]
             Log.t(f"executing instruction {pc}: {' '.join(i)}")
             match i[0]:
                 case "jump":
-                    pc += r[i[1]]
-                    advance = False
+                    self._m.jump(i[1])
 
                 case "jumpv":
-                    pc += int(i[1])
-                    advance = False
+                    self._m.jumpv(int(i[1]))
 
                 case "sys":
-                    self._syscall[r[i[1]]](r, m)
+                    self._m.sys(i[1])
 
                 case "sysv":
-                    self._syscall[int(i[1])](r, m)
+                    self._m.sysv(int(i[1]))
 
                 case "exit":
-                    return r[i[1]]
+                    return self._m.exit(i[1])
 
                 case "exitv":
-                    return int(i[1])
+                    return self._m.exitv(int(i[1]))
 
                 case "not":
-                    r[i[1]] = 1 if r[i[2]] else 0
-
-                # why does this exist...
-                case "notv":
-                    r[i[1]] = 1 if int(i[2]) else 0
+                    self._m.not_(i[1], i[2])
 
                 case "set":
-                    r[i[1]] = r[i[2]]
+                    self._m.set_(i[1], i[2])
 
                 case "setv":
-                    r[i[1]] = int(i[2])
+                    self._m.setv(i[1], int(i[2]))
 
                 case "jumpif":
-                    if r[i[2]] != 0:
-                        pc += r[i[1]]
-                        advance = False
+                    self._m.jumpif(i[1], i[2])
 
                 case "jumpifv":
-                    if r[i[2]] != 0:
-                        pc += int(i[1])
-                        advance = False
+                    self._m.jumpifv(int(i[1]), i[2])
 
                 case "load":
-                    r[i[1]] = m[r[i[2]] + int(i[3])]
+                    self._m.load(i[1], i[2], int(i[3]))
 
                 case "store":
-                    m[r[i[2]] + int(i[3])] = r[i[1]]
+                    self._m.store(i[1], i[2], int(i[3]))
 
                 case "add":
-                    r[i[1]] = r[i[2]] + r[i[3]]
+                    self._m.add(i[1], i[2], i[3])
 
                 case "addv":
-                    r[i[1]] = r[i[2]] + int(i[3])
+                    self._m.addv(i[1], i[2], int(i[3]))
 
                 case "sub":
-                    r[i[1]] = r[i[2]] - r[i[3]]
+                    self._m.sub(i[1], i[2], i[3])
 
                 case "subv":
-                    r[i[1]] = r[i[2]] - int(i[3])
+                    self._m.subv(i[1], i[2], int(i[3]))
 
                 case "mul":
-                    r[i[1]] = r[i[2]] * r[i[3]]
+                    self._m.mul(i[1], i[2], i[3])
 
                 case "mulv":
-                    r[i[1]] = r[i[2]] * int(i[3])
+                    self._m.mulv(i[1], i[2], int(i[3]))
 
                 case "div":
-                    r[i[1]] = r[i[2]] // r[i[3]]
+                    self._m.div(i[1], i[2], i[3])
 
                 case "divv":
-                    r[i[1]] = r[i[2]] // int(i[3])
+                    self._m.divv(i[1], i[2], int(i[3]))
 
                 case "mod":
-                    r[i[1]] = r[i[2]] % r[i[3]]
+                    self._m.mod(i[1], i[2], i[3])
 
                 case "modv":
-                    r[i[1]] = r[i[2]] % int(i[3])
+                    self._m.modv(i[1], i[2], int(i[3]))
 
                 case "or":
-                    r[i[1]] = r[i[2]] | r[i[3]]
+                    self._m.or_(i[1], i[2], i[3])
 
                 case "orv":
-                    r[i[1]] = r[i[2]] | int(i[3])
+                    self._m.orv(i[1], i[2], int(i[3]))
 
                 case "and":
-                    r[i[1]] = r[i[2]] & r[i[3]]
+                    self._m.and_(i[1], i[2], i[3])
 
                 case "andv":
-                    r[i[1]] = r[i[2]] & int(i[3])
+                    self._m.andv(i[1], i[2], int(i[3]))
 
                 case "xor":
-                    r[i[1]] = r[i[2]] ^ r[i[3]]
+                    self._m.xor(i[1], i[2], i[3])
 
                 case "xorv":
-                    r[i[1]] = r[i[2]] ^ int(i[3])
+                    self._m.xorv(i[1], i[2], int(i[3]))
 
                 case "eq":
-                    r[i[1]] = 1 if r[i[2]] == r[i[3]] else 0
+                    self._m.eq(i[1], i[2], i[3])
 
                 case "eqv":
-                    r[i[1]] = 1 if r[i[2]] == int(i[3]) else 0
+                    self._m.eqv(i[1], i[2], int(i[3]))
 
                 case "neq":
-                    r[i[1]] = 1 if r[i[2]] != r[i[3]] else 0
+                    self._m.neq(i[1], i[2], i[3])
 
                 case "neqv":
-                    r[i[1]] = 1 if r[i[2]] != int(i[3]) else 0
+                    self._m.neqv(i[1], i[2], int(i[3]))
 
                 case "gt":
-                    r[i[1]] = 1 if r[i[2]] > r[i[3]] else 0
+                    self._m.gt(i[1], i[2], i[3])
 
                 case "gtv":
-                    r[i[1]] = 1 if r[i[2]] > int(i[3]) else 0
+                    self._m.gtv(i[1], i[2], int(i[3]))
 
                 case "geq":
-                    r[i[1]] = 1 if r[i[2]] >= r[i[3]] else 0
+                    self._m.geq(i[1], i[2], i[3])
 
                 case "geqv":
-                    r[i[1]] = 1 if r[i[2]] >= int(i[3]) else 0
+                    self._m.geqv(i[1], i[2], int(i[3]))
 
                 case "lt":
-                    r[i[1]] = 1 if r[i[2]] < r[i[3]] else 0
+                    self._m.lt(i[1], i[2], i[3])
 
                 case "ltv":
-                    r[i[1]] = 1 if r[i[2]] < int(i[3]) else 0
+                    self._m.ltv(i[1], i[2], int(i[3]))
 
                 case "leq":
-                    r[i[1]] = 1 if r[i[2]] <= r[i[3]] else 0
+                    self._m.leq(i[1], i[2], i[3])
 
                 case "leqv":
-                    r[i[1]] = 1 if r[i[2]] <= int(i[3]) else 0
+                    self._m.leqv(i[1], i[2], int(i[3]))
 
-            if advance:
-                pc += 1
+            # todo: see Machine.clk
+            pc = self._m.clk()
 
     # todo: ugly
     def _load(self) -> list[tuple]:

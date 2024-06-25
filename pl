@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 
 from common import Monad, Log
 from langs.a import AParser, AInterpreter
-from langs.ar import ARInterpreter
+from langs.ar import ARInterpreter, Machine
 from langs.b import BParser, BCompiler
 from langs.b2 import B2Parser, B2Compiler
 
@@ -57,7 +57,7 @@ def main():
                 Monad(prog)
                 .then(B2Parser().parse)
                 .then(B2Compiler().compile)
-                .then(ARInterpreter(regfile_size=727).interpret)
+                .then(ARInterpreter(Machine(regfile_size=727)).interpret)
             )
 
 

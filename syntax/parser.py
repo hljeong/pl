@@ -100,8 +100,10 @@ class Parser:
                 raise error
 
         elif not self.at_end():
-            error: Parser.ParseError = Parser.ParseError("did not parse to end of file")
-            if not Log.ef("[red]ParseError:[/red] did not parse to end of file"):
+            error: Parser.ParseError = Parser.ParseError(
+                "did not parse until end of file"
+            )
+            if not Log.ef("[red]ParseError:[/red] did not parse until end of file"):
                 raise error
 
         return parse_result.node

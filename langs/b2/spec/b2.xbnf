@@ -4,7 +4,7 @@
 
 <statement> ::=
 
-  <variable> "=" (<operand> | <expression> | <string> | <mem_access>) ";" |
+  <variable> "=" (<operand> | <expression> | <string> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)") ";" |
 
   ("print" | "printi" | "read" | "readi") "\(" <variable> "\)" ";" |
 

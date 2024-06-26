@@ -18,9 +18,12 @@ make test
 
 ## run code
 ```sh
+# alterntively,
+source .venv/bin/activate
 ./pl <language> <program>
 
 # alternatively,
+source .venv/bin/activate
 python pl <language> <program>
 ```
 

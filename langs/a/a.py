@@ -584,7 +584,7 @@ class Machine:
         self[dst_r] = 1 if self[op1_r] <= op2_v else 0
 
 
-class AInterpreter:
+class AAssembler:
     def __init__(
         self,
         machine: Machine,
@@ -656,7 +656,10 @@ class AInterpreter:
         ]
 
         prog: list[int] = []
+        label: dict[str, int] = {}
         idx: int = 0
+        ins_num: int = 0
+        to_link: dict[int, str] = {}
         while idx < len(tokens):
             ins: str = tokens[idx]
             match ins:
@@ -668,7 +671,34 @@ class AInterpreter:
                         # todo
                         raise RuntimeError()
 
-                    if ins.endswith("v"):
+                    if ins == "jumpv":
+                        delta_v: str = tokens[idx + 1]
+                        if not (
+                            delta_v.isdigit()
+                            or delta_v.startswith("-")
+                            and delta_v[1:].isdigit()
+                        ):
+                            to_link[ins_num] = delta_v
+                            prog.extend(
+                                [
+                                    ins_list.index(ins),
+                                    0,
+                                    0,
+                                    0,
+                                ]
+                            )
+
+                        else:
+                            prog.extend(
+                                [
+                                    ins_list.index(ins),
+                                    int(tokens[idx + 1]),
+                                    0,
+                                    0,
+                                ]
+                            )
+
+                    elif ins.endswith("v"):
                         prog.extend([ins_list.index(ins), int(tokens[idx + 1]), 0, 0])
 
                     else:
@@ -682,6 +712,7 @@ class AInterpreter:
                         )
 
                     idx += 2
+                    ins_num += 1
 
                 case "not" | "notv" | "set" | "setv" | "jumpif" | "jumpifv":
                     if not Log.e(
@@ -692,14 +723,31 @@ class AInterpreter:
                         raise RuntimeError()
 
                     if ins == "jumpifv":
-                        prog.extend(
-                            [
-                                ins_list.index(ins),
-                                int(tokens[idx + 1]),
-                                Machine.temp_reg_to_byte(tokens[idx + 2]),
-                                0,
-                            ]
-                        )
+                        delta_v: str = tokens[idx + 1]
+                        if not (
+                            delta_v.isdigit()
+                            or delta_v.startswith("-")
+                            and delta_v[1:].isdigit()
+                        ):
+                            to_link[ins_num] = delta_v
+                            prog.extend(
+                                [
+                                    ins_list.index(ins),
+                                    0,
+                                    Machine.temp_reg_to_byte(tokens[idx + 2]),
+                                    0,
+                                ]
+                            )
+
+                        else:
+                            prog.extend(
+                                [
+                                    ins_list.index(ins),
+                                    int(tokens[idx + 1]),
+                                    Machine.temp_reg_to_byte(tokens[idx + 2]),
+                                    0,
+                                ]
+                            )
 
                     elif ins.endswith("v"):
                         prog.extend(
@@ -722,6 +770,7 @@ class AInterpreter:
                         )
 
                     idx += 3
+                    ins_num += 1
 
                 case (
                     "load"
@@ -804,11 +853,40 @@ class AInterpreter:
                         )
 
                     idx += 4
+                    ins_num += 1
 
                 case _:
-                    Log.e(f"'{ins}' is not a valid instruction")
-                    # todo
-                    raise RuntimeError()
+                    # todo: this is bad, offload this to lexer and parser
+                    if ins.endswith(":"):
+                        if ins[:-1] in label:
+                            # todo
+                            Log.e(f"duplicate label '{ins[:-1]}'")
+                            raise RuntimeError()
+
+                        label[ins[:-1]] = ins_num
+                        idx += 1
+
+                    elif len(tokens) - idx >= 2 and tokens[idx + 1] == ":":
+                        if ins in label:
+                            # todo
+                            Log.e(f"duplicate label '{ins}'")
+                            raise RuntimeError()
+
+                        label[ins] = ins_num
+                        idx += 2
+
+                    else:
+                        # todo
+                        Log.e(f"'{ins}' is not a valid instruction")
+                        raise RuntimeError()
+
+        for ins_num_to_link, label_to_link in to_link.items():
+            if label_to_link not in label:
+                # todo
+                Log.e(f"label '{label_to_link}' does not exist")
+                raise RuntimeError()
+
+            prog[4 * ins_num_to_link + 1] = label[label_to_link] - ins_num_to_link
 
         Log.d("finished loading instructions")
         return prog

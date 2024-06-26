@@ -1,1 +1,1 @@
-from .a import AInterpreter, Machine
+from .a import AAssembler, Machine

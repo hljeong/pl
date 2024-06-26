@@ -161,6 +161,12 @@ class BCompiler(Visitor):
             default_nonterminal_node_visitor=Visitor.visit_all(join),
         )
         self._a: dict[str, int] = symbol_table
+        self._label_num: int = 0
+
+    def _label(self) -> str:
+        label = f"l{self._label_num}"
+        self._label_num += 1
+        return label
 
     def _visit_b(self, n: ASTNode) -> str:
         return join(self(n[0]), "exitv 0")
@@ -289,28 +295,34 @@ class BCompiler(Visitor):
 
             # <statement> ::= "while" "\(" <expression> "\)" <block>;
             case 2:
+                start_label: str = self._label()
+                end_label: str = self._label()
                 main_course: str = tabbed(self(n[4]))
                 appetizer: str = join(
+                    f"{start_label}:",
                     self(n[2]),
                     f"eqv t0 t0 0 # t0 = (t0 == 0);",
-                    f"jumpifv {count_lines(main_course) + 2} t0 # if (t0) jumpv({count_lines(main_course) + 2});",
+                    f"jumpifv {end_label} t0 # if (t0) goto {end_label};",
                 )
-                dessert: str = (
-                    f"jumpv {-(count_lines(main_course) + count_lines(appetizer))} # jumpv({-(count_lines(main_course) + count_lines(appetizer))});"
+                dessert: str = join(
+                    f"jumpv {start_label} # goto {start_label};",
+                    f"{end_label}:",
                 )
 
                 return join(appetizer, main_course, dessert)
 
             # <statement> ::= "if" "\(" <expression> "\)" <block>;
             case 3:
+                label: str = self._label()
                 main_course: str = tabbed(self(n[4]))
                 appetizer: str = join(
                     self(n[2]),
                     f"eqv t0 t0 0 # t0 = (t0 == 0);",
-                    f"jumpifv {count_lines(main_course) + 1} t0 # if (t0) jumpv({count_lines(main_course) + 1});",
+                    f"jumpifv {label} t0 # if (t0) goto {label};",
                 )
+                dessert: str = f"{label}:"
 
-                return join(appetizer, main_course)
+                return join(appetizer, main_course, dessert)
 
             # <statement> ::= <mem_access> "=" <variable> ";";
             case 4:

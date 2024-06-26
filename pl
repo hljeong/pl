@@ -3,7 +3,7 @@
 from argparse import ArgumentParser
 
 from common import Monad, Log
-from langs.a import AInterpreter, Machine
+from langs.a import AAssembler, Machine
 from langs.b import BParser, BAllocator, BCompiler
 
 
@@ -36,7 +36,7 @@ def main():
 
     match args.lang:
         case "a":
-            Monad(prog).then(AInterpreter(Machine()))
+            Monad(prog).then(AAssembler(Machine()))
 
         case "b":
             (
@@ -48,7 +48,7 @@ def main():
                         fix_this_ugly_thing[0]
                     )
                 )
-                .then(AInterpreter(Machine()))
+                .then(AAssembler(Machine()))
             )
 
 

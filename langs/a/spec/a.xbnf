@@ -1,13 +1,15 @@
 <a> ::= <instruction>*;
 
-<instruction> ::=
+<instruction> ::= <label>?
 
-  <command> <operand> <operand> <operand> |
+  (<command> <operand> <operand> <operand> |
 
   <command> <operand> <operand> |
 
-  <command> <operand>;
+  <command> <operand>);
+
+<label> ::= identifier ":";
 
 <command> ::= identifier;
 
-<operand> ::= decimal_integer;
+<operand> ::= identifier | decimal_integer;

@@ -1,0 +1,5 @@
+jumpv hi
+bye:
+setv t0 1
+hi: hi_again : setv t0 2
+exitv 0

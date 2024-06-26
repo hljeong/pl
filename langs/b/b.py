@@ -212,17 +212,18 @@ class BCompiler(Visitor):
                     # <string>
                     case 2:
                         literal: str = n[2][0][0].literal
+                        unquoted_lexeme: str = n[2][0][0].lexeme[1:-1]
 
                         # todo: so ugly...
                         # todo: cleanly combine code and comment
                         # todo: switch to using data segment
                         main_course = join(
-                            f"setv a0 {len(literal) + 1} # a0 = {len(literal) + 1};",
+                            f"setv a0 {len(literal) + 1} # a0 = {len(unquoted_lexeme) + 1};",
                             "sysv 4 # a0 = alloc(a0);",
                             f"set t0 a0 # t0 = a0;",
                             join(
                                 join(
-                                    f"setv t1 {ord(literal[i])} # t1 = '{literal[i]}'",
+                                    f"setv t1 {ord(literal[i])} # t1 = '{unquoted_lexeme[i]}'",
                                     f"store t1 t0 {i} # [t0 + {i}] = t1;",
                                 )
                                 for i in range(len(literal))

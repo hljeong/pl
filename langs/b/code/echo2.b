@@ -1,7 +1,10 @@
 buf_size = 32;
 input1 = alloc(buf_size);
 input2 = alloc(buf_size);
+newline = "\n";
 read(input1);
 read(input2);
 print(input2);
+print(newline);
 print(input1);
+print(newline);

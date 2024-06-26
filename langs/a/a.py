@@ -91,7 +91,6 @@ class Machine:
             self._r["r14"] = 1
             return
 
-        print()
         # success -> return 0
         self._r["r14"] = 0
 
@@ -134,7 +133,7 @@ class Machine:
         self._r["r15"] = int(int_str)
 
     def _printi(self) -> None:
-        print(self._r["r14"])
+        print(self._r["r14"], end="")
 
         # success -> return 0
         self._r["r14"] = 0
@@ -275,6 +274,13 @@ class Machine:
             # todo: better exceptions
             raise RuntimeError(f"segment fault: {loc}")
         self[loc] = self[src_r]
+
+    def storev(self, src_v: int, dst_r: str, off_v: int) -> None:
+        loc: int = self[dst_r] + off_v
+        if loc < 0 or loc >= len(self._m):
+            # todo: better exceptions
+            raise RuntimeError(f"segment fault: {loc}")
+        self[loc] = src_v
 
     def add(self, dst_r: str, op1_r: str, op2_r: str) -> None:
         self[dst_r] = self[op1_r] + self[op2_r]
@@ -430,6 +436,9 @@ class AInterpreter:
                 case "store":
                     self._m.store(i[1], i[2], int(i[3]))
 
+                case "storev":
+                    self._m.storev(int(i[1]), i[2], int(i[3]))
+
                 case "add":
                     self._m.add(i[1], i[2], i[3])
 
@@ -553,6 +562,7 @@ class AInterpreter:
                 case (
                     "load"
                     | "store"
+                    | "storev"
                     | "add"
                     | "addv"
                     | "sub"

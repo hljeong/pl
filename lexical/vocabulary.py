@@ -2,8 +2,6 @@ from __future__ import annotations
 import re
 from typing import Callable, Any, Iterator
 
-from common import Log
-
 
 class Vocabulary:
 
@@ -52,7 +50,7 @@ class Vocabulary:
         ),
         "escaped_string": Definition.make(
             r'"(\.|[^\"])*"',
-            lambda lexeme: lexeme[1:-1],
+            lambda lexeme: bytes(lexeme[1:-1], "utf-8").decode("unicode_escape"),
         ),
     }
 

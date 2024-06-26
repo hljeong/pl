@@ -6,7 +6,7 @@ from common import Monad, Log
 from langs.a import AParser, AInterpreter
 from langs.ar import ARInterpreter, Machine
 from langs.b import BParser, BCompiler
-from langs.b2 import B2Parser, B2Compiler
+from langs.b2 import B2Parser, B2Allocator, B2Compiler
 
 
 def main():
@@ -56,7 +56,8 @@ def main():
             (
                 Monad(prog)
                 .then(B2Parser().parse)
-                .then(B2Compiler().compile)
+                .keep_then(B2Allocator())
+                .then(lambda todo: B2Compiler(todo[1])(todo[0]))
                 .then(ARInterpreter(Machine(regfile_size=727)).interpret)
             )
 

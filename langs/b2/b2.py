@@ -155,11 +155,17 @@ class B2Allocator(Visitor):
                 "<variable>": self._visit_variable,
             },
         )
+        self._alloc: dict[str, int] = {}
+        self._next_reg_alloc: int = 0
 
     def allocate(self, ast: ASTNode) -> dict[str, int]:
         self._alloc: dict[str, int] = {}
         self._next_reg_alloc: int = 0
         self.visit(ast)
+        return self._alloc
+
+    def _visit_b2(self, n: ASTNode) -> Any:
+        self._builtin_visit_all(n)
         return self._alloc
 
     def _visit_variable(self, n: ASTNode) -> Any:
@@ -170,31 +176,39 @@ class B2Allocator(Visitor):
 
 
 class B2Compiler(Visitor):
-    def __init__(self):
+    def __init__(self, symbol_table: dict[str, int]):
         super().__init__(
             {
+                "<b2>": self._visit_b2,
                 "<block>": self._visit_block,
                 "<statement>": self._visit_statement,
                 "<expression>": self._visit_expression,
                 "<operand>": self._visit_operand,
             },
-            default_nonterminal_node_visitor=Visitor.visit_all(self, join),
+            default_nonterminal_node_visitor=Visitor.visit_all(join),
         )
+        self._a: dict[str, int] = symbol_table
 
     def compile(self, ast: ASTNode) -> str:
         self._a: dict[str, int] = B2Allocator().allocate(ast)
         return join(self.visit(ast), "exitv 0")
+
+    def _init(self, n: ASTNode) -> None:
+        self._a: dict[str, int] = B2Allocator().allocate(n)
+
+    def _visit_b2(self, n: ASTNode) -> str:
+        return join(self.visit(n[0]), "exitv 0")
 
     def _visit_block(
         self,
         n: Node,
     ) -> Any:
         match n.choice:
-            # <block> ::= <statement>;
+            # <block> ::= <statement>*;
             case 0:
-                return self.visit(n[0])
+                return self(n[0])
 
-            # <block> ::= "{" <statements> "}";
+            # <block> ::= "{" <statement>* "}";
             case 1:
                 return tabbed(self.visit(n[1]))
 

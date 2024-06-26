@@ -14,6 +14,9 @@ class Monad(Generic[T]):
     def then(self, f: Callable[[T], R]) -> Monad[R]:
         return Monad(f(self._value))
 
+    def keep_then(self, f: Callable[[T], R]) -> Monad[tuple[T, R]]:
+        return Monad((self._value, f(self._value)))
+
     def also(self, f: Callable[[T], None]) -> Monad[T]:
         f(self._value)
         return self

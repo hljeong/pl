@@ -227,9 +227,6 @@ class VocabularyGenerator(Visitor):
 
     def generate(self, ast: ASTNode) -> Vocabulary:
         self._dictionary: dict[str, Vocabulary.Definition] = {}
-        from common import to_tree_string
-
-        # Log.d(to_tree_string(ast))
         self.visit(ast)
         return Vocabulary(self._dictionary, ignore=self._ignore)
 

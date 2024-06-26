@@ -48,7 +48,7 @@ def main():
                         fix_this_ugly_thing[0]
                     )
                 )
-                .then(AInterpreter(Machine(regfile_size=727)))
+                .then(AInterpreter(Machine()))
             )
 
 

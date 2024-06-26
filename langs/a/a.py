@@ -9,7 +9,7 @@ Memory = list[int]
 SysCall = Callable[[], None]
 
 
-DEFAULT_REGFILE_SIZE: int = 32
+REGFILE_SIZE: int = 32
 DEFAULT_MEM_SIZE: int = 2 * 1024 * 1024
 DEFAULT_STACK_SIZE: int = 16 * 1024
 USE_DEFAULT_SYSCALL: dict[int, SysCall] = {}
@@ -18,12 +18,11 @@ USE_DEFAULT_SYSCALL: dict[int, SysCall] = {}
 class Machine:
     def __init__(
         self,
-        regfile_size: int = DEFAULT_REGFILE_SIZE,
         mem_size: int = DEFAULT_MEM_SIZE,
         stack_size: int = DEFAULT_STACK_SIZE,
         syscall: dict[int, SysCall] = USE_DEFAULT_SYSCALL,
     ):
-        self._r: RegFile = {f"r{i}": 0 for i in range(regfile_size)}
+        self._r: RegFile = {f"r{i}": 0 for i in range(REGFILE_SIZE)}
         self._m: Memory = [0] * mem_size
         if syscall is USE_DEFAULT_SYSCALL:
             syscall = {

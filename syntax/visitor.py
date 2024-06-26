@@ -39,22 +39,6 @@ class Visitor:
     ) -> Any:
         return self(n[0]) if len(n) == 1 else combine(self(c) for c in n)
 
-    @staticmethod
-    def visit_telescope() -> NonterminalASTNodeVisitor:
-        return lambda v, n: v.visit(Visitor.telescope(n))
-
-    # todo: change to telescope until multiple children?
-    @staticmethod
-    def telescope(n: NonterminalASTNode) -> TerminalASTNode:
-        Log.w(
-            f"telescoping node ({n}) with multiple children",
-            len(n) > 1,
-            tag="Visitor",
-        )
-        while isinstance(n[0], NonterminalASTNode):
-            n = cast(NonterminalASTNode, n[0])
-        return cast(TerminalASTNode, n[0])
-
     def __init__(
         self,
         default_nonterminal_node_visitor: NonterminalASTNodeVisitor = USE_DEFAULT_DEFAULT_NONTERMINAL_AST_NODE_VISITOR,

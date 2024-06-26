@@ -18,7 +18,6 @@ make test
 
 ## run code
 ```sh
-# alterntively,
 source .venv/bin/activate
 ./pl <language> <program>
 

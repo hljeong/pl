@@ -42,6 +42,45 @@ class Machine:
         self._stack_limit: int = stack_size
         self._next_mem_alloc: int = mem_size
 
+        # todo: there should be a better place for this
+        self._aliases: dict[str, str] = {
+            "r1": "sp",
+            "r2": "ra",
+            "r3": "t0",
+            "r4": "t1",
+            "r5": "t2",
+            "r6": "t3",
+            "r7": "t4",
+            "r8": "t5",
+            "r9": "t6",
+            "r10": "t7",
+            "r11": "t8",
+            "r12": "t9",
+            "r13": "t10",
+            "r14": "a0",
+            "r15": "a1",
+            "r16": "a2",
+            "r17": "a3",
+            "r18": "a4",
+            "r19": "a5",
+            "r20": "s0",
+            "r21": "s1",
+            "r22": "s2",
+            "r23": "s3",
+            "r24": "s4",
+            "r25": "s5",
+            "r26": "s6",
+            "r27": "s7",
+            "r28": "s8",
+            "r29": "s9",
+            "r30": "s10",
+            "r31": "s11",
+        }
+        self._aliases_inv: dict[str, str] = {
+            reg: alias for alias, reg in self._aliases.items()
+        }
+        self._tracking: set[Union[str, int]] = set(["r1"])
+
     def _print(self) -> None:
         i: int = self._r["r14"]
         while i < len(self._m) and self._m[i] != 0:
@@ -113,44 +152,73 @@ class Machine:
     def _free(self) -> None:
         self._r["r14"] = 0
 
+    def _alias(self, reg: str) -> str:
+        if reg not in self._r:
+            # todo
+            raise RuntimeError(f"register '{reg}' does not exist")
+
+        if reg not in self._aliases:
+            # todo
+            raise RuntimeError(f"register '{reg}' does not have an alias")
+
+        return self._aliases[reg]
+
+    def _unalias(self, alias: str) -> str:
+        if alias not in self._aliases_inv:
+            return alias
+
+        return self._aliases_inv[alias]
+
+    def _fmt(self, reg_or_addr: Union[str, int]) -> str:
+        if type(reg_or_addr) is str:
+            reg: str = self._unalias(reg_or_addr)
+
+            if reg in self._aliases:
+                return f"[bold][yellow]{self._alias(reg)}[/yellow][/bold] ([bold][yellow]{reg}[/yellow][/bold])"
+
+            else:
+                return f"[bold][yellow]{reg}[/yellow][/bold]"
+
+        elif type(reg_or_addr) is int:
+            addr: int = reg_or_addr
+
+            return f"[bold][[blue]{addr}[/blue]][/bold]"
+
+        assert False
+
     # todo: cleaner tracking
     def __getitem__(self, reg_or_addr: Union[str, int]) -> int:
         if type(reg_or_addr) is str:
-            reg: str = reg_or_addr
-            # todo: alias
+            reg: str = self._unalias(reg_or_addr)
             val = self._r[reg]
-            Log.tf(f"[bold][yellow]{reg}[/yellow][/bold] = {val}")
-            return val
 
         elif type(reg_or_addr) is int:
             addr: int = reg_or_addr
             val = self._m[addr]
-            Log.tf(f"[bold][[blue]{addr}[/blue]][/bold] = {val}")
-            return val
 
-        assert False
+        else:
+            assert False
+
+        Log.tf(f"{self._fmt(reg_or_addr)} = {val}")
+        return val
 
     def __setitem__(self, reg_or_addr: Union[str, int], val: int) -> None:
         if type(reg_or_addr) is str:
-            reg: str = reg_or_addr
-            # todo: alias
+            reg: str = self._unalias(reg_or_addr)
             old_val: int = self._r[reg]
             self._r[reg] = val
-            Log.tf(
-                f"[bold][yellow]{reg}[/yellow][/bold] = [red]{old_val}[/red] -> [green]{val}[/green]"
-            )
-            return
 
         elif type(reg_or_addr) is int:
             addr: int = reg_or_addr
             old_val: int = self._m[addr]
             self._m[addr] = val
-            Log.tf(
-                f"[bold][[blue]{addr}[/blue]][/bold] = [red]{old_val}[/red] -> [green]{val}[/green]"
-            )
-            return
 
-        assert False
+        else:
+            assert False
+
+        Log.tf(
+            f"{self._fmt(reg_or_addr)} = [red]{old_val}[/red] -> [green]{val}[/green]"
+        )
 
     # todo: implement imem and keep pc internal
     def clk(self) -> int:

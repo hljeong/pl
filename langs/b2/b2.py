@@ -312,7 +312,7 @@ class B2Compiler(Visitor):
                 varname: str = n[0][0].lexeme
                 main_course: str = ""
                 dessert: str = (
-                    f"store r3 r1 {self._a[varname]} # [sp + alloc[{varname}]] = t0"
+                    f"store t0 sp {self._a[varname]} # [sp + alloc[{varname}]] = t0"
                 )
                 match n[2].choice:
                     # <operand> ::= <variable> | decimal_integer;
@@ -321,11 +321,11 @@ class B2Compiler(Visitor):
                         match n[2][0].choice:
                             # <operand> ::= <variable>;
                             case 0:
-                                main_course = f"{self.visit(n[2][0]).format('r3')} # t0 = [sp + alloc[{n[2][0][0][0].lexeme}]];"
+                                main_course = f"{self.visit(n[2][0]).format('t0')} # t0 = [sp + alloc[{n[2][0][0][0].lexeme}]];"
 
                             # <operand> ::= decimal_interger;
                             case 1:
-                                main_course = f"setv r3 {self.visit(n[2][0])} # t0 = {self.visit(n[2][0])}"
+                                main_course = f"setv t0 {self.visit(n[2][0])} # t0 = {self.visit(n[2][0])}"
 
                     # <expression>
                     case 1:
@@ -339,24 +339,24 @@ class B2Compiler(Visitor):
                         # todo: cleanly combine code and comment
                         # todo: switch to using data segment
                         main_course = join(
-                            f"setv r14 {len(literal) + 1} # a0 = {len(literal) + 1};",
+                            f"setv a0 {len(literal) + 1} # a0 = {len(literal) + 1};",
                             "sysv 4 # a0 = alloc(a0);",
-                            f"set r3 r14 # t0 = a0;",
+                            f"set t0 a0 # t0 = a0;",
                             join(
                                 join(
-                                    f"setv r4 {ord(literal[i])} # t1 = '{literal[i]}'",
-                                    f"store r4 r3 {i} # [t0 + {i}] = t1;",
+                                    f"setv t1 {ord(literal[i])} # t1 = '{literal[i]}'",
+                                    f"store t1 t0 {i} # [t0 + {i}] = t1;",
                                 )
                                 for i in range(len(literal))
                             ),
-                            f"store r0 r3 {len(literal)} # [t0 + {len(literal)}] = 0;",
+                            f"store r0 t0 {len(literal)} # [t0 + {len(literal)}] = 0;",
                         )
 
                     # <mem_access> ::= "\[" <variable> "+" decimal_integer "\]";
                     case 3:
                         main_course = join(
-                            f"load r4 r1 {self._a[n[2][0][1][0].lexeme]} # t1 = [sp + alloc[{n[2][0][1][0].lexeme}]];",
-                            f"load r3 r4 {n[2][0][3].lexeme} # t0 = [t1 + {n[2][0][3].lexeme}]",
+                            f"load t1 r1 {self._a[n[2][0][1][0].lexeme]} # t1 = [sp + alloc[{n[2][0][1][0].lexeme}]];",
+                            f"load t0 t1 {n[2][0][3].lexeme} # t0 = [t1 + {n[2][0][3].lexeme}]",
                         )
 
                     # todo: wait free() does not belong here lol
@@ -364,45 +364,45 @@ class B2Compiler(Visitor):
                     case 4 | 5:
                         # somehow n[2].choice works here...
                         main_course = join(
-                            f"load r14 r1 {self._a[n[2][2][0].lexeme]} # a0 = [sp + alloc[{n[2][2][0].lexeme}]];",
+                            f"load a0 r1 {self._a[n[2][2][0].lexeme]} # a0 = [sp + alloc[{n[2][2][0].lexeme}]];",
                             f"sysv {n[2].choice} # a0 = {n[2][0].lexeme}(a0);",
-                            f"set r3 r14 # t0 = a0;",
+                            f"set t0 a0 # t0 = a0;",
                         )
 
                     # "stoi" "\(" <variable> "\)"
                     case 6:
                         main_course = join(
-                            f"load r14 r1 {self._a[n[2][2][0].lexeme]} # a0 = [sp + alloc[{n[2][2][0].lexeme}]];",
+                            f"load a0 r1 {self._a[n[2][2][0].lexeme]} # a0 = [sp + alloc[{n[2][2][0].lexeme}]];",
                             f"sysv 2 # a1 = {n[2][0].lexeme}(a0);",
-                            f"set r3 r15 # t0 = a1;",
+                            f"set t0 a1 # t0 = a1;",
                         )
 
                 return join(main_course, dessert)
 
             # <statement> ::= ("print" | "printi" | "read") "\(" <variable> "\)" ";";
             case 1:
-                appetizer = f"load r3 r1 {self._a[n[2][0].lexeme]} # t0 = [sp + alloc[{n[2][0].lexeme}]];"
+                appetizer = f"load t0 r1 {self._a[n[2][0].lexeme]} # t0 = [sp + alloc[{n[2][0].lexeme}]];"
                 main_course: str = ""
                 # "print" | "printi" | "read"
                 match n[0].choice:
                     # "print"
                     case 0:
                         main_course = join(
-                            f"set r14 r3 # a0 = t0;",
+                            f"set a0 t0 # a0 = t0;",
                             "sysv 0 # print(a0);",
                         )
 
                     # "printi"
                     case 1:
                         main_course = join(
-                            f"set r14 r3 # a0 = t0;",
+                            f"set a0 t0 # a0 = t0;",
                             "sysv 3 # printi(a0);",
                         )
 
                     # "read"
                     case 2:
                         main_course = join(
-                            f"set r14 r3 # a0 = t0;",
+                            f"set a0 t0 # a0 = t0;",
                             "sysv 1 # a0 = read(a0);",
                         )
 
@@ -413,8 +413,8 @@ class B2Compiler(Visitor):
                 main_course: str = tabbed(self.visit(n[4]))
                 appetizer: str = join(
                     self.visit(n[2]),
-                    f"eqv r3 r3 0 # t0 = (t0 == 0);",
-                    f"jumpifv {count_lines(main_course) + 2} r3 # if (t0) jumpv({count_lines(main_course) + 2});",
+                    f"eqv t0 t0 0 # t0 = (t0 == 0);",
+                    f"jumpifv {count_lines(main_course) + 2} t0 # if (t0) jumpv({count_lines(main_course) + 2});",
                 )
                 dessert: str = (
                     f"jumpv {-(count_lines(main_course) + count_lines(appetizer))} # jumpv({-(count_lines(main_course) + count_lines(appetizer))});"
@@ -427,8 +427,8 @@ class B2Compiler(Visitor):
                 main_course: str = tabbed(self.visit(n[4]))
                 appetizer: str = join(
                     self.visit(n[2]),
-                    f"eqv r3 r3 0 # t0 = (t0 == 0);",
-                    f"jumpifv {count_lines(main_course) + 1} r3 # if (t0) jumpv({count_lines(main_course) + 1});",
+                    f"eqv t0 t0 0 # t0 = (t0 == 0);",
+                    f"jumpifv {count_lines(main_course) + 1} t0 # if (t0) jumpv({count_lines(main_course) + 1});",
                 )
 
                 return join(appetizer, main_course)
@@ -436,9 +436,9 @@ class B2Compiler(Visitor):
             # <statement> ::= <mem_access> "=" <variable> ";";
             case 4:
                 return join(
-                    f"load r3 r1 {self._a[n[0][1][0].lexeme]} # t0 = [sp + alloc[{self._a[n[0][1][0].lexeme]}]];",
-                    f"load r4 r1 {self._a[n[2][0].lexeme]} # t1 = [sp + alloc[{self._a[n[2][0].lexeme]}]];",
-                    f"store r4 r3 {n[0][3].lexeme} # [t0 + {n[0][3].lexeme}] = t1;",
+                    f"load t0 r1 {self._a[n[0][1][0].lexeme]} # t0 = [sp + alloc[{self._a[n[0][1][0].lexeme]}]];",
+                    f"load t1 r1 {self._a[n[2][0].lexeme]} # t1 = [sp + alloc[{self._a[n[2][0].lexeme]}]];",
+                    f"store t1 t0 {n[0][3].lexeme} # [t0 + {n[0][3].lexeme}] = t1;",
                 )
 
     def _visit_expression(self, n: ASTNode) -> Any:
@@ -449,11 +449,11 @@ class B2Compiler(Visitor):
                 if n[1].choice == 1:
                     val: int = int(self.visit(n[1]))
                     val = 1 if val == 0 else 0
-                    return f"setv r3 {val}"
+                    return f"setv t0 {val}"
 
                 else:
                     # todo: optimize constant
-                    return join(self.visit(n[1]).format("r4"), f"neqv r3 r4 0")
+                    return join(self.visit(n[1]).format("t1"), f"neqv t0 t1 0")
 
             # <operand> <binary_operator> <operand>
             case 1:
@@ -492,7 +492,7 @@ class B2Compiler(Visitor):
                     lop_val: int = int(self.visit(lop))
                     rop_val: int = int(self.visit(rop))
                     val: int = binop(lop_val, rop_val)
-                    return f"setv r3 {val} # t0 = {val};"
+                    return f"setv t0 {val} # t0 = {val};"
 
                 inst = {
                     # <binary_operator> ::= "\+";
@@ -524,16 +524,16 @@ class B2Compiler(Visitor):
                 # todo: very very sloppy
                 return join(
                     (
-                        f"{self.visit(lop).format('r4')} # t1 = [sp + alloc[{lop[0][0].lexeme}]]"
+                        f"{self.visit(lop).format('t1')} # t1 = [sp + alloc[{lop[0][0].lexeme}]]"
                         if lop.choice == 0
-                        else f"setv r4 {self.visit(lop)} # t1 = {self.visit(lop)};"
+                        else f"setv t1 {self.visit(lop)} # t1 = {self.visit(lop)};"
                     ),
                     (
-                        f"{self.visit(rop).format('r5')} # t2 = [sp + alloc[{rop[0][0].lexeme}]]"
+                        f"{self.visit(rop).format('t2')} # t2 = [sp + alloc[{rop[0][0].lexeme}]]"
                         if rop.choice == 0
-                        else f"setv r5 {self.visit(rop)} # t2 = {self.visit(rop)};"
+                        else f"setv t2 {self.visit(rop)} # t2 = {self.visit(rop)};"
                     ),
-                    f"{inst} r3 r4 r5 # t0 = {inst}(t1, t2);",
+                    f"{inst} t0 t1 t2 # t0 = {inst}(t1, t2);",
                 )
 
     def _visit_operand(self, n: ASTNode) -> Any:

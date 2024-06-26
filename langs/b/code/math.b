@@ -1,6 +1,13 @@
-readi(x);
-readi(y);
-readi(z);
+buf_size = 32;
+x_str = alloc(buf_size);
+y_str = alloc(buf_size);
+z_str = alloc(buf_size);
+read(x_str);
+read(y_str);
+read(z_str);
+x = stoi(x_str);
+y = stoi(y_str);
+z = stoi(z_str);
 u = 3 * x;
 {v = y & 1;
 w = v - y;

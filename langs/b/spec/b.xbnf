@@ -4,13 +4,17 @@
 
 <statement> ::=
 
-  <variable> "=" (<operand> | <expression> | <string>) ";" |
+  <variable> "=" (<operand> | <expression> | <string> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)") ";" |
 
-  ("print" | "printi" | "read" | "readi") "\(" <variable> "\)" ";" |
-  
+  ("print" | "printi" | "read") "\(" <variable> "\)" ";" |
+
   "while" "\(" <expression> "\)" <block> |
 
-  "if" "\(" <expression> "\)" <block>;
+  "if" "\(" <expression> "\)" <block> |
+
+  <mem_access> "=" <variable> ";";
+
+<mem_access> ::= "\[" <variable>  "\+" decimal_integer "\]";
 
 <expression> ::=
 

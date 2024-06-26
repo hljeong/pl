@@ -173,7 +173,7 @@ class Parser:
     def __backtrack(self, to: int) -> None:
         self._current = to
 
-    def parse(self, tokens: list[Token]) -> ASTNode:
+    def __call__(self, tokens: list[Token]) -> ASTNode:
         self._tokens: list[Token] = tokens
         self._current: int = 0
         return self.__parse()

@@ -35,13 +35,15 @@ class Grammar:
                     raise error
 
             ast: ASTNode = (
-                Monad(xbnf)
-                .then(Lexer(xbnf_grammar).lex)
-                .then(Parser(xbnf_grammar).parse)
+                # todo: review cast
+                Monad(cast(str, xbnf))
+                .then(Lexer(grammar=xbnf_grammar))
+                .then(Parser(grammar=xbnf_grammar))
                 .value
             )
 
             vocabulary = VocabularyGenerator(ignore).generate(ast)
+            # todo: type annotation
             node_parsers = NodeParsersGenerator().generate(ast)
 
         elif node_parsers is None:
@@ -219,15 +221,13 @@ xbnf_grammar: Grammar = Grammar(
 
 class VocabularyGenerator(Visitor):
     def __init__(self, ignore: list[str] = []):
-        super().__init__(
-            {"escaped_string": self._visit_escaped_string},
-        )
+        super().__init__()
         self._ignore: list[str] = Vocabulary.DEFAULT_IGNORE
         self._ignore.extend(ignore)
 
     def generate(self, ast: ASTNode) -> Vocabulary:
         self._dictionary: dict[str, Vocabulary.Definition] = {}
-        self.visit(ast)
+        self(ast)
         return Vocabulary(self._dictionary, ignore=self._ignore)
 
     def _visit_escaped_string(
@@ -243,31 +243,24 @@ class VocabularyGenerator(Visitor):
 
 class NodeParsersGenerator(Visitor):
     def __init__(self):
-        super().__init__(
-            {
-                "<xbnf>": self._visit_xbnf,
-                "<production>": self._visit_production,
-                "<body>": self._visit_body,
-                "<expression>": self._visit_expression,
-                "<group>": self._visit_group,
-                "<multiplicity>": self._visit_multiplicity,
-            }
-        )
+        super().__init__()
 
-    def generate(
-        self, ast: ASTNode
-    ) -> dict[str, Callable[[Parser], Optional[ASTNode]]]:
         self._productions = defaultdict(list[ExpressionTerm])
         # todo: this is ugly, move to call stack
         self._lhs_stack: list[str] = []
         self._idx_stack: list[int] = []
         self._used: set[str] = set()
-        # entry point is used
-        self._used.add(f"<{ast[0][0][0][1].lexeme}>")
+
         self._node_parsers: dict[
             str, Callable[[Parser, Optional[bool]], Optional[ASTNode]]
         ] = {}
-        self.visit(ast)
+
+    def generate(
+        self, ast: ASTNode
+    ) -> dict[str, Callable[[Parser], Optional[ASTNode]]]:
+        # entry point is used
+        self._used.add(f"<{ast[0][0][0][1].lexeme}>")
+        self(ast)
 
         for node_type in self._used:
             if node_type not in self._node_parsers:
@@ -316,7 +309,7 @@ class NodeParsersGenerator(Visitor):
         # node[0]: <production>+
         # production: <production>
         for production in n[0]:
-            self.visit(production)
+            self(production)
 
     def _visit_production(
         self,
@@ -328,7 +321,7 @@ class NodeParsersGenerator(Visitor):
         self._idx_stack.append(0)
 
         # not using extend => force 1 production definition for each nonterminal
-        self._add_nonterminal(nonterminal, self.visit(n[2]))
+        self._add_nonterminal(nonterminal, self(n[2]))
 
         self._idx_stack.pop()
         self._lhs_stack.pop()
@@ -342,7 +335,7 @@ class NodeParsersGenerator(Visitor):
         # only 1 production
         if len(n[1]) == 0:
             # node[0]: <expression>
-            productions.append(self.visit(n[0]))
+            productions.append(self(n[0]))
 
         # multiple productions
         else:
@@ -352,7 +345,7 @@ class NodeParsersGenerator(Visitor):
             self._idx_stack.append(0)
 
             # node[0]: <expression>
-            productions.append(self.visit(n[0]))
+            productions.append(self(n[0]))
 
             self._idx_stack.pop()
             self._lhs_stack.pop()
@@ -366,7 +359,7 @@ class NodeParsersGenerator(Visitor):
             self._idx_stack.append(0)
 
             # or_production[1]: <expression>
-            productions.append(self.visit(or_production[1]))
+            productions.append(self(or_production[1]))
 
             self._idx_stack.pop()
             self._lhs_stack.pop()
@@ -391,10 +384,10 @@ class NodeParsersGenerator(Visitor):
                 multiplicity: Union[str, int] = 1
 
             else:
-                multiplicity: Union[str, int] = self.visit(optional_multiplicity[0])
+                multiplicity: Union[str, int] = self(optional_multiplicity[0])
 
             # expression_term[0]: <group>
-            group: str = self.visit(expression_term[0])
+            group: str = self(expression_term[0])
 
             ret.append(ExpressionTerm(group, multiplicity))
 
@@ -435,7 +428,7 @@ class NodeParsersGenerator(Visitor):
                 self._used.add(auxiliary_nonterminal)
 
                 # node[1]: <body>
-                self._add_nonterminal(auxiliary_nonterminal, self.visit(n[1]))
+                self._add_nonterminal(auxiliary_nonterminal, self(n[1]))
 
                 self._idx_stack.pop()
                 self._lhs_stack.pop()

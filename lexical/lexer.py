@@ -196,7 +196,7 @@ class Lexer:
             self._tokens.append(self.__scan_token())
             self.__consume_ignored()
 
-    def lex(self, source: str) -> list[Token]:
+    def __call__(self, source: str) -> list[Token]:
         self._source: str = source
         self._position = Lexer.Position()
         self._tokens: list[Token] = []

@@ -3,10 +3,8 @@
 from argparse import ArgumentParser
 
 from common import Monad, Log
-from langs.a import AParser, AInterpreter
-from langs.ar import ARInterpreter, Machine
-from langs.b import BParser, BCompiler
-from langs.b2 import B2Parser, B2Allocator, B2Compiler
+from langs.a import AInterpreter, Machine
+from langs.b import BParser, BAllocator, BCompiler
 
 
 def main():
@@ -38,27 +36,19 @@ def main():
 
     match args.lang:
         case "a":
-            Monad(prog).then(AParser().parse).then(AInterpreter().interpret)
-
-        case "ar":
-            Monad(prog).then(ARInterpreter().interpret)
+            Monad(prog).then(AInterpreter(Machine()))
 
         case "b":
             (
                 Monad(prog)
-                .then(BParser().parse)
-                .then(BCompiler().compile)
-                .then(AParser().parse)
-                .then(AInterpreter().interpret)
-            )
-
-        case "b2":
-            (
-                Monad(prog)
-                .then(B2Parser().parse)
-                .keep_then(B2Allocator())
-                .then(lambda todo: B2Compiler(todo[1])(todo[0]))
-                .then(ARInterpreter(Machine(regfile_size=727)).interpret)
+                .then(BParser())
+                .keep_then(BAllocator())
+                .then(
+                    lambda fix_this_ugly_thing: BCompiler(fix_this_ugly_thing[1])(
+                        fix_this_ugly_thing[0]
+                    )
+                )
+                .then(AInterpreter(Machine(regfile_size=727)))
             )
 
 

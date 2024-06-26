@@ -27,6 +27,7 @@ DEFAULT_DEFAULT_TERMINAL_AST_NODE_VISITOR: TerminalASTNodeVisitor = lambda *_: N
 
 
 class Visitor:
+    # todo: what's class method?
     @staticmethod
     def visit_all(
         combine: Callable[[Iterable[Any]], Any] = tuple
@@ -56,7 +57,6 @@ class Visitor:
 
     def __init__(
         self,
-        dummy,
         default_nonterminal_node_visitor: NonterminalASTNodeVisitor = USE_DEFAULT_DEFAULT_NONTERMINAL_AST_NODE_VISITOR,
         default_terminal_node_visitor: TerminalASTNodeVisitor = DEFAULT_DEFAULT_TERMINAL_AST_NODE_VISITOR,
     ):
@@ -102,6 +102,3 @@ class Visitor:
 
         else:
             return self._node_visitor[n.node_type]
-
-    def visit(self, n: ASTNode):
-        return self(n)

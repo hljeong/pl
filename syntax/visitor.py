@@ -1,6 +1,6 @@
 from __future__ import annotations
 from collections import defaultdict
-from typing import cast, Any, Callable, Union
+from typing import cast, Any, Callable, Union, Iterable
 
 from common import Log
 from syntax import ASTNode, NonterminalASTNode, TerminalASTNode
@@ -28,8 +28,12 @@ DEFAULT_DEFAULT_TERMINAL_AST_NODE_VISITOR: TerminalASTNodeVisitor = lambda _: No
 
 class Visitor:
     @staticmethod
-    def visit_all(v: Visitor) -> NonterminalASTNodeVisitor:
-        return lambda n: v.visit(n[0]) if len(n) == 1 else tuple(v.visit(c) for c in n)
+    def visit_all(
+        v: Visitor, combine: Callable[[Iterable[Any]], Any] = tuple
+    ) -> NonterminalASTNodeVisitor:
+        return lambda n: (
+            v.visit(n[0]) if len(n) == 1 else combine(v.visit(c) for c in n)
+        )
 
     @staticmethod
     def visit_telescope(v: Visitor) -> NonterminalASTNodeVisitor:

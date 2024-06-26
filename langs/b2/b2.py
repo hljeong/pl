@@ -31,25 +31,17 @@ class B2Printer(Visitor):
     def __init__(self):
         super().__init__(
             {
-                "<b2>": self._visit_b2,
                 "<block>": self._visit_block,
                 "<statement>": self._visit_statement,
                 "<expression>": self._visit_expression,
                 "<mem_access>": self._visit_mem_access,
             },
+            default_nonterminal_node_visitor=Visitor.visit_all(self, join),
             default_terminal_node_visitor=lambda n: n.lexeme,
         )
 
     def print(self, ast: ASTNode) -> str:
         return self.visit(ast)
-
-    def _visit_b2(
-        self,
-        n: NonterminalASTNode,
-    ) -> str:
-        # todo: review cast
-        prog: str = join(self.visit(c) for c in cast(NonterminalASTNode, n[0]))
-        return prog
 
     def _visit_block(
         self,
@@ -62,12 +54,7 @@ class B2Printer(Visitor):
 
             # <block> ::= "{" <statements> "}";
             case 1:
-                inner_prog: str = tabbed(
-                    # todo: review cast
-                    join(self.visit(child) for child in cast(NonterminalASTNode, n[1]))
-                )
-
-                return join("{", inner_prog, "}")
+                return join("{", tabbed(self.visit(n[1])), "}")
 
         assert False
 
@@ -164,10 +151,7 @@ class B2Allocator(Visitor):
     def __init__(self):
         super().__init__(
             {
-                "<b2>": self._visit_b2,
-                "<block>": self._visit_block,
-                "<statement>": self._visit_statement,
-                "<expression>": self._visit_expression,
+                # magical default visitor machinery handles everything :DDD
                 "<variable>": self._visit_variable,
             },
         )
@@ -178,116 +162,28 @@ class B2Allocator(Visitor):
         self.visit(ast)
         return self._alloc
 
-    def _var(self, varname: str):
+    def _visit_variable(self, n: ASTNode) -> Any:
+        varname: str = n[0].lexeme
         if varname not in self._alloc:
             self._alloc[varname] = self._next_reg_alloc
             self._next_reg_alloc += 1
-
-    def _visit_b2(
-        self,
-        n: Node,
-    ) -> Any:
-        for child in n[0]:
-            self.visit(child)
-
-    def _visit_block(
-        self,
-        n: Node,
-    ) -> Any:
-        match n.choice:
-            # <block> ::= <statement>;
-            case 0:
-                self.visit(n[0])
-
-            # <block> ::= "{" <statements> "}";
-            case 1:
-                for child in n[1]:
-                    self.visit(child)
-
-    def _visit_statement(
-        self,
-        n: ASTNode,
-    ) -> Any:
-        match n.choice:
-            # <statement> ::= <variable> "=" (<operand> | <expression> | <string> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)") ";";
-            case 0:
-                self.visit(n[0])
-
-                match n[2].choice:
-                    # <operand> | <expression>
-                    case 0 | 1:
-                        self.visit(n[2][0])
-
-                    # <string>
-                    case 2:
-                        self._var(n[0][0].lexeme)
-
-                    # <mem_access> ::= "\[" <variable> "+" decimal_integer "\]";
-                    case 3:
-                        self.visit(n[2][0][1])
-
-                    # "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)"
-                    case 4 | 5 | 6:
-                        self.visit(n[2][2])
-
-            # <statement> ::= ("print" | "printi" | "read") "\(" <variable> "\)" ";";
-            case 1:
-                varname: str = n[2][0].lexeme
-
-                match n[0].choice:
-                    # "print" | "read"
-                    case 0 | 2:
-                        self._var(varname)
-
-                    # "printi"
-                    case 1:
-                        self._var(varname)
-
-            # <statement> ::= "while" "\(" <expression> "\)" <block> | "if" "\(" <expression> "\)" <block>;
-            case 2 | 3:
-                self.visit(n[2])
-                self.visit(n[4])
-
-            case 4:
-                self.visit(n[0][1])
-                self.visit(n[2])
-
-    def _visit_expression(self, n: ASTNode) -> Any:
-        match n.choice:
-            # <expression> ::= <unary_operator> <operand>;
-            case 0:
-                self.visit(n[1])
-
-            # <expression> ::= <operand> <binary_operator> <operand>;
-            case 1:
-                self.visit(n[0])
-                self.visit(n[2])
-
-    def _visit_variable(self, n: ASTNode) -> Any:
-        self._var(n[0].lexeme)
 
 
 class B2Compiler(Visitor):
     def __init__(self):
         super().__init__(
             {
-                "<b2>": self._visit_b2,
                 "<block>": self._visit_block,
                 "<statement>": self._visit_statement,
                 "<expression>": self._visit_expression,
                 "<operand>": self._visit_operand,
             },
+            default_nonterminal_node_visitor=Visitor.visit_all(self, join),
         )
 
     def compile(self, ast: ASTNode) -> str:
         self._a: dict[str, int] = B2Allocator().allocate(ast)
         return join(self.visit(ast), "exitv 0")
-
-    def _visit_b2(
-        self,
-        n: Node,
-    ) -> Any:
-        return join(self.visit(child) for child in n[0])
 
     def _visit_block(
         self,
@@ -300,7 +196,7 @@ class B2Compiler(Visitor):
 
             # <block> ::= "{" <statements> "}";
             case 1:
-                return tabbed(join(self.visit(child) for child in n[1]))
+                return tabbed(self.visit(n[1]))
 
     def _visit_statement(
         self,

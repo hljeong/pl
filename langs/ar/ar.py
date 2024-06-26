@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Callable
+from typing import Callable, Union
 
 from common import Log
 
@@ -113,6 +113,45 @@ class Machine:
     def _free(self) -> None:
         self._r["r14"] = 0
 
+    # todo: cleaner tracking
+    def __getitem__(self, reg_or_addr: Union[str, int]) -> int:
+        if type(reg_or_addr) is str:
+            reg: str = reg_or_addr
+            # todo: alias
+            val = self._r[reg]
+            Log.tf(f"[bold][yellow]{reg}[/yellow][/bold] = {val}")
+            return val
+
+        elif type(reg_or_addr) is int:
+            addr: int = reg_or_addr
+            val = self._m[addr]
+            Log.tf(f"[bold][[blue]{addr}[/blue]][/bold] = {val}")
+            return val
+
+        assert False
+
+    def __setitem__(self, reg_or_addr: Union[str, int], val: int) -> None:
+        if type(reg_or_addr) is str:
+            reg: str = reg_or_addr
+            # todo: alias
+            old_val: int = self._r[reg]
+            self._r[reg] = val
+            Log.tf(
+                f"[bold][yellow]{reg}[/yellow][/bold] = [red]{old_val}[/red] -> [green]{val}[/green]"
+            )
+            return
+
+        elif type(reg_or_addr) is int:
+            addr: int = reg_or_addr
+            old_val: int = self._m[addr]
+            self._m[addr] = val
+            Log.tf(
+                f"[bold][[blue]{addr}[/blue]][/bold] = [red]{old_val}[/red] -> [green]{val}[/green]"
+            )
+            return
+
+        assert False
+
     # todo: implement imem and keep pc internal
     def clk(self) -> int:
         if self._r["r1"] >= self._stack_limit:
@@ -122,174 +161,137 @@ class Machine:
         return self._pc
 
     def jump(self, delta_r: str) -> None:
-        Log.t(f"{delta_r} = {self._r[delta_r]}")
-        self._next_pc = self._pc + self._r[delta_r]
+        self._next_pc = self._pc + self[delta_r]
 
     def jumpv(self, delta_v: int) -> None:
         self._next_pc = self._pc + delta_v
 
     def sys(self, id_r: str) -> None:
-        Log.t(f"{id_r} = {self._r[id_r]}")
-        self._syscall[self._r[id_r]]()
+        self._syscall[self[id_r]]()
 
     def sysv(self, id_v: int) -> None:
         self._syscall[id_v]()
 
     def exit(self, val_r: str) -> int:
-        Log.t(f"{val_r} = {self._r[val_r]}")
-        return self._r[val_r]
+        return self[val_r]
 
     def exitv(self, val_v: int) -> int:
         return val_v
 
     def not_(self, dst_r: str, op_r: str) -> None:
-        Log.t(f"{op_r} = {self._r[op_r]}")
-        self._r[dst_r] = 1 if self._r[op_r] else 0
+        self[dst_r] = 1 if self[op_r] else 0
 
     def set_(self, dst_r: str, src_r: str) -> None:
-        Log.t(f"{src_r} = {self._r[src_r]}")
-        self._r[dst_r] = self._r[src_r]
+        self[dst_r] = self[src_r]
 
     def setv(self, dst_r: str, src_v: int) -> None:
-        self._r[dst_r] = src_v
+        self[dst_r] = src_v
 
     def jumpif(self, delta_r: str, cond_r: str) -> None:
-        Log.t(f"{delta_r} = {self._r[delta_r]}, {cond_r} = {self._r[cond_r]}")
-        if self._r[cond_r] != 0:
-            self._next_pc = self._pc + self._r[delta_r]
+        if self[cond_r] != 0:
+            self._next_pc = self._pc + self[delta_r]
 
     def jumpifv(self, delta_v: int, cond_r: str) -> None:
-        Log.t(f"{cond_r} = {self._r[cond_r]}")
-        if self._r[cond_r] != 0:
+        if self[cond_r] != 0:
             self._next_pc = self._pc + delta_v
 
     def load(self, dst_r: str, src_r: str, off_v: int) -> None:
-        loc: int = self._r[src_r] + off_v
+        loc: int = self[src_r] + off_v
         if loc < 0 or loc >= len(self._m):
             # todo: better exceptions
             raise RuntimeError(f"segment fault: {loc}")
-        Log.t(f"{src_r} = {self._r[src_r]}, [{src_r} + {off_v}] = {self._m[loc]}")
-        self._r[dst_r] = self._m[loc]
+        self[dst_r] = self[loc]
 
     def store(self, src_r: str, dst_r: str, off_v: int) -> None:
-        Log.t(f"{src_r} = {self._r[src_r]}, {dst_r} = {self._r[dst_r]}")
-        loc: int = self._r[dst_r] + off_v
+        loc: int = self[dst_r] + off_v
         if loc < 0 or loc >= len(self._m):
             # todo: better exceptions
             raise RuntimeError(f"segment fault: {loc}")
-        self._m[loc] = self._r[src_r]
+        self[loc] = self[src_r]
 
     def add(self, dst_r: str, op1_r: str, op2_r: str) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
-        self._r[dst_r] = self._r[op1_r] + self._r[op2_r]
+        self[dst_r] = self[op1_r] + self[op2_r]
 
     def addv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}")
-        self._r[dst_r] = self._r[op1_r] + op2_v
+        self[dst_r] = self[op1_r] + op2_v
 
     def sub(self, dst_r: str, op1_r: str, op2_r: str) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
-        self._r[dst_r] = self._r[op1_r] - self._r[op2_r]
+        self[dst_r] = self[op1_r] - self[op2_r]
 
     def subv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}")
-        self._r[dst_r] = self._r[op1_r] - op2_v
+        self[dst_r] = self[op1_r] - op2_v
 
     def mul(self, dst_r: str, op1_r: str, op2_r: str) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
-        self._r[dst_r] = self._r[op1_r] * self._r[op2_r]
+        self[dst_r] = self[op1_r] * self[op2_r]
 
     def mulv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}")
-        self._r[dst_r] = self._r[op1_r] * op2_v
+        self[dst_r] = self[op1_r] * op2_v
 
     def div(self, dst_r: str, op1_r: str, op2_r: str) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
-        self._r[dst_r] = self._r[op1_r] // self._r[op2_r]
+        self[dst_r] = self[op1_r] // self[op2_r]
 
     def divv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}")
-        self._r[dst_r] = self._r[op1_r] // op2_v
+        self[dst_r] = self[op1_r] // op2_v
 
     def mod(self, dst_r: str, op1_r: str, op2_r: str) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
-        self._r[dst_r] = self._r[op1_r] % self._r[op2_r]
+        self[dst_r] = self[op1_r] % self[op2_r]
 
     def modv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}")
-        self._r[dst_r] = self._r[op1_r] % op2_v
+        self[dst_r] = self[op1_r] % op2_v
 
     def or_(self, dst_r: str, op1_r: str, op2_r: str) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
-        self._r[dst_r] = self._r[op1_r] | self._r[op2_r]
+        self[dst_r] = self[op1_r] | self[op2_r]
 
     def orv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}")
-        self._r[dst_r] = self._r[op1_r] | op2_v
+        self[dst_r] = self[op1_r] | op2_v
 
     def and_(self, dst_r: str, op1_r: str, op2_r: str) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
-        self._r[dst_r] = self._r[op1_r] & self._r[op2_r]
+        self[dst_r] = self[op1_r] & self[op2_r]
 
     def andv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}")
-        self._r[dst_r] = self._r[op1_r] & op2_v
+        self[dst_r] = self[op1_r] & op2_v
 
     def xor(self, dst_r: str, op1_r: str, op2_r: str) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
-        self._r[dst_r] = self._r[op1_r] ^ self._r[op2_r]
+        self[dst_r] = self[op1_r] ^ self[op2_r]
 
     def xorv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}")
-        self._r[dst_r] = self._r[op1_r] ^ op2_v
+        self[dst_r] = self[op1_r] ^ op2_v
 
     def eq(self, dst_r: str, op1_r: str, op2_r: str) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
-        self._r[dst_r] = 1 if self._r[op1_r] == self._r[op2_r] else 0
+        self[dst_r] = 1 if self[op1_r] == self[op2_r] else 0
 
     def eqv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}")
-        self._r[dst_r] = 1 if self._r[op1_r] == op2_v else 0
+        self[dst_r] = 1 if self[op1_r] == op2_v else 0
 
     def neq(self, dst_r: str, op1_r: str, op2_r: str) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
-        self._r[dst_r] = 1 if self._r[op1_r] != self._r[op2_r] else 0
+        self[dst_r] = 1 if self[op1_r] != self[op2_r] else 0
 
     def neqv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}")
-        self._r[dst_r] = 1 if self._r[op1_r] != op2_v else 0
+        self[dst_r] = 1 if self[op1_r] != op2_v else 0
 
     def gt(self, dst_r: str, op1_r: str, op2_r: str) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
-        self._r[dst_r] = 1 if self._r[op1_r] > self._r[op2_r] else 0
+        self[dst_r] = 1 if self[op1_r] > self[op2_r] else 0
 
     def gtv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}")
-        self._r[dst_r] = 1 if self._r[op1_r] > op2_v else 0
+        self[dst_r] = 1 if self[op1_r] > op2_v else 0
 
     def geq(self, dst_r: str, op1_r: str, op2_r: str) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
-        self._r[dst_r] = 1 if self._r[op1_r] >= self._r[op2_r] else 0
+        self[dst_r] = 1 if self[op1_r] >= self[op2_r] else 0
 
     def geqv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}")
-        self._r[dst_r] = 1 if self._r[op1_r] >= op2_v else 0
+        self[dst_r] = 1 if self[op1_r] >= op2_v else 0
 
     def lt(self, dst_r: str, op1_r: str, op2_r: str) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
-        self._r[dst_r] = 1 if self._r[op1_r] < self._r[op2_r] else 0
+        self[dst_r] = 1 if self[op1_r] < self[op2_r] else 0
 
     def ltv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}")
-        self._r[dst_r] = 1 if self._r[op1_r] < op2_v else 0
+        self[dst_r] = 1 if self[op1_r] < op2_v else 0
 
     def leq(self, dst_r: str, op1_r: str, op2_r: str) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}, {op2_r} = {self._r[op2_r]}")
-        self._r[dst_r] = 1 if self._r[op1_r] <= self._r[op2_r] else 0
+        self[dst_r] = 1 if self[op1_r] <= self[op2_r] else 0
 
     def leqv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
-        Log.t(f"{op1_r} = {self._r[op1_r]}")
-        self._r[dst_r] = 1 if self._r[op1_r] <= op2_v else 0
+        self[dst_r] = 1 if self[op1_r] <= op2_v else 0
 
 
 class ARInterpreter:

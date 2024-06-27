@@ -1,19 +1,14 @@
-buf_size = 32;
-newline = "\n";
-x_equals = "x = ";
-y_equals = "y = ";
-z_equals = "z = ";
-x_str = alloc(buf_size);
-y_str = alloc(buf_size);
-z_str = alloc(buf_size);
+x_str = alloc(32);
+y_str = alloc(32);
+z_str = alloc(32);
 
-print(x_equals);
+print("x = ");
 read(x_str);
 
-print(y_equals);
+print("y = ");
 read(y_str);
 
-print(z_equals);
+print("z = ");
 read(z_str);
 
 x = stoi(x_str);
@@ -27,32 +22,26 @@ w = v - y;
 r = v | t;
 c = 15 * 7;
 
-u_equals = "u = 3 * x = ";
-print(u_equals);
+print("u = 3 * x = ");
 printi(u);
-print(newline);
+print("\n");
 
-v_equals = "v = y & 1 = ";
-print(v_equals);
+print("v = y & 1 = ");
 printi(v);
-print(newline);
+print("\n");
 
-w_equals = "w = v - y = ";
-print(w_equals);
+print("w = v - y = ");
 printi(w);
-print(newline);
+print("\n");
 
-t_equals = "t = y <= u = ";
-print(t_equals);
+print("t = y <= u = ");
 printi(t);
-print(newline);
+print("\n");
 
-r_equals = "r = v | t = ";
-print(r_equals);
+print("r = v | t = ");
 printi(r);
-print(newline);
+print("\n");
 
-c_equals = "c = 15 * 7 = ";
-print(c_equals);
+print("c = 15 * 7 = ");
 printi(c);
-print(newline);
+print("\n");

@@ -63,12 +63,12 @@ class BPrinter(Visitor):
                             f"{self(n[0])} = {self(cast(NonterminalASTNode, n[2])[0])};"
                         )
 
-                    # "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)"
+                    # "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)" | "stoi" "\(" <operand> "\)"
                     case 3 | 4 | 5:
                         # todo: annotation
                         return f"{self(n[0])} = {n[2][0].lexeme}({self(n[2][2])});"
 
-            # <statement> ::= ("print" | "printi" | "read") "\(" <variable> "\)" ";";
+            # <statement> ::= ("print" | "printi" | "read") "\(" <operand> "\)" ";";
             case 1:
                 # todo: review casts
                 return f"{cast(TerminalASTNode, cast(NonterminalASTNode, n[0])[0]).lexeme}({self(cast(NonterminalASTNode, n[2])[0])});"
@@ -149,8 +149,9 @@ class BAggregator(Visitor):
         return self._constant_aggregate
 
     def _visit_string(self, n: ASTNode) -> Any:
-        self._constant_aggregate[n[0].literal] = self._constant_idx
-        self._constant_idx += 1
+        if n[0].literal not in self._constant_aggregate:
+            self._constant_aggregate[n[0].literal] = self._constant_idx
+            self._constant_idx += 1
 
 
 class BAllocator(Visitor):
@@ -258,52 +259,103 @@ class BCompiler(Visitor):
                         )
 
                     # todo: wait free() does not belong here lol
-                    # "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)"
+                    # "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)"
                     case 3 | 4:
+                        # todo: better way to load operand
+                        load_operand: str = ""
+                        match n[2][2].choice:
+                            # <operand> ::= <variable>;
+                            case 0:
+                                load_operand = f"{self(n[2][2]).format('a0')} # a0 = [sp + alloc[{n[2][2][0][0].lexeme}]];"
+
+                            # <operand> ::= <string>;
+                            case 1:
+                                load_operand = f"{self(n[2][2]).format('a0')} # a0 = {n[2][2][0][0].lexeme};"
+
+                            # <operand> ::= decimal_interger;
+                            case 2:
+                                load_operand = (
+                                    f"setv a0 {self(n[2][2])} # a0 = {self(n[2][2])};"
+                                )
+
+                            case _:
+                                print(n[2][2].choice)
+                                assert False
+
                         # somehow n[2].choice works here...
                         # ^ no longer true but only shifted by 1
                         main_course = join(
-                            f"load a0 r1 {self._a[n[2][2][0].lexeme]} # a0 = [sp + alloc[{n[2][2][0].lexeme}]];",
+                            load_operand,
                             f"sysv {n[2].choice + 1} # a0 = {n[2][0].lexeme}(a0);",
                             f"set t0 a0 # t0 = a0;",
                         )
 
-                    # "stoi" "\(" <variable> "\)"
+                    # "stoi" "\(" <operand> "\)"
                     case 5:
+                        # todo: better way to load operand
+                        load_operand: str = ""
+                        match n[2][2].choice:
+                            # <operand> ::= <variable>;
+                            case 0:
+                                load_operand = f"{self(n[2][2]).format('a0')} # a0 = [sp + alloc[{n[2][2][0][0].lexeme}]];"
+
+                            # <operand> ::= <string>;
+                            case 1:
+                                load_operand = f"{self(n[2][2]).format('a0')} # a0 = {n[2][2][0][0].lexeme};"
+
+                            # <operand> ::= decimal_interger;
+                            case 2:
+                                load_operand = (
+                                    f"setv a0 {self(n[2][2])} # a0 = {self(n[2][2])};"
+                                )
+
+                            case _:
+                                assert False
+
                         main_course = join(
-                            f"load a0 r1 {self._a[n[2][2][0].lexeme]} # a0 = [sp + alloc[{n[2][2][0].lexeme}]];",
+                            load_operand,
                             f"sysv 2 # a1 = {n[2][0].lexeme}(a0);",
                             f"set t0 a1 # t0 = a1;",
                         )
 
                 return join(main_course, dessert)
 
-            # <statement> ::= ("print" | "printi" | "read") "\(" <variable> "\)" ";";
+            # <statement> ::= ("print" | "printi" | "read") "\(" <operand> "\)" ";";
             case 1:
-                appetizer = f"load t0 r1 {self._a[n[2][0].lexeme]} # t0 = [sp + alloc[{n[2][0].lexeme}]];"
+                # todo: better way to load operand
+                appetizer: str = ""
+                match n[2].choice:
+                    # <operand> ::= <variable>;
+                    case 0:
+                        appetizer = f"{self(n[2]).format('a0')} # a0 = [sp + alloc[{n[2][0][0].lexeme}]];"
+
+                    # <operand> ::= <string>;
+                    case 1:
+                        appetizer = (
+                            f"{self(n[2]).format('a0')} # a0 = {n[2][0][0].lexeme};"
+                        )
+
+                    # <operand> ::= decimal_interger;
+                    case 2:
+                        appetizer = f"setv a0 {self(n[2])} # a0 = {self(n[2])};"
+
+                    case _:
+                        assert False
+
                 main_course: str = ""
                 # "print" | "printi" | "read"
                 match n[0].choice:
                     # "print"
                     case 0:
-                        main_course = join(
-                            f"set a0 t0 # a0 = t0;",
-                            "sysv 0 # print(a0);",
-                        )
+                        main_course = "sysv 0 # print(a0);"
 
                     # "printi"
                     case 1:
-                        main_course = join(
-                            f"set a0 t0 # a0 = t0;",
-                            "sysv 3 # printi(a0);",
-                        )
+                        main_course = "sysv 3 # printi(a0);"
 
                     # "read"
                     case 2:
-                        main_course = join(
-                            f"set a0 t0 # a0 = t0;",
-                            "sysv 1 # a0 = read(a0);",
-                        )
+                        main_course = "sysv 1 # a0 = read(a0);"
 
                 return join(appetizer, main_course)
 
@@ -351,7 +403,7 @@ class BCompiler(Visitor):
             # <unary_operator> <operand>
             case 0:
                 # constant expression optimization
-                if n[1].choice == 1:
+                if n[1].choice == 2:
                     val: int = int(self(n[1]))
                     val = 1 if val == 0 else 0
                     return f"setv t0 {val}"
@@ -363,12 +415,10 @@ class BCompiler(Visitor):
             # <operand> <binary_operator> <operand>
             case 1:
                 lop: ASTNode = n[0]
-                lop_choice: int = lop.choice
                 rop: ASTNode = n[2]
-                rop_choice: int = rop.choice
 
                 # constant expression optimization
-                if lop_choice == 1 and rop_choice == 1:
+                if lop.choice == 2 and rop.choice == 2:
                     binop = {
                         # <binary_operator> ::= "\+";
                         0: lambda x, y: x + y,
@@ -376,22 +426,28 @@ class BCompiler(Visitor):
                         1: lambda x, y: x - y,
                         # <binary_operator> ::= "\*";
                         2: lambda x, y: x * y,
+                        # <binary_operator> ::= "/";
+                        3: lambda x, y: x // y,
+                        # <binary_operator> ::= "%";
+                        4: lambda x, y: x % y,
                         # <binary_operator> ::= "\|";
-                        3: lambda x, y: x | y,
+                        5: lambda x, y: x | y,
                         # <binary_operator> ::= "&";
-                        4: lambda x, y: x & y,
+                        6: lambda x, y: x & y,
+                        # <binary_operator> ::= "^";
+                        7: lambda x, y: x ^ y,
                         # <binary_operator> ::= "==";
-                        5: lambda x, y: x == y,
+                        8: lambda x, y: 1 if x == y else 0,
                         # <binary_operator> ::= "!=";
-                        6: lambda x, y: x != y,
+                        9: lambda x, y: 1 if x != y else 0,
                         # <binary_operator> ::= ">";
-                        7: lambda x, y: x > y,
+                        10: lambda x, y: 1 if x > y else 0,
                         # <binary_operator> ::= ">=";
-                        8: lambda x, y: x >= y,
+                        11: lambda x, y: 1 if x >= y else 0,
                         # <binary_operator> ::= "<";
-                        9: lambda x, y: x < y,
+                        12: lambda x, y: 1 if x < y else 0,
                         # <binary_operator> ::= "<=";
-                        10: lambda x, y: x <= y,
+                        13: lambda x, y: 1 if x <= y else 0,
                     }[n[1].choice]
 
                     lop_val: int = int(self(lop))
@@ -406,22 +462,28 @@ class BCompiler(Visitor):
                     1: "sub",
                     # <binary_operator> ::= "\*";
                     2: "mul",
+                    # <binary_operator> ::= "/";
+                    3: "div",
+                    # <binary_operator> ::= "%";
+                    4: "mod",
                     # <binary_operator> ::= "\|";
-                    3: "or",
+                    5: "or",
                     # <binary_operator> ::= "&";
-                    4: "and",
+                    6: "and",
+                    # <binary_operator> ::= "^";
+                    7: "xor",
                     # <binary_operator> ::= "==";
-                    5: "eq",
+                    8: "eq",
                     # <binary_operator> ::= "!=";
-                    6: "neq",
+                    9: "neq",
                     # <binary_operator> ::= ">";
-                    7: "gt",
+                    10: "gt",
                     # <binary_operator> ::= ">=";
-                    8: "geq",
+                    11: "geq",
                     # <binary_operator> ::= "<";
-                    9: "lt",
+                    12: "lt",
                     # <binary_operator> ::= "<=";
-                    10: "leq",
+                    13: "leq",
                 }[n[1].choice]
 
                 # todo: fix lazy comment (print it as binary operation)

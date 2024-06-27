@@ -1,10 +1,6 @@
-buf_size = 32;
-input1 = alloc(buf_size);
-input2 = alloc(buf_size);
-newline = "\n";
+input1 = alloc(32);
+input2 = alloc(32);
 read(input1);
 read(input2);
-print(input2);
-print(newline);
-print(input1);
-print(newline);
+print(input2); print("\n");
+print(input1); print("\n");

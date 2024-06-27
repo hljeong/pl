@@ -1,6 +1,4 @@
-buf_size = 32;
-input = alloc(buf_size);
+input = alloc(32);
 read(input);
-newline = "\n";
 print(input);
-print(newline);
+print("\n");

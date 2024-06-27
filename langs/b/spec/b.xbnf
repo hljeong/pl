@@ -4,9 +4,9 @@
 
 <statement> ::=
 
-  <variable> "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)") ";" |
+  <variable> "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)" | "stoi" "\(" <operand> "\)") ";" |
 
-  ("print" | "printi" | "read") "\(" <variable> "\)" ";" |
+  ("print" | "printi" | "read") "\(" <operand> "\)" ";" |
 
   "while" "\(" <expression> "\)" <block> |
 
@@ -28,11 +28,13 @@
 
 <binary_operator> ::=
 
-  "\+" | "-"  | "\*" | "\|" |
+  "\+" | "-"  | "\*" | "/"  |
 
-  "&"  | "==" | "!=" | ">"  |
+  "%"  | "\|" | "&"  | "^"  |
 
-  ">=" | "<"  | "<=";
+  "==" | "!=" | ">"  | ">=" |
+
+  "<"  | "<=";
 
 <variable> ::= identifier;
 

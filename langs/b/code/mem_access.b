@@ -1,30 +1,27 @@
-buffer_size = 32;
-newline = "\n";
-v0_str = alloc(buffer_size);
-prompt_left = "a[";
-prompt_right = "] = ";
-output_left = "p = {";
-comma = ", ";
-output_right = "}";
+ibuf = alloc(32);
 
-arr_size = 5;
-a = alloc(arr_size);
-p = alloc(arr_size);
+print("n = ");
+read(ibuf);
+n = stoi(ibuf);
+np1 = n + 1;
+
+a = alloc(n);
+p = alloc(np1);
 
 i = 0;
-while (i < arr_size) {
-  print(prompt_left);
+while (i < n) {
+  print("a[");
   printi(i);
-  print(prompt_right);
-  read(v0_str);
-  v0 = stoi(v0_str);
+  print("] = ");
+  read(ibuf);
+  v0 = stoi(ibuf);
   v1 = a + i;
   [v1 + 0] = v0;
   i = i + 1;
 }
 
 i = 0;
-while (i < arr_size) {
+while (i < n) {
   v0 = p + i;
   v1 = a + i;
   v2 = [v0 + 0];
@@ -34,14 +31,24 @@ while (i < arr_size) {
   i = i + 1;
 }
 
-print(output_left);
+print("a = {");
 i = 0;
-while (i < arr_size) {
-  if (i > 0) print(comma);
+while (i < n) {
+  if (i > 0) print(", ");
+  v0 = a + i;
+  x = [v0 + 0];
+  printi(x);
+  i = i + 1;
+}
+
+print("}\n");
+print("p = {");
+i = 0;
+while (i < n) {
+  if (i > 0) print(", ");
   v0 = p + i;
   x = [v0 + 1];
   printi(x);
   i = i + 1;
 }
-print(output_right);
-print(newline);
+print("}\n");

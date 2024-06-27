@@ -1,10 +1,6 @@
-buf_size = 32;
-prompt = "n = ";
-n_fact_equals = "n! = ";
-newline = "\n";
-n_str = alloc(buf_size);
+n_str = alloc(32);
 
-print(prompt);
+print("n = ");
 read(n_str);
 n = stoi(n_str);
 
@@ -13,6 +9,7 @@ while (n != 0) {
   fact = fact * n;
   n = n - 1;
 }
-print(n_fact_equals);
+
+print("n! = ");
 printi(fact);
-print(newline);
+print("\n");

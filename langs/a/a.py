@@ -9,57 +9,52 @@ Memory = list[int]
 SysCall = Callable[[], None]
 
 
-# 32 regs
-REGFILE_SIZE: int = 32
-
-# 2 "mb" dmem
-DEFAULT_DMEM_SIZE: int = 2 * 1024 * 1024
-
-# 8 "kb" imem
-DEFAULT_IMEM_SIZE: int = 8 * 1024
+# 2 "mb" mem
+DEFAULT_MEM_SIZE: int = 2 * 1024 * 1024
 
 # 16 "kb" stack
+# what about a variable-sized stack?
 DEFAULT_STACK_SIZE: int = 16 * 1024
 
 USE_DEFAULT_SYSCALL: dict[int, SysCall] = {}
 
 
 class Machine:
-    _regs: set[str] = set(
-        [
-            "r1",
-            "r2",
-            "r3",
-            "r4",
-            "r5",
-            "r6",
-            "r7",
-            "r8",
-            "r9",
-            "r10",
-            "r11",
-            "r12",
-            "r13",
-            "r14",
-            "r15",
-            "r16",
-            "r17",
-            "r18",
-            "r19",
-            "r20",
-            "r21",
-            "r22",
-            "r23",
-            "r24",
-            "r25",
-            "r26",
-            "r27",
-            "r28",
-            "r29",
-            "r30",
-            "r31",
-        ]
-    )
+    _regs: list[str] = [
+        "r0",
+        "r1",
+        "r2",
+        "r3",
+        "r4",
+        "r5",
+        "r6",
+        "r7",
+        "r8",
+        "r9",
+        "r10",
+        "r11",
+        "r12",
+        "r13",
+        "r14",
+        "r15",
+        "r16",
+        "r17",
+        "r18",
+        "r19",
+        "r20",
+        "r21",
+        "r22",
+        "r23",
+        "r24",
+        "r25",
+        "r26",
+        "r27",
+        "r28",
+        "r29",
+        "r30",
+        "r31",
+        "pc",
+    ]
 
     _aliases: dict[str, str] = {
         "r1": "sp",
@@ -119,22 +114,17 @@ class Machine:
 
     @staticmethod
     def temp_reg_to_byte(reg: str) -> int:
-        return int(Machine._unalias(reg)[1:]) + 128
+        return Machine._regs.index(Machine._unalias(reg)) + 128
 
     def __init__(
         self,
-        dmem_size: int = DEFAULT_DMEM_SIZE,
-        imem_size: int = DEFAULT_IMEM_SIZE,
+        mem_size: int = DEFAULT_MEM_SIZE,
         stack_size: int = DEFAULT_STACK_SIZE,
         syscall: dict[int, SysCall] = USE_DEFAULT_SYSCALL,
     ):
-        self._r: RegFile = {f"r{i}": 0 for i in range(REGFILE_SIZE)}
-        self._r["pc"] = 0
-        self._next_pc: int = 4
-        self._dmem_size: int = dmem_size
-        self._imem_loc: int = dmem_size
-        self._imem_size: int = imem_size
-        self._m: Memory = [0] * (dmem_size + imem_size)
+        self._r: RegFile = {reg: 0 for reg in Machine._regs}
+        self._mem_size: int = mem_size
+        self._m: Memory = [0] * mem_size
         if syscall is USE_DEFAULT_SYSCALL:
             syscall = {
                 0: self._print,
@@ -145,23 +135,44 @@ class Machine:
                 5: self._free,
             }
         self._syscall = syscall
-        self._stack_limit: int = stack_size
-        # skip nullptr
-        self["sp"] = 1
-        self._next_mem_alloc: int = dmem_size
+        self._stack_size: int = stack_size
 
         # self._tracking: set[Union[str, int]] = set(["sp"])
 
     def __call__(self, prog: list[int]) -> int:
-        prog_size: int = len(prog)
-        if prog_size > self._imem_size:
-            raise RuntimeError(f"program too large: {prog_size} > {self._imem_size}")
+        if len(prog) < 2:
+            raise RuntimeError("invalid program header")
 
-        for i, e in enumerate(prog):
-            self._m[self._imem_loc + i] = e
+        header: list[int] = prog[:2]
+        body: list[int] = prog[2:]
 
-        self["pc"] = self._imem_loc
-        self._next_pc = self._imem_loc + 4
+        data_size: int = header[0]
+        code_size: int = header[1]
+        if len(body) != data_size + code_size:
+            raise RuntimeError("inconsistent program header")
+
+        if data_size + code_size > self._mem_size - self._stack_size:
+            raise RuntimeError(
+                f"program too large: {data_size + code_size} > {self._mem_size + self._stack_size}"
+            )
+
+        data: list[int] = body[:data_size]
+        code: list[int] = body[data_size:]
+
+        self._code_loc = self._mem_size - code_size
+        for i, e in enumerate(code):
+            self._m[self._code_loc + i] = e
+
+        self._data_loc = self._code_loc - data_size
+        for i, e in enumerate(data):
+            self._m[self._data_loc + i] = e
+
+        # skip nullptr
+        self["sp"] = 1
+
+        self["pc"] = self._code_loc
+        self._next_pc: int = self._code_loc + 4
+        self._next_mem_alloc: int = self._mem_size - code_size - data_size
         while self._clk():
             pass
 
@@ -178,11 +189,11 @@ class Machine:
         # todo: need something a lot better than this
         Log.t(f"{pc}: {ins} {val1} {val2} {val3}")
         if val1 >= 128:
-            reg1 = f"r{val1 - 128}"
+            reg1 = Machine._regs[val1 - 128]
         if val2 >= 128:
-            reg2 = f"r{val2 - 128}"
+            reg2 = Machine._regs[val2 - 128]
         if val3 >= 128:
-            reg3 = f"r{val3 - 128}"
+            reg3 = Machine._regs[val3 - 128]
 
         # todo: there has to be a better way...
         match ins:
@@ -314,7 +325,7 @@ class Machine:
             case 41:
                 self._leqv(reg1, reg2, val3)
 
-        if self._r["r1"] >= self._stack_limit:
+        if self._r["r1"] >= self._stack_size:
             # todo
             raise RuntimeError("stack overflow")
 
@@ -591,13 +602,7 @@ class AAssembler:
     ):
         self._m = machine
 
-    def __call__(self, prog: str):
-        return self.interpret(prog)
-
-    def interpret(
-        self,
-        prog: str,
-    ) -> int:
+    def __call__(self, prog: str) -> int:
         self._cur: int = 0
         self._prog: str = prog
         self._len: int = len(self._prog)
@@ -655,230 +660,294 @@ class AAssembler:
             "leqv",
         ]
 
-        prog: list[int] = []
+        code: list[int] = []
         label: dict[str, int] = {}
         idx: int = 0
         ins_num: int = 0
         to_link: dict[int, str] = {}
+        section: str = "none"
+        data: list[int] = []
+        # todo: what even is this??
+        string_constant_to_link: dict[tuple[int, int], int] = {}
+        string_constant_map: list[int] = []
+
+        def val(value_or_string_constant_link: str, loc: int) -> int:
+            if value_or_string_constant_link.startswith("="):
+                string_constant_to_link[(ins_num, loc)] = int(
+                    value_or_string_constant_link[1:]
+                )
+                return 0
+
+            else:
+                return int(value_or_string_constant_link)
+
         while idx < len(tokens):
-            ins: str = tokens[idx]
-            match ins:
-                case "jump" | "jumpv" | "sys" | "sysv" | "exit" | "exitv":
-                    if not Log.e(
-                        f"expected 1 argument for {ins}, found {len(tokens) - idx - 1}",
-                        len(tokens) - idx < 2,
-                    ):
-                        # todo
-                        raise RuntimeError()
+            if tokens[idx].startswith("."):
+                section = tokens[idx][1:]
+                idx += 1
+                continue
 
-                    if ins == "jumpv":
-                        delta_v: str = tokens[idx + 1]
-                        if not (
-                            delta_v.isdigit()
-                            or delta_v.startswith("-")
-                            and delta_v[1:].isdigit()
+            match section:
+                case "code":
+                    ins: str = tokens[idx]
+                    match ins:
+                        case "jump" | "jumpv" | "sys" | "sysv" | "exit" | "exitv":
+                            if not Log.e(
+                                f"expected 1 argument for {ins}, found {len(tokens) - idx - 1}",
+                                len(tokens) - idx < 2,
+                            ):
+                                # todo
+                                raise RuntimeError()
+
+                            if ins == "jumpv":
+                                delta_v: str = tokens[idx + 1]
+                                if not (
+                                    delta_v.isdigit()
+                                    or delta_v.startswith("-")
+                                    and delta_v[1:].isdigit()
+                                ):
+                                    to_link[ins_num] = delta_v
+                                    code.extend(
+                                        [
+                                            ins_list.index(ins),
+                                            0,
+                                            0,
+                                            0,
+                                        ]
+                                    )
+
+                                else:
+                                    # no string constant linking here...
+                                    # as it shouldnt
+                                    code.extend(
+                                        [
+                                            ins_list.index(ins),
+                                            int(tokens[idx + 1]),
+                                            0,
+                                            0,
+                                        ]
+                                    )
+
+                            elif ins.endswith("v"):
+                                code.extend(
+                                    [ins_list.index(ins), val(tokens[idx + 1], 1), 0, 0]
+                                )
+
+                            else:
+                                code.extend(
+                                    [
+                                        ins_list.index(ins),
+                                        Machine.temp_reg_to_byte(tokens[idx + 1]),
+                                        0,
+                                        0,
+                                    ]
+                                )
+
+                            idx += 2
+                            ins_num += 1
+
+                        case "not" | "notv" | "set" | "setv" | "jumpif" | "jumpifv":
+                            if not Log.e(
+                                f"expected 2 argument for {ins}, found {len(tokens) - idx - 1}",
+                                len(tokens) - idx < 3,
+                            ):
+                                # todo
+                                raise RuntimeError()
+
+                            if ins == "jumpifv":
+                                delta_v: str = tokens[idx + 1]
+                                if not (
+                                    delta_v.isdigit()
+                                    or delta_v.startswith("-")
+                                    and delta_v[1:].isdigit()
+                                ):
+                                    to_link[ins_num] = delta_v
+                                    code.extend(
+                                        [
+                                            ins_list.index(ins),
+                                            0,
+                                            Machine.temp_reg_to_byte(tokens[idx + 2]),
+                                            0,
+                                        ]
+                                    )
+
+                                else:
+                                    code.extend(
+                                        [
+                                            ins_list.index(ins),
+                                            val(tokens[idx + 1], 1),
+                                            Machine.temp_reg_to_byte(tokens[idx + 2]),
+                                            0,
+                                        ]
+                                    )
+
+                            elif ins.endswith("v"):
+                                code.extend(
+                                    [
+                                        ins_list.index(ins),
+                                        Machine.temp_reg_to_byte(tokens[idx + 1]),
+                                        val(tokens[idx + 2], 2),
+                                        0,
+                                    ]
+                                )
+
+                            else:
+                                code.extend(
+                                    [
+                                        ins_list.index(ins),
+                                        Machine.temp_reg_to_byte(tokens[idx + 1]),
+                                        Machine.temp_reg_to_byte(tokens[idx + 2]),
+                                        0,
+                                    ]
+                                )
+
+                            idx += 3
+                            ins_num += 1
+
+                        case (
+                            "load"
+                            | "store"
+                            | "storev"
+                            | "add"
+                            | "addv"
+                            | "sub"
+                            | "subv"
+                            | "mul"
+                            | "mulv"
+                            | "div"
+                            | "divv"
+                            | "mod"
+                            | "modv"
+                            | "or"
+                            | "orv"
+                            | "and"
+                            | "andv"
+                            | "xor"
+                            | "xorv"
+                            | "eq"
+                            | "eqv"
+                            | "neq"
+                            | "neqv"
+                            | "gt"
+                            | "gtv"
+                            | "geq"
+                            | "geqv"
+                            | "lt"
+                            | "ltv"
+                            | "leq"
+                            | "leqv"
                         ):
-                            to_link[ins_num] = delta_v
-                            prog.extend(
-                                [
-                                    ins_list.index(ins),
-                                    0,
-                                    0,
-                                    0,
-                                ]
-                            )
+                            if not Log.e(
+                                f"expected 3 argument for {ins}, found {len(tokens) - idx - 1}",
+                                len(tokens) - idx < 4,
+                            ):
+                                # todo
+                                raise RuntimeError()
 
-                        else:
-                            prog.extend(
-                                [
-                                    ins_list.index(ins),
-                                    int(tokens[idx + 1]),
-                                    0,
-                                    0,
-                                ]
-                            )
+                            if ins == "load" or ins == "store":
+                                code.extend(
+                                    [
+                                        ins_list.index(ins),
+                                        Machine.temp_reg_to_byte(tokens[idx + 1]),
+                                        Machine.temp_reg_to_byte(tokens[idx + 2]),
+                                        val(tokens[idx + 3], 3),
+                                    ]
+                                )
 
-                    elif ins.endswith("v"):
-                        prog.extend([ins_list.index(ins), int(tokens[idx + 1]), 0, 0])
+                            elif ins == "storev":
+                                code.extend(
+                                    [
+                                        ins_list.index(ins),
+                                        val(tokens[idx + 1], 1),
+                                        Machine.temp_reg_to_byte(tokens[idx + 2]),
+                                        val(tokens[idx + 3], 3),
+                                    ]
+                                )
 
-                    else:
-                        prog.extend(
-                            [
-                                ins_list.index(ins),
-                                Machine.temp_reg_to_byte(tokens[idx + 1]),
-                                0,
-                                0,
-                            ]
-                        )
+                            elif ins.endswith("v"):
+                                code.extend(
+                                    [
+                                        ins_list.index(ins),
+                                        Machine.temp_reg_to_byte(tokens[idx + 1]),
+                                        Machine.temp_reg_to_byte(tokens[idx + 2]),
+                                        val(tokens[idx + 3], 3),
+                                    ]
+                                )
 
-                    idx += 2
-                    ins_num += 1
+                            else:
+                                code.extend(
+                                    [
+                                        ins_list.index(ins),
+                                        Machine.temp_reg_to_byte(tokens[idx + 1]),
+                                        Machine.temp_reg_to_byte(tokens[idx + 2]),
+                                        Machine.temp_reg_to_byte(tokens[idx + 3]),
+                                    ]
+                                )
 
-                case "not" | "notv" | "set" | "setv" | "jumpif" | "jumpifv":
-                    if not Log.e(
-                        f"expected 2 argument for {ins}, found {len(tokens) - idx - 1}",
-                        len(tokens) - idx < 3,
-                    ):
-                        # todo
-                        raise RuntimeError()
+                            idx += 4
+                            ins_num += 1
 
-                    if ins == "jumpifv":
-                        delta_v: str = tokens[idx + 1]
-                        if not (
-                            delta_v.isdigit()
-                            or delta_v.startswith("-")
-                            and delta_v[1:].isdigit()
-                        ):
-                            to_link[ins_num] = delta_v
-                            prog.extend(
-                                [
-                                    ins_list.index(ins),
-                                    0,
-                                    Machine.temp_reg_to_byte(tokens[idx + 2]),
-                                    0,
-                                ]
-                            )
+                        case _:
+                            # todo: this is bad, offload this to lexer and parser
+                            if ins.endswith(":"):
+                                if ins[:-1] in label:
+                                    # todo
+                                    Log.e(f"duplicate label '{ins[:-1]}'")
+                                    raise RuntimeError()
 
-                        else:
-                            prog.extend(
-                                [
-                                    ins_list.index(ins),
-                                    int(tokens[idx + 1]),
-                                    Machine.temp_reg_to_byte(tokens[idx + 2]),
-                                    0,
-                                ]
-                            )
+                                label[ins[:-1]] = ins_num
+                                idx += 1
 
-                    elif ins.endswith("v"):
-                        prog.extend(
-                            [
-                                ins_list.index(ins),
-                                Machine.temp_reg_to_byte(tokens[idx + 1]),
-                                int(tokens[idx + 2]),
-                                0,
-                            ]
-                        )
+                            elif len(tokens) - idx >= 2 and tokens[idx + 1] == ":":
+                                if ins in label:
+                                    # todo
+                                    Log.e(f"duplicate label '{ins}'")
+                                    raise RuntimeError()
 
-                    else:
-                        prog.extend(
-                            [
-                                ins_list.index(ins),
-                                Machine.temp_reg_to_byte(tokens[idx + 1]),
-                                Machine.temp_reg_to_byte(tokens[idx + 2]),
-                                0,
-                            ]
-                        )
+                                label[ins] = ins_num
+                                idx += 2
 
-                    idx += 3
-                    ins_num += 1
+                            else:
+                                # todo
+                                Log.e(f"'{ins}' is not a valid instruction")
+                                raise RuntimeError()
 
-                case (
-                    "load"
-                    | "store"
-                    | "storev"
-                    | "add"
-                    | "addv"
-                    | "sub"
-                    | "subv"
-                    | "mul"
-                    | "mulv"
-                    | "div"
-                    | "divv"
-                    | "mod"
-                    | "modv"
-                    | "or"
-                    | "orv"
-                    | "and"
-                    | "andv"
-                    | "xor"
-                    | "xorv"
-                    | "eq"
-                    | "eqv"
-                    | "neq"
-                    | "neqv"
-                    | "gt"
-                    | "gtv"
-                    | "geq"
-                    | "geqv"
-                    | "lt"
-                    | "ltv"
-                    | "leq"
-                    | "leqv"
-                ):
-                    if not Log.e(
-                        f"expected 3 argument for {ins}, found {len(tokens) - idx - 1}",
-                        len(tokens) - idx < 4,
-                    ):
-                        # todo
-                        raise RuntimeError()
+                case "data":
+                    # todo: validate tokens to be escaped strings
+                    #       -- probably defer this to lexer
+                    # todo: why do i have to do this manually :(
+                    # extremely inefficient lazy bum implementation btw
+                    def valid_escaped_string(s: str) -> bool:
+                        i = 1
+                        while i < len(s):
+                            if s[i] == "\\":
+                                if i + 1 >= len(s):
+                                    return False
+                                i += 1
 
-                    if ins == "load" or ins == "store":
-                        prog.extend(
-                            [
-                                ins_list.index(ins),
-                                Machine.temp_reg_to_byte(tokens[idx + 1]),
-                                Machine.temp_reg_to_byte(tokens[idx + 2]),
-                                int(tokens[idx + 3]),
-                            ]
-                        )
+                            if s[i] == '"':
+                                return i == len(s) - 1
 
-                    elif ins == "storev":
-                        prog.extend(
-                            [
-                                ins_list.index(ins),
-                                int(tokens[idx + 1]),
-                                Machine.temp_reg_to_byte(tokens[idx + 2]),
-                                int(tokens[idx + 3]),
-                            ]
-                        )
+                            i += 1
+                        return False
 
-                    elif ins.endswith("v"):
-                        prog.extend(
-                            [
-                                ins_list.index(ins),
-                                Machine.temp_reg_to_byte(tokens[idx + 1]),
-                                Machine.temp_reg_to_byte(tokens[idx + 2]),
-                                int(tokens[idx + 3]),
-                            ]
-                        )
-
-                    else:
-                        prog.extend(
-                            [
-                                ins_list.index(ins),
-                                Machine.temp_reg_to_byte(tokens[idx + 1]),
-                                Machine.temp_reg_to_byte(tokens[idx + 2]),
-                                Machine.temp_reg_to_byte(tokens[idx + 3]),
-                            ]
-                        )
-
-                    idx += 4
-                    ins_num += 1
+                    s: str = tokens[idx]
+                    idx += 1
+                    while idx < len(tokens) and not valid_escaped_string(s):
+                        # whitespace info is lost here...
+                        s += " "
+                        s += tokens[idx]
+                        idx += 1
+                    if idx == len(tokens) and not valid_escaped_string(s):
+                        raise RuntimeError("escaped string parsed until end of file")
+                    s = bytes(s[1:-1], "utf-8").decode("unicode_escape")
+                    string_constant_map.append(len(data))
+                    data.extend(list(map(ord, s)))
+                    data.append(0)
 
                 case _:
-                    # todo: this is bad, offload this to lexer and parser
-                    if ins.endswith(":"):
-                        if ins[:-1] in label:
-                            # todo
-                            Log.e(f"duplicate label '{ins[:-1]}'")
-                            raise RuntimeError()
-
-                        label[ins[:-1]] = ins_num
-                        idx += 1
-
-                    elif len(tokens) - idx >= 2 and tokens[idx + 1] == ":":
-                        if ins in label:
-                            # todo
-                            Log.e(f"duplicate label '{ins}'")
-                            raise RuntimeError()
-
-                        label[ins] = ins_num
-                        idx += 2
-
-                    else:
-                        # todo
-                        Log.e(f"'{ins}' is not a valid instruction")
-                        raise RuntimeError()
+                    # todo
+                    Log.e(f"invalid section '{section}'")
 
         for ins_num_to_link, label_to_link in to_link.items():
             if label_to_link not in label:
@@ -886,7 +955,28 @@ class AAssembler:
                 Log.e(f"label '{label_to_link}' does not exist")
                 raise RuntimeError()
 
-            prog[4 * ins_num_to_link + 1] = label[label_to_link] - ins_num_to_link
+            code[4 * ins_num_to_link + 1] = label[label_to_link] - ins_num_to_link
+
+        # todo: terrible variable naming
+        for ins_num_and_loc, string_const_to_link in string_constant_to_link.items():
+            if string_const_to_link >= len(string_constant_map):
+                # todo:
+                Log.e(f"string constant '={string_const_to_link}' does not exist")
+                raise RuntimeError()
+
+            ins_num_to_link: int
+            loc_to_link: int
+            ins_num_to_link, loc_to_link = ins_num_and_loc
+            code[4 * ins_num_to_link + loc_to_link] = -(
+                4 * ins_num_to_link
+                + (len(data) - string_constant_map[string_const_to_link])
+            )
+
+        prog: list[int] = []
+        prog.append(len(data))
+        prog.append(len(code))
+        prog.extend(data)
+        prog.extend(code)
 
         Log.d("finished loading instructions")
         return prog

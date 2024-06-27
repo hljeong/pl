@@ -50,7 +50,9 @@ class Vocabulary:
         ),
         "escaped_string": Definition.make(
             r'"(\.|[^\"])*"',
-            lambda lexeme: bytes(lexeme[1:-1], "utf-8").decode("unicode_escape"),
+            # todo: delete
+            # lambda lexeme: bytes(lexeme[1:-1], "utf-8").decode("unicode_escape"),
+            lambda lexeme: lexeme[1:-1],
         ),
     }
 

@@ -136,6 +136,23 @@ class BPrinter(Visitor):
         return f"[{self(n[1])} + {self(n[3])}]"
 
 
+# pass for aggregating string constants...
+# might just be a construct created by myself
+class BAggregator(Visitor):
+    def __init__(self):
+        super().__init__()
+
+    def _visit_b(self, n: ASTNode) -> dict[str, int]:
+        self._constant_aggregate: dict[str, int] = {}
+        self._constant_idx: int = 0
+        self(n[0])
+        return self._constant_aggregate
+
+    def _visit_string(self, n: ASTNode) -> Any:
+        self._constant_aggregate[n[0].literal] = self._constant_idx
+        self._constant_idx += 1
+
+
 class BAllocator(Visitor):
     str_buffer_len = 32
 
@@ -156,12 +173,22 @@ class BAllocator(Visitor):
 
 
 class BCompiler(Visitor):
-    def __init__(self, symbol_table: dict[str, int]):
+    def __init__(
+        self, constant_aggregate: dict[str, int], symbol_table: dict[str, int]
+    ):
         super().__init__(
             default_nonterminal_node_visitor=Visitor.visit_all(join),
         )
+        self._c: dict[str, int] = constant_aggregate
         self._a: dict[str, int] = symbol_table
-        self._label_num: int = 0
+
+    # todo: incredibly ugly
+    def _generate_data_section(self) -> str:
+        constant_string: list[str] = [""] * len(self._c)
+        for s in self._c:
+            constant_string[self._c[s]] = f'"{s}"'
+
+        return join(".data", tabbed(join(constant_string)))
 
     def _label(self) -> str:
         label = f"l{self._label_num}"
@@ -169,7 +196,11 @@ class BCompiler(Visitor):
         return label
 
     def _visit_b(self, n: ASTNode) -> str:
-        return join(self(n[0]), "exitv 0")
+        self._label_num: int = 0
+        return join(
+            self._generate_data_section(),
+            join(".code", tabbed(join(self(n[0]), "exitv 0"))),
+        )
 
     def _visit_block(
         self,
@@ -208,7 +239,7 @@ class BCompiler(Visitor):
                             # <operand> ::= decimal_interger;
                             case 1:
                                 main_course = (
-                                    f"setv t0 {self(n[2][0])} # t0 = {self(n[2][0])}"
+                                    f"setv t0 {self(n[2][0])} # t0 = {self(n[2][0])};"
                                 )
 
                     # <expression>
@@ -217,25 +248,29 @@ class BCompiler(Visitor):
 
                     # <string>
                     case 2:
-                        literal: str = n[2][0][0].literal
-                        unquoted_lexeme: str = n[2][0][0].lexeme[1:-1]
+                        main_course = f"addv t0 pc ={self._c[n[2][0][0].literal]} # t0 = {n[2][0][0].lexeme};"
 
-                        # todo: so ugly...
-                        # todo: cleanly combine code and comment
-                        # todo: switch to using data segment
-                        main_course = join(
-                            f"setv a0 {len(literal) + 1} # a0 = {len(unquoted_lexeme) + 1};",
-                            "sysv 4 # a0 = alloc(a0);",
-                            f"set t0 a0 # t0 = a0;",
-                            join(
+                        # todo: delete
+                        if False:
+                            literal: str = n[2][0][0].literal
+                            unquoted_lexeme: str = n[2][0][0].lexeme[1:-1]
+
+                            # todo: so ugly...
+                            # todo: cleanly combine code and comment
+                            # todo: switch to using data segment
+                            main_course = join(
+                                f"setv a0 {len(literal) + 1} # a0 = {len(unquoted_lexeme) + 1};",
+                                "sysv 4 # a0 = alloc(a0);",
+                                f"set t0 a0 # t0 = a0;",
                                 join(
-                                    f"setv t1 {ord(literal[i])} # t1 = '{unquoted_lexeme[i]}'",
-                                    f"store t1 t0 {i} # [t0 + {i}] = t1;",
-                                )
-                                for i in range(len(literal))
-                            ),
-                            f"store r0 t0 {len(literal)} # [t0 + {len(literal)}] = 0;",
-                        )
+                                    join(
+                                        f"setv t1 {ord(literal[i])} # t1 = '{unquoted_lexeme[i]}'",
+                                        f"store t1 t0 {i} # [t0 + {i}] = t1;",
+                                    )
+                                    for i in range(len(literal))
+                                ),
+                                f"store r0 t0 {len(literal)} # [t0 + {len(literal)}] = 0;",
+                            )
 
                     # <mem_access> ::= "\[" <variable> "+" decimal_integer "\]";
                     case 3:

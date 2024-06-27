@@ -53,7 +53,6 @@ def main():
                         fix_this_ugly_thing[0][1], fix_this_ugly_thing[1]
                     )(fix_this_ugly_thing[0][0])
                 )
-                .also(print)
                 .then(AAssembler(Machine()))
             )
 

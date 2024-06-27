@@ -4,7 +4,7 @@
 
 <statement> ::=
 
-  <variable> "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)") ";" |
+  <variable> "=" (<operand> | <expression> | <string> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)") ";" |
 
   ("print" | "printi" | "read") "\(" <variable> "\)" ";" |
 
@@ -22,7 +22,7 @@
 
   <operand> <binary_operator> <operand>;
 
-<operand> ::= <variable> | decimal_integer | <string>;
+<operand> ::= <variable> | decimal_integer;
 
 <unary_operator> ::= "!";
 

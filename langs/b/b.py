@@ -52,19 +52,19 @@ class BPrinter(Visitor):
         n: ChoiceNonterminalASTNode,
     ) -> str:
         match n.choice:
-            # <statement> ::= <variable> "=" (<operand> | <expression> | <string> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)") ";";
+            # <statement> ::= <variable> "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)") ";";
             case 0:
                 # todo: review cast
                 match cast(ChoiceNonterminalASTNode, n[2]).choice:
-                    # <operand> | <expression> | <string> | <mem_access>
-                    case 0 | 1 | 2 | 3:
+                    # <operand> | <expression> | <mem_access>
+                    case 0 | 1 | 2:
                         # todo: review cast
                         return (
                             f"{self(n[0])} = {self(cast(NonterminalASTNode, n[2])[0])};"
                         )
 
                     # "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)"
-                    case 4 | 5 | 6:
+                    case 3 | 4 | 5:
                         # todo: annotation
                         return f"{self(n[0])} = {n[2][0].lexeme}({self(n[2][2])});"
 
@@ -220,7 +220,7 @@ class BCompiler(Visitor):
         n: Node,
     ) -> Any:
         match n.choice:
-            # <statement> ::= <variable> "=" (<operand> | <expression> | <string> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)") ";";
+            # <statement> ::= <variable> "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)") ";";
             case 0:
                 varname: str = n[0][0].lexeme
                 main_course: str = ""
@@ -228,7 +228,7 @@ class BCompiler(Visitor):
                     f"store t0 sp {self._a[varname]} # [sp + alloc[{varname}]] = t0"
                 )
                 match n[2].choice:
-                    # <operand> ::= <variable> | decimal_integer;
+                    # <operand> ::= <variable> | <string> | decimal_integer;
                     case 0:
                         # todo: there has to be a better way...
                         match n[2][0].choice:
@@ -236,8 +236,12 @@ class BCompiler(Visitor):
                             case 0:
                                 main_course = f"{self(n[2][0]).format('t0')} # t0 = [sp + alloc[{n[2][0][0][0].lexeme}]];"
 
-                            # <operand> ::= decimal_interger;
+                            # <operand> ::= <string>;
                             case 1:
+                                main_course = f"{self(n[2][0]).format('t0')} # t0 = {n[2][0][0][0].lexeme};"
+
+                            # <operand> ::= decimal_interger;
+                            case 2:
                                 main_course = (
                                     f"setv t0 {self(n[2][0])} # t0 = {self(n[2][0])};"
                                 )
@@ -246,34 +250,8 @@ class BCompiler(Visitor):
                     case 1:
                         main_course = self(n[2][0])
 
-                    # <string>
-                    case 2:
-                        main_course = f"addv t0 pc ={self._c[n[2][0][0].literal]} # t0 = {n[2][0][0].lexeme};"
-
-                        # todo: delete
-                        if False:
-                            literal: str = n[2][0][0].literal
-                            unquoted_lexeme: str = n[2][0][0].lexeme[1:-1]
-
-                            # todo: so ugly...
-                            # todo: cleanly combine code and comment
-                            # todo: switch to using data segment
-                            main_course = join(
-                                f"setv a0 {len(literal) + 1} # a0 = {len(unquoted_lexeme) + 1};",
-                                "sysv 4 # a0 = alloc(a0);",
-                                f"set t0 a0 # t0 = a0;",
-                                join(
-                                    join(
-                                        f"setv t1 {ord(literal[i])} # t1 = '{unquoted_lexeme[i]}'",
-                                        f"store t1 t0 {i} # [t0 + {i}] = t1;",
-                                    )
-                                    for i in range(len(literal))
-                                ),
-                                f"store r0 t0 {len(literal)} # [t0 + {len(literal)}] = 0;",
-                            )
-
                     # <mem_access> ::= "\[" <variable> "+" decimal_integer "\]";
-                    case 3:
+                    case 2:
                         main_course = join(
                             f"load t1 r1 {self._a[n[2][0][1][0].lexeme]} # t1 = [sp + alloc[{n[2][0][1][0].lexeme}]];",
                             f"load t0 t1 {n[2][0][3].lexeme} # t0 = [t1 + {n[2][0][3].lexeme}]",
@@ -281,16 +259,17 @@ class BCompiler(Visitor):
 
                     # todo: wait free() does not belong here lol
                     # "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)"
-                    case 4 | 5:
+                    case 3 | 4:
                         # somehow n[2].choice works here...
+                        # ^ no longer true but only shifted by 1
                         main_course = join(
                             f"load a0 r1 {self._a[n[2][2][0].lexeme]} # a0 = [sp + alloc[{n[2][2][0].lexeme}]];",
-                            f"sysv {n[2].choice} # a0 = {n[2][0].lexeme}(a0);",
+                            f"sysv {n[2].choice + 1} # a0 = {n[2][0].lexeme}(a0);",
                             f"set t0 a0 # t0 = a0;",
                         )
 
                     # "stoi" "\(" <variable> "\)"
-                    case 6:
+                    case 5:
                         main_course = join(
                             f"load a0 r1 {self._a[n[2][2][0].lexeme]} # a0 = [sp + alloc[{n[2][2][0].lexeme}]];",
                             f"sysv 2 # a1 = {n[2][0].lexeme}(a0);",
@@ -469,6 +448,10 @@ class BCompiler(Visitor):
             case 0:
                 return f"load {{}} r1 {self._a[n[0][0].lexeme]}"
 
-            # <operand> ::= decimal_integer;
+            # <operand> ::= <string>;
             case 1:
+                return f"addv {{}} pc ={self._c[n[0][0].literal]}"
+
+            # <operand> ::= decimal_integer;
+            case 2:
                 return n[0].lexeme

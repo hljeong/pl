@@ -154,18 +154,34 @@ class Text:
         return ret
 
 
-def join(lines_or_line: Union[Iterable[str], str], *rest_lines: str):
-    if len(rest_lines) == 0:
-        return "\n".join(lines_or_line)
-    else:
-        # todo: review cast
-        lines: list[str] = [cast(str, lines_or_line), *rest_lines]
-        lines = list(filter(lambda line: len(line) > 0, lines))
-        return "\n".join(lines)
+SPACE: str = (
+    "this used to be an empty string and i thought the 'is' keyword compares reference instead of value..."
+)
+
+
+def join(*lines: str):
+    for line in lines:
+        if line is SPACE:
+            print("wtf")
+    return "\n".join(filter(lambda line: line is SPACE or len(line.strip()) > 0, lines))
+
+
+def sjoin(*lines: str):
+    return "\n\n".join(
+        filter(lambda line: line is SPACE or len(line.strip()) > 0, lines)
+    )
+
+
+def joini(lines: Iterable[str]):
+    return join(*lines)
+
+
+def sjoini(lines: Iterable[str]):
+    return sjoin(*lines)
 
 
 def tabbed(text: str, tab: int = 2):
-    return join(map(lambda line: f'{" " * tab}{line}', text.split("\n")))
+    return "\n".join(map(lambda line: f'{" " * tab}{line}', text.split("\n")))
 
 
 def count_lines(text: str):

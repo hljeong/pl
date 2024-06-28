@@ -19,6 +19,53 @@ DEFAULT_STACK_SIZE: int = 16 * 1024
 USE_DEFAULT_SYSCALL: dict[int, SysCall] = {}
 
 
+# todo: im really desperate to push function calls out at this point
+ins_list: list[str] = [
+    "jump",
+    "jumpv",
+    "sys",
+    "sysv",
+    "exit",
+    "exitv",
+    "not",
+    "set",
+    "setv",
+    "jumpif",
+    "jumpifv",
+    "load",
+    "store",
+    "storev",
+    "add",
+    "addv",
+    "sub",
+    "subv",
+    "mul",
+    "mulv",
+    "div",
+    "divv",
+    "mod",
+    "modv",
+    "or",
+    "orv",
+    "and",
+    "andv",
+    "xor",
+    "xorv",
+    "eq",
+    "eqv",
+    "neq",
+    "neqv",
+    "gt",
+    "gtv",
+    "geq",
+    "geqv",
+    "lt",
+    "ltv",
+    "leq",
+    "leqv",
+]
+
+
 class Machine:
     _regs: list[str] = [
         "r0",
@@ -100,8 +147,7 @@ class Machine:
             raise RuntimeError(f"register '{reg}' does not exist")
 
         if reg not in Machine._aliases:
-            # todo
-            raise RuntimeError(f"register '{reg}' does not have an alias")
+            return reg
 
         return Machine._aliases[reg]
 
@@ -167,18 +213,19 @@ class Machine:
         for i, e in enumerate(data):
             self._m[self._data_loc + i] = e
 
-        # skip nullptr
-        self["sp"] = 1
+        # todo: move this up and move heap and other stuff down
+        self["sp"] = self._stack_size
 
         self["pc"] = self._code_loc
         self._next_pc: int = self._code_loc + 4
         self._next_mem_alloc: int = self._mem_size - code_size - data_size
-        while self._clk():
-            pass
+        while self["pc"] != 0:
+            self._clk()
+            # input()
 
         return self["a0"]
 
-    def _clk(self) -> bool:
+    def _clk(self) -> None:
         pc: int = self._r["pc"]
 
         # todo: clean this up
@@ -186,8 +233,20 @@ class Machine:
         reg2: str = ""
         reg3: str = ""
         ins, val1, val2, val3 = self._m[pc : pc + 4]
+
+        # todo: temp solution
+        def temp_make_readable(val: int) -> str:
+            # assuming no literals are >= 128...
+            if val >= 128:
+                return Machine._alias(Machine._regs[val - 128])
+            else:
+                return str(val)
+
         # todo: need something a lot better than this
-        Log.t(f"{pc}: {ins} {val1} {val2} {val3}")
+        Log.t(
+            f"{pc}: {ins_list[ins]} {temp_make_readable(val1)} {temp_make_readable(val2)} {temp_make_readable(val3)}"
+        )
+
         if val1 >= 128:
             reg1 = Machine._regs[val1 - 128]
         if val2 >= 128:
@@ -325,13 +384,12 @@ class Machine:
             case 41:
                 self._leqv(reg1, reg2, val3)
 
-        if self._r["r1"] >= self._stack_size:
+        if self._r["r1"] <= 0:
             # todo
             raise RuntimeError("stack overflow")
 
         self["pc"] = self._next_pc
         self._next_pc += 4
-        return True
 
     def _print(self) -> None:
         i: int = self._r["r14"]
@@ -405,13 +463,13 @@ class Machine:
 
     def _fmt(self, reg_or_addr: Union[str, int]) -> str:
         if type(reg_or_addr) is str:
-            reg: str = self._unalias(reg_or_addr)
+            reg: str = Machine._unalias(reg_or_addr)
 
-            if reg in self._aliases:
-                return f"[bold][yellow]{self._alias(reg)}[/yellow][/bold] ([bold][yellow]{reg}[/yellow][/bold])"
+            if reg == Machine._alias(reg):
+                return f"[bold][yellow]{reg}[/yellow][/bold]"
 
             else:
-                return f"[bold][yellow]{reg}[/yellow][/bold]"
+                return f"[bold][yellow]{Machine._alias(reg)}[/yellow][/bold] ([bold][yellow]{reg}[/yellow][/bold])"
 
         elif type(reg_or_addr) is int:
             addr: int = reg_or_addr
@@ -424,6 +482,9 @@ class Machine:
     def __getitem__(self, reg_or_addr: Union[str, int]) -> int:
         if type(reg_or_addr) is str:
             reg: str = self._unalias(reg_or_addr)
+            # hard wired 0
+            if reg == "r0":
+                return 0
             val = self._r[reg]
 
         elif type(reg_or_addr) is int:
@@ -440,6 +501,9 @@ class Machine:
         if type(reg_or_addr) is str:
             reg: str = self._unalias(reg_or_addr)
             old_val: int = self._r[reg]
+            # hard wired 0
+            if reg == "r0":
+                return
             self._r[reg] = val
 
         elif type(reg_or_addr) is int:
@@ -454,8 +518,8 @@ class Machine:
             f"{self._fmt(reg_or_addr)} = [red]{old_val}[/red] -> [green]{val}[/green]"
         )
 
-    def _jump(self, delta_r: str) -> None:
-        self._next_pc = self["pc"] + self[delta_r] * 4
+    def _jump(self, dest_r: str) -> None:
+        self._next_pc = self[dest_r]
 
     def _jumpv(self, delta_v: int) -> None:
         self._next_pc = self["pc"] + delta_v * 4
@@ -614,51 +678,6 @@ class AAssembler:
         self._consume_until_token()
         while not self._at_end():
             tokens.append(self._consume())
-
-        ins_list: list[str] = [
-            "jump",
-            "jumpv",
-            "sys",
-            "sysv",
-            "exit",
-            "exitv",
-            "not",
-            "set",
-            "setv",
-            "jumpif",
-            "jumpifv",
-            "load",
-            "store",
-            "storev",
-            "add",
-            "addv",
-            "sub",
-            "subv",
-            "mul",
-            "mulv",
-            "div",
-            "divv",
-            "mod",
-            "modv",
-            "or",
-            "orv",
-            "and",
-            "andv",
-            "xor",
-            "xorv",
-            "eq",
-            "eqv",
-            "neq",
-            "neqv",
-            "gt",
-            "gtv",
-            "geq",
-            "geqv",
-            "lt",
-            "ltv",
-            "leq",
-            "leqv",
-        ]
 
         code: list[int] = []
         label: dict[str, int] = {}

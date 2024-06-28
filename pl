@@ -4,7 +4,15 @@ from argparse import ArgumentParser
 
 from common import Monad, Log
 from langs.a import AAssembler, Machine
-from langs.b import BParser, BAggregator, BAllocator, BCompiler
+from langs.b import (
+    BParser,
+    BAggregator,
+    BAllocator,
+    BCompiler,
+    BPrinter,
+    BASTCleaner,
+    BSymbolTableGenerator,
+)
 
 
 def main():
@@ -42,17 +50,26 @@ def main():
             (
                 Monad(prog)
                 .then(BParser())
+                .then(BASTCleaner())
                 .keep_then(BAggregator())
                 .keep_then(
                     lambda fix_this_ugly_thing_too: BAllocator()(
                         fix_this_ugly_thing_too[0]
                     )
                 )
+                .keep_then(
+                    lambda also_fix_this_ugly_thing: BSymbolTableGenerator()(
+                        also_fix_this_ugly_thing[0][0]
+                    )
+                )
                 .then(
                     lambda fix_this_ugly_thing: BCompiler(
-                        fix_this_ugly_thing[0][1], fix_this_ugly_thing[1]
-                    )(fix_this_ugly_thing[0][0])
+                        fix_this_ugly_thing[0][0][1],
+                        fix_this_ugly_thing[0][1],
+                        fix_this_ugly_thing[1],
+                    )(fix_this_ugly_thing[0][0][0])
                 )
+                # .also(print)
                 .then(AAssembler(Machine()))
             )
 

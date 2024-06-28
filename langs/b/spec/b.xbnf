@@ -1,10 +1,14 @@
-<b> ::= <block>*;
+<b> ::= <declaration>+;
+
+<declaration> ::= "fn" <function> "\(" <parameter_list>? "\)" <block>;
+
+<parameter_list> ::= <variable> ("," <variable>)*;
 
 <block> ::= <statement> | "{" <statement>* "}";
 
 <statement> ::=
 
-  <variable> "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)" | "stoi" "\(" <operand> "\)") ";" |
+  <variable> "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)" | "stoi" "\(" <operand> "\)" | <function> "\(" <argument_list>? "\)") ";" |
 
   ("print" | "printi" | "read") "\(" <operand> "\)" ";" |
 
@@ -12,7 +16,13 @@
 
   "if" "\(" <expression> "\)" <block> |
 
-  <mem_access> "=" <variable> ";";
+  <mem_access> "=" <variable> ";" |
+
+  "return" <operand>? ";" |
+
+  <function> "\(" <argument_list>? "\)" ";";
+
+<argument_list> ::=  <operand> ("," <operand>)*;
 
 <mem_access> ::= "\[" <variable>  "\+" decimal_integer "\]";
 
@@ -35,6 +45,8 @@
   "==" | "!=" | ">"  | ">=" |
 
   "<"  | "<=";
+
+<function> ::= identifier;
 
 <variable> ::= identifier;
 

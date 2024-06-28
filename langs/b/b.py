@@ -1,7 +1,8 @@
 from __future__ import annotations
+from os import close
 from typing import cast, Any
 
-from common import Monad, Log, tabbed, join, count_lines
+from common import Monad, Log, tabbed, join, joini, count_lines, SPACE, sjoin, sjoini
 from lexical import Lexer
 from syntax import (
     Grammar,
@@ -12,7 +13,6 @@ from syntax import (
     ChoiceNonterminalASTNode,
     TerminalASTNode,
 )
-from syntax.visitor import NonterminalASTNodeVisitor
 
 with open("langs/b/spec/b.xbnf") as b_xbnf_f:
     b_xbnf = "".join(b_xbnf_f.readlines())
@@ -25,12 +25,98 @@ class BParser:
         return Monad(prog).then(Lexer(b_grammar)).then(Parser(b_grammar)).value
 
 
+# todo: better name
+class BASTCleaner(Visitor):
+    # todo: static?
+    @staticmethod
+    def rebuild(v: Visitor, n: ASTNode) -> ASTNode:
+        if type(n) is ChoiceNonterminalASTNode:
+            n_: ChoiceNonterminalASTNode = ChoiceNonterminalASTNode(
+                n.node_type, n.choice
+            )
+
+        elif type(n) is NonterminalASTNode:
+            n_: NonterminalASTNode = NonterminalASTNode(n.node_type)
+
+        else:
+            assert False
+
+        for c in n:
+            n_.add(v(c))
+
+        return n_
+
+    def __init__(self):
+        super().__init__(
+            default_nonterminal_node_visitor=BASTCleaner.rebuild,
+            default_terminal_node_visitor=lambda _, n: n,
+        )
+
+    def _visit_b(self, n: ASTNode) -> ASTNode:
+        n_: NonterminalASTNode = NonterminalASTNode("<b>")
+        main_fn_declared: bool = False
+        declarations: dict[str, NonterminalASTNode] = {}
+        for c in n[0]:
+            declaration: NonterminalASTNode = self(c)
+            fn_name: str = declaration[1][0].lexeme
+
+            if fn_name in declarations:
+                # todo: log error
+                raise RuntimeError(f"function '{fn_name}' declared multiple times")
+
+            if fn_name == "main":
+                if main_fn_declared:
+                    # todo: log error
+                    raise RuntimeError(f"function '{fn_name}' declared multiple times")
+
+                n_.add(declaration)
+                main_fn_declared = True
+
+            else:
+                declarations[fn_name] = declaration
+
+        if not main_fn_declared:
+            # todo: log error
+            raise RuntimeError("main function not declared")
+
+        for fn_name in declarations:
+            n_.add(declarations[fn_name])
+
+        return n_
+
+    def _visit_argument_list(self, n: ASTNode) -> ASTNode:
+        n_: NonterminalASTNode = NonterminalASTNode("<flattened_argument_list>")
+        n_.add(n[0])
+        for c in n[1]:
+            n_.add(c[1])
+        return n_
+
+    def _visit_parameter_list(self, n: ASTNode) -> ASTNode:
+        n_: NonterminalASTNode = NonterminalASTNode("<flattened_parameter_list>")
+        n_.add(n[0])
+        for c in n[1]:
+            n_.add(c[1])
+        return n_
+
+
 class BPrinter(Visitor):
     def __init__(self):
         super().__init__(
-            default_nonterminal_node_visitor=Visitor.visit_all(join),
+            default_nonterminal_node_visitor=Visitor.visit_all(joini),
             default_terminal_node_visitor=lambda _, n: n.lexeme,
         )
+
+    def _visit_b(self, n: ASTNode) -> str:
+        return "\n\n".join(self(c) for c in n)
+
+    def _visit_declaration(self, n: ASTNode) -> str:
+        return f"fn {self(n[1])}({self(n[3])}) {self(n[5])}"
+
+    def _visit_flattened_argument_list(self, n: ASTNode) -> str:
+        return ", ".join(self(c) for c in n)
+
+    def _visit_flattened_parameter_list(self, n: ASTNode) -> str:
+        return ", ".join(self(c) for c in n)
 
     def _visit_block(
         self,
@@ -41,18 +127,24 @@ class BPrinter(Visitor):
             case 0:
                 return self(n[0])
 
-            # <block> ::= "{" <statements> "}";
+            # <block> ::= "{" <statement>* "}";
             case 1:
-                return join("{", tabbed(self(n[1])), "}")
+                inner: str = self(n[1])
+                if len(inner) == 0:
+                    return "{}"
 
-        assert False
+                else:
+                    return join("{", tabbed(inner), "}")
+
+            case _:
+                assert False
 
     def _visit_statement(
         self,
         n: ChoiceNonterminalASTNode,
     ) -> str:
         match n.choice:
-            # <statement> ::= <variable> "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)") ";";
+            # <statement> ::= <variable> "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)" | "stoi" "\(" <operand> "\)" | <function> "\(" <flattened_parameter_list>? "\)") ";";
             case 0:
                 # todo: review cast
                 match cast(ChoiceNonterminalASTNode, n[2]).choice:
@@ -67,6 +159,14 @@ class BPrinter(Visitor):
                     case 3 | 4 | 5:
                         # todo: annotation
                         return f"{self(n[0])} = {n[2][0].lexeme}({self(n[2][2])});"
+
+                    # <function> "\(" <flattened_parameter_list>? "\)"
+                    case 6:
+                        # todo: annotation
+                        return f"{self(n[0])} = {n[2][0][0].lexeme}({self(n[2][2])});"
+
+                    case _:
+                        assert False
 
             # <statement> ::= ("print" | "printi" | "read") "\(" <operand> "\)" ";";
             case 1:
@@ -90,6 +190,9 @@ class BPrinter(Visitor):
                     case 1:
                         return f"while ({self(n[2])}) {self(n[4])}"
 
+                    case _:
+                        assert False
+
             # <statement> ::= "if" "\(" <expression> "\)" <block>;
             case 3:
                 # todo: review cast
@@ -107,11 +210,27 @@ class BPrinter(Visitor):
                     case 1:
                         return f"if ({self(n[2])}) {self(n[4])}"
 
+                    case _:
+                        assert False
+
             # <statement> ::= <mem_access> "=" <variable> ";";
             case 4:
                 return f"{self(n[0])} = {self(n[2])};"
 
-        assert False
+            # <statement> ::= "return" <operand>? ";";
+            case 5:
+                if len(n[1]) > 0:
+                    return f"return {self(n[1])};"
+
+                else:
+                    return "return;"
+
+            # <statement> ::= <function> "\(" <argument_list>? "\)";
+            case 6:
+                return f"{self(n[0])}({self(n[2])});"
+
+            case _:
+                assert False
 
     # todo: casting from here down
     def _visit_expression(
@@ -127,7 +246,8 @@ class BPrinter(Visitor):
             case 1:
                 return f"{self(n[0])} {self(n[1])} {self(n[2])}"
 
-        assert False
+            case _:
+                assert False
 
     def _visit_mem_access(
         self,
@@ -145,7 +265,7 @@ class BAggregator(Visitor):
     def _visit_b(self, n: ASTNode) -> dict[str, int]:
         self._constant_aggregate: dict[str, int] = {}
         self._constant_idx: int = 0
-        self(n[0])
+        self._builtin_visit_all(n)
         return self._constant_aggregate
 
     def _visit_string(self, n: ASTNode) -> Any:
@@ -155,8 +275,6 @@ class BAggregator(Visitor):
 
 
 class BAllocator(Visitor):
-    str_buffer_len = 32
-
     def __init__(self):
         super().__init__()
         self._alloc: dict[str, int] = {}
@@ -167,21 +285,89 @@ class BAllocator(Visitor):
         return self._alloc
 
     def _visit_variable(self, n: ASTNode) -> Any:
-        varname: str = n[0].lexeme
-        if varname not in self._alloc:
-            self._alloc[varname] = self._next_reg_alloc
+        var_name: str = n[0].lexeme
+        if var_name not in self._alloc:
+            self._alloc[var_name] = self._next_reg_alloc
             self._next_reg_alloc += 1
+
+
+class BSymbolTableGenerator(Visitor):
+    def __init__(self):
+        super().__init__()
+
+    def _fn_label(self) -> str:
+        fn_label: str = f"f{self._fn_label_idx}"
+        self._fn_label_idx += 1
+        return fn_label
+
+    def _visit_b(self, n: ASTNode) -> dict[str, dict[str, Any]]:
+        self._symbol_table: dict[str, dict[str, Any]] = {}
+        self._fn_label_idx: int = 0
+        self._builtin_visit_all(n)
+        return self._symbol_table
+
+    def _visit_declaration(self, n: ASTNode) -> None:
+        fn_name: str = n[1][0].lexeme
+        # todo: no bueno, maybe implement visitor context
+        self._current_locals: dict[str, int] = {}
+        self._current_var_idx: int = 0
+        self._current_extra_args: int = 0
+        self._builtin_visit_all(n)
+
+        saved: dict[str, int] = {}
+        saved["ra"] = self._var()
+
+        # todo: this shifting is kinda bad
+        # allocate slots for extra argumentsat at on the bottom
+        self._current_locals = {
+            var_name: self._current_extra_args + var_idx
+            for var_name, var_idx in self._current_locals.items()
+        }
+        saved = {
+            reg: self._current_extra_args + var_idx for reg, var_idx in saved.items()
+        }
+        for i in range(self._current_extra_args):
+            self._current_locals[f"#a{6 + i}"] = i
+
+        self._symbol_table[fn_name] = {
+            "label": self._fn_label(),
+            "locals": self._current_locals,
+            "saved": saved,
+            "stack_frame": len(self._current_locals) + len(saved),
+        }
+
+    def _var(self) -> int:
+        var_idx = self._current_var_idx
+        self._current_var_idx += 1
+        return var_idx
+
+    def _local(self, var_name: str) -> None:
+        if var_name not in self._current_locals:
+            self._current_locals[var_name] = self._var()
+
+    def _visit_flattened_argument_list(self, n: ASTNode) -> None:
+        self._builtin_visit_all(n)
+        if len(n) > 6 + self._current_extra_args:
+            self._current_extra_args = len(n) - 6
+
+    def _visit_variable(self, n: ASTNode) -> None:
+        var_name: str = n[0].lexeme
+        self._local(var_name)
 
 
 class BCompiler(Visitor):
     def __init__(
-        self, constant_aggregate: dict[str, int], symbol_table: dict[str, int]
+        self,
+        constant_aggregate: dict[str, int],
+        symbol_table: dict[str, int],
+        actual_symbol_table: dict[str, dict[str, Any]],
     ):
         super().__init__(
-            default_nonterminal_node_visitor=Visitor.visit_all(join),
+            default_nonterminal_node_visitor=Visitor.visit_all(joini),
         )
         self._c: dict[str, int] = constant_aggregate
         self._a: dict[str, int] = symbol_table
+        self._s: dict[str, dict[str, Any]] = actual_symbol_table
 
     # todo: incredibly ugly
     def _generate_data_section(self) -> str:
@@ -189,7 +375,7 @@ class BCompiler(Visitor):
         for s in self._c:
             constant_string[self._c[s]] = f'"{s}"'
 
-        return join(".data", tabbed(join(constant_string)))
+        return join(".data", tabbed(join(*constant_string)))
 
     def _label(self) -> str:
         label = f"l{self._label_num}"
@@ -198,9 +384,9 @@ class BCompiler(Visitor):
 
     def _visit_b(self, n: ASTNode) -> str:
         self._label_num: int = 0
-        return join(
+        return sjoin(
             self._generate_data_section(),
-            join(".code", tabbed(join(self(n[0]), "exitv 0"))),
+            join(".code", tabbed(sjoini(self(c) for c in n))),
         )
 
     def _visit_block(
@@ -208,7 +394,7 @@ class BCompiler(Visitor):
         n: Node,
     ) -> Any:
         match n.choice:
-            # <block> ::= <statement>*;
+            # <block> ::= <statement>;
             case 0:
                 return self(n[0])
 
@@ -216,17 +402,90 @@ class BCompiler(Visitor):
             case 1:
                 return tabbed(self(n[1]))
 
+    def _visit_declaration(self, n: ASTNode) -> Any:
+        fn_name: str = n[1][0].lexeme
+        # todo: no bueno, probably visitor contextualize this
+        # "current symbol table"
+        self._cst: dict[str, Any] = self._s[fn_name]
+        # "current locals"
+        self._cl: dict[str, int] = self._cst["locals"]
+        # "current saved registers"
+        self._csr: dict[str, int] = self._cst["saved"]
+        fn_label: str = self._cst["label"]
+
+        # todo: overflowing arguments
+        # store arguments in local variables
+        commit_args: str = ""
+        if len(n[3]) != 0:
+            commit_args = joini(
+                self._commit_var(c[0].lexeme, f"a{i}")
+                for i, c in enumerate(n[3][0])
+                if i < 6
+            )
+
+            if len(n[3][0]) > 6:
+                commit_args = join(
+                    commit_args,
+                    joini(
+                        join(
+                            f"load t0 sp {self._cst['stack_frame'] + i - 6} # t0 = [sp + {self._cst['stack_frame'] + i - 6}]",
+                            self._commit_var(n[3][0][i][0].lexeme, "t0"),
+                        )
+                        for i in range(6, len(n[3][0]))
+                    ),
+                )
+
+        appetizer: str = join(
+            f"{fn_label}:",
+            tabbed(
+                join(
+                    # todo
+                    # allocate stack frame
+                    f"subv sp sp {self._cst['stack_frame']} # sp = sp - {self._cst['stack_frame']};",
+                    # todo: optimize this away if there are no fn calls?
+                    # push ra onto stack
+                    f"store ra sp {self._csr['ra']} # [sp + {self._csr['ra']}] = ra;",
+                    commit_args,
+                )
+            ),
+        )
+        main_course: str = ""
+        # todo: stack frame allocation
+        dessert: str = tabbed(
+            join(
+                # reload ra
+                f"load ra sp {self._csr['ra']} # ra = [sp + {self._csr['ra']}];",
+                # deallocate stack frame
+                f"addv sp sp {self._cst['stack_frame']} # sp = sp + {self._cst['stack_frame']};",
+                # go back
+                "jump ra # pc = ra;",
+            )
+        )
+
+        # <block> ::= <statement> | "{" <statements>* "}";
+        match n[5].choice:
+            case 0:
+                main_course = tabbed(self(n[5]))
+
+            case 1:
+                main_course = self(n[5])
+
+            case _:
+                assert False
+
+        return join(appetizer, main_course, dessert)
+
     def _visit_statement(
         self,
         n: Node,
     ) -> Any:
         match n.choice:
-            # <statement> ::= <variable> "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)") ";";
+            # <statement> ::= <variable> "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)" | <function> "\(" <argument_list>? "\)") ";";
             case 0:
-                varname: str = n[0][0].lexeme
+                var_name: str = n[0][0].lexeme
                 main_course: str = ""
                 dessert: str = (
-                    f"store t0 sp {self._a[varname]} # [sp + alloc[{varname}]] = t0"
+                    f"store t0 sp {self._cl[var_name]} # [sp + alloc[{var_name}]] = t0"
                 )
                 match n[2].choice:
                     # <operand> ::= <variable> | <string> | decimal_integer;
@@ -247,6 +506,9 @@ class BCompiler(Visitor):
                                     f"setv t0 {self(n[2][0])} # t0 = {self(n[2][0])};"
                                 )
 
+                            case _:
+                                assert False
+
                     # <expression>
                     case 1:
                         main_course = self(n[2][0])
@@ -254,7 +516,7 @@ class BCompiler(Visitor):
                     # <mem_access> ::= "\[" <variable> "+" decimal_integer "\]";
                     case 2:
                         main_course = join(
-                            f"load t1 r1 {self._a[n[2][0][1][0].lexeme]} # t1 = [sp + alloc[{n[2][0][1][0].lexeme}]];",
+                            f"load t1 r1 {self._cl[n[2][0][1][0].lexeme]} # t1 = [sp + alloc[{n[2][0][1][0].lexeme}]];",
                             f"load t0 t1 {n[2][0][3].lexeme} # t0 = [t1 + {n[2][0][3].lexeme}]",
                         )
 
@@ -279,7 +541,6 @@ class BCompiler(Visitor):
                                 )
 
                             case _:
-                                print(n[2][2].choice)
                                 assert False
 
                         # somehow n[2].choice works here...
@@ -317,6 +578,16 @@ class BCompiler(Visitor):
                             f"sysv 2 # a1 = {n[2][0].lexeme}(a0);",
                             f"set t0 a1 # t0 = a1;",
                         )
+
+                    # <function> "\(" <argument_list> "\)"
+                    case 6:
+                        # todo: the second instruction is completely avoidable... just commit a0 directly
+                        main_course = join(
+                            self._call_function(n[2]), "set t0 a0 # t0 = a0;"
+                        )
+
+                    case _:
+                        assert False
 
                 return join(main_course, dessert)
 
@@ -357,6 +628,9 @@ class BCompiler(Visitor):
                     case 2:
                         main_course = "sysv 1 # a0 = read(a0);"
 
+                    case _:
+                        assert False
+
                 return join(appetizer, main_course)
 
             # <statement> ::= "while" "\(" <expression> "\)" <block>;
@@ -393,10 +667,110 @@ class BCompiler(Visitor):
             # <statement> ::= <mem_access> "=" <variable> ";";
             case 4:
                 return join(
-                    f"load t0 r1 {self._a[n[0][1][0].lexeme]} # t0 = [sp + alloc[{self._a[n[0][1][0].lexeme]}]];",
-                    f"load t1 r1 {self._a[n[2][0].lexeme]} # t1 = [sp + alloc[{self._a[n[2][0].lexeme]}]];",
+                    f"load t0 r1 {self._cl[n[0][1][0].lexeme]} # t0 = [sp + alloc[{self._cl[n[0][1][0].lexeme]}]];",
+                    f"load t1 r1 {self._cl[n[2][0].lexeme]} # t1 = [sp + alloc[{self._cl[n[2][0].lexeme]}]];",
                     f"store t1 t0 {n[0][3].lexeme} # [t0 + {n[0][3].lexeme}] = t1;",
                 )
+
+            # <statement> ::= "return" <operand>? ";";
+            case 5:
+                return_operand: str = ""
+
+                # todo: operand loading rework
+                if len(n[1]) != 0:
+                    match n[1][0].choice:
+                        # <operand> ::= <variable>;
+                        case 0:
+                            return_operand = f"{self(n[1][0]).format('a0')} # a0 = [sp + alloc[{n[1][0][0][0].lexeme}]];"
+
+                        # <operand> ::= <string>;
+                        case 1:
+                            return_operand = f"{self(n[1][0]).format('a0')} # a0 = {n[1][0][0].lexeme};"
+
+                        # <operand> ::= decimal_interger;
+                        case 2:
+                            return_operand = (
+                                f"setv a0 {self(n[1][0])} # a0 = {self(n[1][0])};"
+                            )
+
+                        case _:
+                            assert False
+
+                # todo: duplicate of function dessert
+                return join(
+                    return_operand,
+                    # reload ra
+                    f"load ra sp {self._csr['ra']} # ra = [sp + {self._csr['ra']}];",
+                    # deallocate stack frame
+                    f"addv sp sp {self._cst['stack_frame']} # sp = sp + {self._cst['stack_frame']};",
+                    # go back
+                    "jump ra # pc = ra;",
+                )
+
+            # <statement> ::= <function> "\(" <argument_list>? "\)" ";";
+            case 6:
+                return self._call_function(n)
+
+            case _:
+                assert False
+
+    def _call_function(self, n: ASTNode) -> str:
+        fn_name: str = n[0][0].lexeme
+        fn_label: str = self._s[fn_name]["label"]
+
+        fetch_args: str = ""
+        if len(n[2]) != 0:
+            # todo: support argument overflow
+            fetch_args = joini(
+                self._fetch_operand(c, f"a{i}") for i, c in enumerate(n[2][0]) if i < 6
+            )
+
+            if len(n[2][0]) > 6:
+                fetch_args = join(
+                    fetch_args,
+                    joini(
+                        join(
+                            self._fetch_operand(n[2][0][i], "t0"),
+                            self._commit_var(f"#a{i}", "t0"),
+                        )
+                        for i in range(6, len(n[2][0]))
+                    ),
+                )
+
+        # todo: args
+        # todo: reg saving
+        return join(
+            fetch_args,
+            "addv ra pc 8 # t0 = pc + 8;",
+            f"jumpv {fn_label} # goto {fn_label};",
+        )
+
+    def _fetch_var(self, var_name: str, reg: str) -> str:
+        return f"load {reg} sp {self._cl[var_name]} # {reg} = [sp + alloc[{var_name}]];"
+
+    def _commit_var(self, var_name: str, reg: str) -> str:
+        return (
+            f"store {reg} sp {self._cl[var_name]} # [sp + alloc[{var_name}]] = {reg};"
+        )
+
+    def _fetch_operand(self, n: ASTNode, reg: str) -> str:
+        # <operand> ::= <variable> | decimal_integer;
+        match n.choice:
+            # <operand> ::= <variable>;
+            case 0:
+                var_name: str = n[0][0].lexeme
+                return self._fetch_var(var_name, reg)
+
+            # <operand> ::= <string>;
+            case 1:
+                return f"addv {reg} pc ={self._c[n[0][0].literal]} # {reg} = {n[0][0].lexeme};"
+
+            # <operand> ::= decimal_integer;
+            case 2:
+                return f"setv {reg} {n[0].lexeme} # {reg} = {n[0].lexeme};"
+
+            case _:
+                assert False
 
     def _visit_expression(self, n: ASTNode) -> Any:
         match n.choice:
@@ -491,24 +865,27 @@ class BCompiler(Visitor):
                 # todo: very very sloppy
                 return join(
                     (
-                        f"{self(lop).format('t1')} # t1 = [sp + alloc[{lop[0][0].lexeme}]]"
+                        f"{self(lop).format('t1')} # t1 = [sp + alloc[{lop[0][0].lexeme}]];"
                         if lop.choice == 0
                         else f"setv t1 {self(lop)} # t1 = {self(lop)};"
                     ),
                     (
-                        f"{self(rop).format('t2')} # t2 = [sp + alloc[{rop[0][0].lexeme}]]"
+                        f"{self(rop).format('t2')} # t2 = [sp + alloc[{rop[0][0].lexeme}]];"
                         if rop.choice == 0
                         else f"setv t2 {self(rop)} # t2 = {self(rop)};"
                     ),
                     f"{inst} t0 t1 t2 # t0 = {inst}(t1, t2);",
                 )
 
+            case _:
+                assert False
+
     def _visit_operand(self, n: ASTNode) -> Any:
         # <operand> ::= <variable> | decimal_integer;
         match n.choice:
             # <operand> ::= <variable>;
             case 0:
-                return f"load {{}} r1 {self._a[n[0][0].lexeme]}"
+                return f"load {{}} r1 {self._cl[n[0][0].lexeme]}"
 
             # <operand> ::= <string>;
             case 1:
@@ -517,3 +894,6 @@ class BCompiler(Visitor):
             # <operand> ::= decimal_integer;
             case 2:
                 return n[0].lexeme
+
+            case _:
+                assert False

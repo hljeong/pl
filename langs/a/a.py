@@ -243,15 +243,20 @@ class Machine:
                 return str(val)
 
         # todo: need something a lot better than this
-        Log.t(
-            f"{pc}: {ins_list[ins]} {temp_make_readable(val1)} {temp_make_readable(val2)} {temp_make_readable(val3)}"
-        )
+        if ins_list[ins] == "jumpv":
+            Log.t(
+                f"{pc}: {ins_list[ins]} {val1} {temp_make_readable(val2)} {temp_make_readable(val3)}"
+            )
+        else:
+            Log.t(
+                f"{pc}: {ins_list[ins]} {temp_make_readable(val1)} {temp_make_readable(val2)} {temp_make_readable(val3)}"
+            )
 
-        if val1 >= 128:
+        if val1 >= 128 and val1 - 128 < len(Machine._regs):
             reg1 = Machine._regs[val1 - 128]
-        if val2 >= 128:
+        if val2 >= 128 and val2 - 128 < len(Machine._regs):
             reg2 = Machine._regs[val2 - 128]
-        if val3 >= 128:
+        if val3 >= 128 and val3 - 128 < len(Machine._regs):
             reg3 = Machine._regs[val3 - 128]
 
         # todo: there has to be a better way...
@@ -453,6 +458,9 @@ class Machine:
     # todo: better allocator
     def _alloc(self) -> None:
         size: int = self._r["r14"]
+        if self._next_mem_alloc - size < self._stack_size:
+            # todo
+            raise RuntimeError("out of memory")
         self._r["r14"] = self._next_mem_alloc - size
         self._next_mem_alloc -= size
 
@@ -883,7 +891,8 @@ class AAssembler:
                                     ]
                                 )
 
-                            elif ins.endswith("v"):
+                            # goofy corner case
+                            elif ins.endswith("v") and ins != "div":
                                 code.extend(
                                     [
                                         ins_list.index(ins),

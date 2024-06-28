@@ -144,7 +144,7 @@ class BPrinter(Visitor):
         n: ChoiceNonterminalASTNode,
     ) -> str:
         match n.choice:
-            # <statement> ::= <variable> "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)" | "stoi" "\(" <operand> "\)" | <function> "\(" <flattened_parameter_list>? "\)") ";";
+            # <statement> ::= (<variable> | <array_access>) "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)" | "stoi" "\(" <operand> "\)" | <function> "\(" <flattened_parameter_list>? "\)") ";";
             case 0:
                 # todo: review cast
                 match cast(ChoiceNonterminalASTNode, n[2]).choice:
@@ -254,6 +254,12 @@ class BPrinter(Visitor):
         n: ASTNode,
     ) -> str:
         return f"[{self(n[1])} + {self(n[3])}]"
+
+    def _visit_array_access(
+        self,
+        n: ASTNode,
+    ) -> str:
+        return f"{self(n[0])}[{self(n[2])}]"
 
 
 # pass for aggregating string constants...
@@ -480,34 +486,19 @@ class BCompiler(Visitor):
         n: Node,
     ) -> Any:
         match n.choice:
-            # <statement> ::= <variable> "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)" | <function> "\(" <argument_list>? "\)") ";";
+            # <statement> ::= (<variable> | <array_access>) "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)" | <function> "\(" <argument_list>? "\)") ";";
             case 0:
-                var_name: str = n[0][0].lexeme
                 main_course: str = ""
                 dessert: str = (
-                    f"store t0 sp {self._cl[var_name]} # [sp + alloc[{var_name}]] = t0"
+                    self._commit_var(n[0][0][0].lexeme, "t0")
+                    if n[0].choice == 0
+                    else self._commit_array_access(n[0][0], "t0")
                 )
+
                 match n[2].choice:
-                    # <operand> ::= <variable> | <string> | decimal_integer;
+                    # <operand> ::= <variable> | <string> | <array_access> | decimal_integer;
                     case 0:
-                        # todo: there has to be a better way...
-                        match n[2][0].choice:
-                            # <operand> ::= <variable>;
-                            case 0:
-                                main_course = f"{self(n[2][0]).format('t0')} # t0 = [sp + alloc[{n[2][0][0][0].lexeme}]];"
-
-                            # <operand> ::= <string>;
-                            case 1:
-                                main_course = f"{self(n[2][0]).format('t0')} # t0 = {n[2][0][0][0].lexeme};"
-
-                            # <operand> ::= decimal_interger;
-                            case 2:
-                                main_course = (
-                                    f"setv t0 {self(n[2][0])} # t0 = {self(n[2][0])};"
-                                )
-
-                            case _:
-                                assert False
+                        main_course = self._fetch_operand(n[2][0], "t0")
 
                     # <expression>
                     case 1:
@@ -523,25 +514,7 @@ class BCompiler(Visitor):
                     # todo: wait free() does not belong here lol
                     # "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)"
                     case 3 | 4:
-                        # todo: better way to load operand
-                        load_operand: str = ""
-                        match n[2][2].choice:
-                            # <operand> ::= <variable>;
-                            case 0:
-                                load_operand = f"{self(n[2][2]).format('a0')} # a0 = [sp + alloc[{n[2][2][0][0].lexeme}]];"
-
-                            # <operand> ::= <string>;
-                            case 1:
-                                load_operand = f"{self(n[2][2]).format('a0')} # a0 = {n[2][2][0][0].lexeme};"
-
-                            # <operand> ::= decimal_interger;
-                            case 2:
-                                load_operand = (
-                                    f"setv a0 {self(n[2][2])} # a0 = {self(n[2][2])};"
-                                )
-
-                            case _:
-                                assert False
+                        load_operand: str = self._fetch_operand(n[2][2], "a0")
 
                         # somehow n[2].choice works here...
                         # ^ no longer true but only shifted by 1
@@ -553,25 +526,7 @@ class BCompiler(Visitor):
 
                     # "stoi" "\(" <operand> "\)"
                     case 5:
-                        # todo: better way to load operand
-                        load_operand: str = ""
-                        match n[2][2].choice:
-                            # <operand> ::= <variable>;
-                            case 0:
-                                load_operand = f"{self(n[2][2]).format('a0')} # a0 = [sp + alloc[{n[2][2][0][0].lexeme}]];"
-
-                            # <operand> ::= <string>;
-                            case 1:
-                                load_operand = f"{self(n[2][2]).format('a0')} # a0 = {n[2][2][0][0].lexeme};"
-
-                            # <operand> ::= decimal_interger;
-                            case 2:
-                                load_operand = (
-                                    f"setv a0 {self(n[2][2])} # a0 = {self(n[2][2])};"
-                                )
-
-                            case _:
-                                assert False
+                        load_operand: str = self._fetch_operand(n[2][2], "a0")
 
                         main_course = join(
                             load_operand,
@@ -593,25 +548,7 @@ class BCompiler(Visitor):
 
             # <statement> ::= ("print" | "printi" | "read") "\(" <operand> "\)" ";";
             case 1:
-                # todo: better way to load operand
-                appetizer: str = ""
-                match n[2].choice:
-                    # <operand> ::= <variable>;
-                    case 0:
-                        appetizer = f"{self(n[2]).format('a0')} # a0 = [sp + alloc[{n[2][0][0].lexeme}]];"
-
-                    # <operand> ::= <string>;
-                    case 1:
-                        appetizer = (
-                            f"{self(n[2]).format('a0')} # a0 = {n[2][0][0].lexeme};"
-                        )
-
-                    # <operand> ::= decimal_interger;
-                    case 2:
-                        appetizer = f"setv a0 {self(n[2])} # a0 = {self(n[2])};"
-
-                    case _:
-                        assert False
+                appetizer: str = self._fetch_operand(n[2], "a0")
 
                 main_course: str = ""
                 # "print" | "printi" | "read"
@@ -678,23 +615,7 @@ class BCompiler(Visitor):
 
                 # todo: operand loading rework
                 if len(n[1]) != 0:
-                    match n[1][0].choice:
-                        # <operand> ::= <variable>;
-                        case 0:
-                            return_operand = f"{self(n[1][0]).format('a0')} # a0 = [sp + alloc[{n[1][0][0][0].lexeme}]];"
-
-                        # <operand> ::= <string>;
-                        case 1:
-                            return_operand = f"{self(n[1][0]).format('a0')} # a0 = {n[1][0][0].lexeme};"
-
-                        # <operand> ::= decimal_interger;
-                        case 2:
-                            return_operand = (
-                                f"setv a0 {self(n[1][0])} # a0 = {self(n[1][0])};"
-                            )
-
-                        case _:
-                            assert False
+                    return_operand = self._fetch_operand(n[1][0], "a0")
 
                 # todo: duplicate of function dessert
                 return join(
@@ -745,12 +666,29 @@ class BCompiler(Visitor):
             f"jumpv {fn_label} # goto {fn_label};",
         )
 
-    def _fetch_var(self, var_name: str, reg: str) -> str:
-        return f"load {reg} sp {self._cl[var_name]} # {reg} = [sp + alloc[{var_name}]];"
-
     def _commit_var(self, var_name: str, reg: str) -> str:
         return (
             f"store {reg} sp {self._cl[var_name]} # [sp + alloc[{var_name}]] = {reg};"
+        )
+
+    def _commit_array_access(self, n: ASTNode, reg: str) -> str:
+        return join(
+            self._fetch_var(n[0], "t2"),
+            self._fetch_operand(n[2], "t3"),
+            f"add t2 t2 t3",
+            f"store {reg} t2 0 # {reg} = [t2 + 0];",
+        )
+
+    def _fetch_var(self, n: ASTNode, reg: str) -> str:
+        var_name: str = n[0].lexeme
+        return f"load {reg} sp {self._cl[var_name]} # {reg} = [sp + alloc[{var_name}]];"
+
+    def _fetch_array_access(self, n: ASTNode, reg: str) -> str:
+        return join(
+            self._fetch_var(n[0], "t2"),
+            self._fetch_operand(n[2], "t3"),
+            f"add t2 t2 t3",
+            f"load {reg} t2 0 # {reg} = [t2 + 0];",
         )
 
     def _fetch_operand(self, n: ASTNode, reg: str) -> str:
@@ -758,15 +696,18 @@ class BCompiler(Visitor):
         match n.choice:
             # <operand> ::= <variable>;
             case 0:
-                var_name: str = n[0][0].lexeme
-                return self._fetch_var(var_name, reg)
+                return self._fetch_var(n[0], reg)
 
             # <operand> ::= <string>;
             case 1:
                 return f"addv {reg} pc ={self._c[n[0][0].literal]} # {reg} = {n[0][0].lexeme};"
 
-            # <operand> ::= decimal_integer;
+            # <operand> ::= <array_access>;
             case 2:
+                return self._fetch_array_access(n[0], reg)
+
+            # <operand> ::= decimal_integer;
+            case 3:
                 return f"setv {reg} {n[0].lexeme} # {reg} = {n[0].lexeme};"
 
             case _:
@@ -778,13 +719,13 @@ class BCompiler(Visitor):
             case 0:
                 # constant expression optimization
                 if n[1].choice == 2:
-                    val: int = int(self(n[1]))
+                    val: int = int(n[1][0].lexeme)
                     val = 1 if val == 0 else 0
                     return f"setv t0 {val}"
 
                 else:
                     # todo: optimize constant
-                    return join(self(n[1]).format("t1"), f"neqv t0 t1 0")
+                    return join(self._fetch_operand(n[1], "t1"), f"neqv t0 t1 0")
 
             # <operand> <binary_operator> <operand>
             case 1:
@@ -792,7 +733,7 @@ class BCompiler(Visitor):
                 rop: ASTNode = n[2]
 
                 # constant expression optimization
-                if lop.choice == 2 and rop.choice == 2:
+                if lop.choice == 3 and rop.choice == 3:
                     binop = {
                         # <binary_operator> ::= "\+";
                         0: lambda x, y: x + y,
@@ -824,8 +765,8 @@ class BCompiler(Visitor):
                         13: lambda x, y: 1 if x <= y else 0,
                     }[n[1].choice]
 
-                    lop_val: int = int(self(lop))
-                    rop_val: int = int(self(rop))
+                    lop_val: int = lop[0].literal
+                    rop_val: int = rop[0].literal
                     val: int = binop(lop_val, rop_val)
                     return f"setv t0 {val} # t0 = {val};"
 
@@ -864,36 +805,10 @@ class BCompiler(Visitor):
                 # todo: constant optimizations
                 # todo: very very sloppy
                 return join(
-                    (
-                        f"{self(lop).format('t1')} # t1 = [sp + alloc[{lop[0][0].lexeme}]];"
-                        if lop.choice == 0
-                        else f"setv t1 {self(lop)} # t1 = {self(lop)};"
-                    ),
-                    (
-                        f"{self(rop).format('t2')} # t2 = [sp + alloc[{rop[0][0].lexeme}]];"
-                        if rop.choice == 0
-                        else f"setv t2 {self(rop)} # t2 = {self(rop)};"
-                    ),
+                    self._fetch_operand(lop, "t1"),
+                    self._fetch_operand(rop, "t2"),
                     f"{inst} t0 t1 t2 # t0 = {inst}(t1, t2);",
                 )
-
-            case _:
-                assert False
-
-    def _visit_operand(self, n: ASTNode) -> Any:
-        # <operand> ::= <variable> | decimal_integer;
-        match n.choice:
-            # <operand> ::= <variable>;
-            case 0:
-                return f"load {{}} r1 {self._cl[n[0][0].lexeme]}"
-
-            # <operand> ::= <string>;
-            case 1:
-                return f"addv {{}} pc ={self._c[n[0][0].literal]}"
-
-            # <operand> ::= decimal_integer;
-            case 2:
-                return n[0].lexeme
 
             case _:
                 assert False

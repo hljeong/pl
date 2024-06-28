@@ -8,7 +8,7 @@
 
 <statement> ::=
 
-  <variable> "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)" | "stoi" "\(" <operand> "\)" | <function> "\(" <argument_list>? "\)") ";" |
+  (<variable> | <array_access>) "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)" | "stoi" "\(" <operand> "\)" | <function> "\(" <argument_list>? "\)") ";" |
 
   ("print" | "printi" | "read") "\(" <operand> "\)" ";" |
 
@@ -24,6 +24,8 @@
 
 <argument_list> ::=  <operand> ("," <operand>)*;
 
+<array_access> ::= <variable> "\[" <operand> "\]";
+
 <mem_access> ::= "\[" <variable>  "\+" decimal_integer "\]";
 
 <expression> ::=
@@ -32,7 +34,7 @@
 
   <operand> <binary_operator> <operand>;
 
-<operand> ::= <variable> | <string> | decimal_integer;
+<operand> ::= <variable> | <string> | <array_access> | decimal_integer;
 
 <unary_operator> ::= "!";
 

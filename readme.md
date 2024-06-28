@@ -38,12 +38,17 @@ try these examples:
     ./pl a ./langs/a/code/fact.a
     ```
 
-- [fact.b](./langs/b/code/fact.b)
-    ```sh
-    ./pl b ./langs/b/code/fact.b
-    ```
-
 - [fizz.b](./langs/b/code/fizz.b)
     ```sh
     ./pl b ./langs/b/code/fizz.b
+    ```
+
+- [pfact.b](./langs/b/code/pfact.b)
+    ```sh
+    ./pl b ./langs/b/code/pfact.b
+    ```
+
+- [fib_memo.b](./langs/b/code/fib_memo.b)
+    ```sh
+    ./pl b ./langs/b/code/fib_memo.b
     ```

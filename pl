@@ -51,6 +51,8 @@ def main():
                 Monad(prog)
                 .then(BParser())
                 .then(BASTCleaner())
+                # .then(BPrinter())
+                # .then(print)
                 .keep_then(BAggregator())
                 .keep_then(
                     lambda fix_this_ugly_thing_too: BAllocator()(
@@ -69,7 +71,7 @@ def main():
                         fix_this_ugly_thing[1],
                     )(fix_this_ugly_thing[0][0][0])
                 )
-                # .also(print)
+                # .then(print)
                 .then(AAssembler(Machine()))
             )
 

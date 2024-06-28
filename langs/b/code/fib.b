@@ -1,5 +1,5 @@
 fn fib(n) {
-  if (n <= 1) return 1;
+  if (n <= 1) return n;
   nm2 = n - 2;
   nm1 = n - 1;
   l = fib(nm2);

@@ -1,9 +1,11 @@
-setv r14 1        # 0: input = 1;
-sysv 1            # 1: read(input);
-setv r14 1        # 2: input = 1;
-sysv 0            # 3: print(input);
-setv r14 1        # 4: input = 1;
-storev 10 r14 0   # 5: [input + 0] = '\n';
-storev 0 r14 1    # 6: [input + 1] = '\0';
-sysv 0            # 7: print(input);
-exitv 0           # 8: return 0
+.data
+  "\n"
+
+.code
+  setv a0 1         # 0: a0 = 1;
+  sysv 1            # 1: read(a0);
+  setv a0 1         # 2: a0 = 1;
+  sysv 0            # 3: print(a0);
+  addv a0 pc =0     # 4: a0 = "\n";
+  sysv 0            # 5: print(a0);
+  jump ra           # 6: goto ra

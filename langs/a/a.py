@@ -268,18 +268,18 @@ class Machine:
                 self._jumpv(val1)
 
             case 2:
-                self._sys(reg1)
+                self._sys()
 
+            # todo: delete this
             case 3:
-                self._sysv(val1)
+                raise RuntimeError("'sysv' is not longer a valid instruction")
 
+            # todo: also delete these
             case 4:
                 self._exit(reg1)
-                return False
 
             case 5:
                 self._exitv(val1)
-                return False
 
             case 6:
                 self._not(reg1, reg2)
@@ -397,77 +397,63 @@ class Machine:
         self._next_pc += 4
 
     def _print(self) -> None:
-        i: int = self._r["r14"]
+        i: int = self._r["r15"]
         while i < len(self._m) and self._m[i] != 0:
             print(chr(self._m[i]), end="")
             i += 1
 
         if i == len(self._m) and self._m[-1] != 0:
-            # error -> return 1
-            self._r["r14"] = 1
-            return
-
-        # success -> return 0
-        self._r["r14"] = 0
+            # todo
+            raise RuntimeError(f"segment fault: {i}")
 
     def _read(self) -> None:
-        i: int = self._r["r14"]
+        i: int = self._r["r15"]
         read = input()
         for j in range(len(read)):
             if i + j >= len(self._m):
-                # error -> return 1
-                self._r["r14"] = 1
-                return
+                # todo
+                raise RuntimeError(f"segment fault: {i}")
 
             self._m[i + j] = ord(read[j])
 
         if i + len(read) >= len(self._m):
-            # error -> return 1
-            self._r["r14"] = 1
-            return
+            # todo
+            raise RuntimeError(f"segment fault: {i}")
 
         # 0-terminate
         self._m[i + len(read)] = 0
 
-        # success -> return 0
-        self._r["r14"] = 0
-
     def _stoi(self) -> None:
-        i: int = self._r["r14"]
+        i: int = self._r["r15"]
         int_str: str = ""
         while i < len(self._m) and self._m[i] != 0:
             int_str += chr(self._m[i])
             i += 1
 
         if i == len(self._m) and self._m[-1] != 0:
-            # error -> return 1
-            self._r["r14"] = 1
-            return
+            # todo
+            raise RuntimeError(f"segment fault: {i}")
 
-        # success -> return 0 and int value
-        self._r["r14"] = 0
-        self._r["r15"] = int(int_str)
+        self._r["r14"] = int(int_str)
 
     def _printi(self) -> None:
-        print(self._r["r14"], end="")
-
-        # success -> return 0
-        self._r["r14"] = 0
+        print(self._r["r15"], end="")
 
     # todo: need to put string constants somewhere else so it doesnt fight w dynamic allocation
     # todo: better allocator
     def _alloc(self) -> None:
-        size: int = self._r["r14"]
+        size: int = self._r["r15"]
         if self._next_mem_alloc - size < self._stack_size:
             # todo
             raise RuntimeError("out of memory")
+
         self._r["r14"] = self._next_mem_alloc - size
         self._next_mem_alloc -= size
 
     # no op for now
     # todo: better allocator
     def _free(self) -> None:
-        self._r["r14"] = 0
+        pass
 
     def _fmt(self, reg_or_addr: Union[str, int]) -> str:
         if type(reg_or_addr) is str:
@@ -532,17 +518,8 @@ class Machine:
     def _jumpv(self, delta_v: int) -> None:
         self._next_pc = self["pc"] + delta_v * 4
 
-    def _sys(self, id_r: str) -> None:
-        self._syscall[self[id_r]]()
-
-    def _sysv(self, id_v: int) -> None:
-        self._syscall[id_v]()
-
-    def _exit(self, val_r: str) -> None:
-        self["a0"] = self[val_r]
-
-    def _exitv(self, val_v: int) -> None:
-        self["a0"] = val_v
+    def _sys(self) -> None:
+        self._syscall[self["a0"]]()
 
     def _not(self, dst_r: str, op_r: str) -> None:
         self[dst_r] = 1 if self[op_r] else 0
@@ -718,7 +695,19 @@ class AAssembler:
                 case "code":
                     ins: str = tokens[idx]
                     match ins:
-                        case "jump" | "jumpv" | "sys" | "sysv" | "exit" | "exitv":
+                        case "sys":
+                            code.extend(
+                                [
+                                    ins_list.index(ins),
+                                    0,
+                                    0,
+                                    0,
+                                ]
+                            )
+                            idx += 1
+                            ins_num += 1
+
+                        case "jump" | "jumpv" | "exit" | "exitv":
                             if not Log.e(
                                 f"expected 1 argument for {ins}, found {len(tokens) - idx - 1}",
                                 len(tokens) - idx < 2,

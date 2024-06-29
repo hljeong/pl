@@ -496,24 +496,26 @@ class BCompiler(Visitor):
                     # todo: wait free() does not belong here lol
                     # "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)"
                     case 3 | 4:
-                        load_operand: str = self._fetch_operand(n[2][2], "a0")
+                        load_operand: str = self._fetch_operand(n[2][2], "a1")
 
                         # somehow n[2].choice works here...
                         # ^ no longer true but only shifted by 1
                         main_course = join(
+                            f"setv a0 {n[2].choice + 1} # a0 = {n[2].choice + 1}; ({n[2][0].lexeme})",
                             load_operand,
-                            f"sysv {n[2].choice + 1} # a0 = {n[2][0].lexeme}(a0);",
+                            f"sys # a0 = {n[2][0].lexeme}(a1);",
                             f"set t0 a0 # t0 = a0;",
                         )
 
                     # "stoi" "\(" <operand> "\)"
                     case 5:
-                        load_operand: str = self._fetch_operand(n[2][2], "a0")
+                        load_operand: str = self._fetch_operand(n[2][2], "a1")
 
                         main_course = join(
+                            "setv a0 2 # a0 = 2; (stoi)",
                             load_operand,
-                            f"sysv 2 # a1 = {n[2][0].lexeme}(a0);",
-                            f"set t0 a1 # t0 = a1;",
+                            f"sys # a0 = {n[2][0].lexeme}(a1);",
+                            f"set t0 a0 # t0 = a0;",
                         )
 
                     # <function> "\(" <flattened_argument_list> "\)"
@@ -530,22 +532,31 @@ class BCompiler(Visitor):
 
             # <statement> ::= ("print" | "printi" | "read") "\(" <operand> "\)" ";";
             case 1:
-                appetizer: str = self._fetch_operand(n[2], "a0")
+                appetizer: str = self._fetch_operand(n[2], "a1")
 
                 main_course: str = ""
                 # "print" | "printi" | "read"
                 match n[0].choice:
                     # "print"
                     case 0:
-                        main_course = "sysv 0 # print(a0);"
+                        main_course = join(
+                            "setv a0 0 # a0 = 0; (print)",
+                            "sys # print(a1);",
+                        )
 
                     # "printi"
                     case 1:
-                        main_course = "sysv 3 # printi(a0);"
+                        main_course = join(
+                            "setv a0 3 # a0 = 3; (printi)",
+                            "sys # printi(a1);",
+                        )
 
                     # "read"
                     case 2:
-                        main_course = "sysv 1 # a0 = read(a0);"
+                        main_course = join(
+                            "setv a0 1 # a0 = 1; (read)",
+                            "sys # read(a1);",
+                        )
 
                     case _:  # pragma: no cover
                         assert False

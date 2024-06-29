@@ -38,7 +38,7 @@ class BASTCleaner(Visitor):
         elif type(n) is NonterminalASTNode:
             n_: NonterminalASTNode = NonterminalASTNode(n.node_type)
 
-        else:
+        else:  # pragma: no cover
             assert False
 
         for c in n:
@@ -136,7 +136,7 @@ class BPrinter(Visitor):
                 else:
                     return join("{", tabbed(inner), "}")
 
-            case _:
+            case _:  # pragma: no cover
                 assert False
 
     def _visit_statement(
@@ -165,7 +165,7 @@ class BPrinter(Visitor):
                         # todo: annotation
                         return f"{self(n[0])} = {n[2][0][0].lexeme}({self(n[2][2])});"
 
-                    case _:
+                    case _:  # pragma: no cover
                         assert False
 
             # <statement> ::= ("print" | "printi" | "read") "\(" <operand> "\)" ";";
@@ -190,7 +190,7 @@ class BPrinter(Visitor):
                     case 1:
                         return f"while ({self(n[2])}) {self(n[4])}"
 
-                    case _:
+                    case _:  # pragma: no cover
                         assert False
 
             # <statement> ::= "if" "\(" <expression> "\)" <block>;
@@ -210,7 +210,7 @@ class BPrinter(Visitor):
                     case 1:
                         return f"if ({self(n[2])}) {self(n[4])}"
 
-                    case _:
+                    case _:  # pragma: no cover
                         assert False
 
             # <statement> ::= <mem_access> "=" <variable> ";";
@@ -229,7 +229,7 @@ class BPrinter(Visitor):
             case 6:
                 return f"{self(n[0])}({self(n[2])});"
 
-            case _:
+            case _:  # pragma: no cover
                 assert False
 
     # todo: casting from here down
@@ -246,7 +246,7 @@ class BPrinter(Visitor):
             case 1:
                 return f"{self(n[0])} {self(n[1])} {self(n[2])}"
 
-            case _:
+            case _:  # pragma: no cover
                 assert False
 
     def _visit_mem_access(
@@ -476,7 +476,7 @@ class BCompiler(Visitor):
             case 1:
                 main_course = self(n[5])
 
-            case _:
+            case _:  # pragma: no cover
                 assert False
 
         return join(appetizer, main_course, dessert)
@@ -541,7 +541,7 @@ class BCompiler(Visitor):
                             self._call_function(n[2]), "set t0 a0 # t0 = a0;"
                         )
 
-                    case _:
+                    case _:  # pragma: no cover
                         assert False
 
                 return join(main_course, dessert)
@@ -565,7 +565,7 @@ class BCompiler(Visitor):
                     case 2:
                         main_course = "sysv 1 # a0 = read(a0);"
 
-                    case _:
+                    case _:  # pragma: no cover
                         assert False
 
                 return join(appetizer, main_course)
@@ -632,7 +632,7 @@ class BCompiler(Visitor):
             case 6:
                 return self._call_function(n)
 
-            case _:
+            case _:  # pragma: no cover
                 assert False
 
     def _call_function(self, n: ASTNode) -> str:
@@ -710,7 +710,7 @@ class BCompiler(Visitor):
             case 3:
                 return f"setv {reg} {n[0].lexeme} # {reg} = {n[0].lexeme};"
 
-            case _:
+            case _:  # pragma: no cover
                 assert False
 
     def _visit_expression(self, n: ASTNode) -> Any:
@@ -718,14 +718,16 @@ class BCompiler(Visitor):
             # <unary_operator> <operand>
             case 0:
                 # constant expression optimization
-                if n[1].choice == 2:
+                if n[1].choice == 3:
                     val: int = int(n[1][0].lexeme)
                     val = 1 if val == 0 else 0
-                    return f"setv t0 {val}"
+                    return f"setv t0 {val} # t0 = {val};"
 
                 else:
                     # todo: optimize constant
-                    return join(self._fetch_operand(n[1], "t1"), f"neqv t0 t1 0")
+                    return join(
+                        self._fetch_operand(n[1], "t1"), f"eqv t0 t1 0 # t0 = t1 == 0;"
+                    )
 
             # <operand> <binary_operator> <operand>
             case 1:
@@ -810,5 +812,5 @@ class BCompiler(Visitor):
                     f"{inst} t0 t1 t2 # t0 = {inst}(t1, t2);",
                 )
 
-            case _:
+            case _:  # pragma: no cover
                 assert False

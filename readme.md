@@ -11,7 +11,6 @@ make install                # install dependencies
 ```
 
 ## test
-- no tests at the moment...
 ```sh
 make test
 ```
@@ -19,11 +18,11 @@ make test
 ## run code
 ```sh
 source .venv/bin/activate
-./pl <language> <program>
+./pl <lang> <cmd> <prog>
 
 # alternatively,
 source .venv/bin/activate
-python pl <language> <program>
+python pl <lang> <cmd> <prog>
 ```
 
 try these examples:

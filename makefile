@@ -1,6 +1,6 @@
 .PHONY: install test requirements clean
 
-MODULES = common lexical syntax grammar langs.a langs.b
+modules = lexical syntax langs.a langs.b
 
 install:
 	python -m pip install -r requirements.txt

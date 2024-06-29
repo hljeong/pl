@@ -236,8 +236,8 @@ class Machine:
 
         # todo: temp solution
         def temp_make_readable(val: int) -> str:
-            # assuming no literals are >= 128...
-            if val >= 128:
+            # assuming anything thats in [128, 128 + len(Machine._regs)) is a reg...
+            if val >= 128 and val - 128 < len(Machine._regs):
                 return Machine._alias(Machine._regs[val - 128])
             else:
                 return str(val)
@@ -282,10 +282,10 @@ class Machine:
                 return False
 
             case 6:
-                self._not_(reg1, reg2)
+                self._not(reg1, reg2)
 
             case 7:
-                self._set_(reg1, reg2)
+                self._set(reg1, reg2)
 
             case 8:
                 self._setv(reg1, val2)
@@ -336,13 +336,13 @@ class Machine:
                 self._modv(reg1, reg2, val3)
 
             case 24:
-                self._or_(reg1, reg2, reg3)
+                self._or(reg1, reg2, reg3)
 
             case 25:
                 self._orv(reg1, reg2, val3)
 
             case 26:
-                self._and_(reg1, reg2, reg3)
+                self._and(reg1, reg2, reg3)
 
             case 27:
                 self._andv(reg1, reg2, val3)
@@ -544,10 +544,10 @@ class Machine:
     def _exitv(self, val_v: int) -> None:
         self["a0"] = val_v
 
-    def _not_(self, dst_r: str, op_r: str) -> None:
+    def _not(self, dst_r: str, op_r: str) -> None:
         self[dst_r] = 1 if self[op_r] else 0
 
-    def _set_(self, dst_r: str, src_r: str) -> None:
+    def _set(self, dst_r: str, src_r: str) -> None:
         self[dst_r] = self[src_r]
 
     def _setv(self, dst_r: str, src_v: int) -> None:
@@ -612,13 +612,13 @@ class Machine:
     def _modv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
         self[dst_r] = self[op1_r] % op2_v
 
-    def _or_(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+    def _or(self, dst_r: str, op1_r: str, op2_r: str) -> None:
         self[dst_r] = self[op1_r] | self[op2_r]
 
     def _orv(self, dst_r: str, op1_r: str, op2_v: int) -> None:
         self[dst_r] = self[op1_r] | op2_v
 
-    def _and_(self, dst_r: str, op1_r: str, op2_r: str) -> None:
+    def _and(self, dst_r: str, op1_r: str, op2_r: str) -> None:
         self[dst_r] = self[op1_r] & self[op2_r]
 
     def _andv(self, dst_r: str, op1_r: str, op2_v: int) -> None:

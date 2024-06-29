@@ -9,6 +9,7 @@ from .pretty import (
     count_lines,
     Text,
     SPACE,
+    opt_p,
 )
 from .logger import Log
 from .lib import R, Monad, Arglist, slowdown

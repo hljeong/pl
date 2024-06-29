@@ -154,6 +154,14 @@ class Text:
         return ret
 
 
+# prefixed optional
+def opt_p(prepend: str, optional: str):
+    if len(optional) == 0:
+        return ""
+
+    return f"{prepend}{optional}"
+
+
 SPACE: str = (
     "this used to be an empty string and i thought the 'is' keyword compares reference instead of value..."
 )

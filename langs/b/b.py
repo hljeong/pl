@@ -1,8 +1,15 @@
 from __future__ import annotations
-from os import close
-from typing import cast, Any
+from typing import Any
 
-from common import Monad, Log, tabbed, join, joini, count_lines, SPACE, sjoin, sjoini
+from common import (
+    Monad,
+    tabbed,
+    join,
+    joini,
+    sjoin,
+    sjoini,
+    opt_p,
+)
 from lexical import Lexer
 from syntax import (
     Grammar,
@@ -11,7 +18,6 @@ from syntax import (
     ASTNode,
     NonterminalASTNode,
     ChoiceNonterminalASTNode,
-    TerminalASTNode,
 )
 
 with open("langs/b/spec/b.xbnf") as b_xbnf_f:
@@ -86,16 +92,16 @@ class BASTCleaner(Visitor):
 
     def _visit_argument_list(self, n: ASTNode) -> ASTNode:
         n_: NonterminalASTNode = NonterminalASTNode("<flattened_argument_list>")
-        n_.add(n[0])
+        n_.add(self(n[0]))
         for c in n[1]:
-            n_.add(c[1])
+            n_.add(self(c[1]))
         return n_
 
     def _visit_parameter_list(self, n: ASTNode) -> ASTNode:
         n_: NonterminalASTNode = NonterminalASTNode("<flattened_parameter_list>")
-        n_.add(n[0])
+        n_.add(self(n[0]))
         for c in n[1]:
-            n_.add(c[1])
+            n_.add(self(c[1]))
         return n_
 
 
@@ -146,38 +152,27 @@ class BPrinter(Visitor):
         match n.choice:
             # <statement> ::= (<variable> | <array_access>) "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)" | "stoi" "\(" <operand> "\)" | <function> "\(" <flattened_parameter_list>? "\)") ";";
             case 0:
-                # todo: review cast
-                match cast(ChoiceNonterminalASTNode, n[2]).choice:
+                match n[2].choice:
                     # <operand> | <expression> | <mem_access>
                     case 0 | 1 | 2:
-                        # todo: review cast
-                        return (
-                            f"{self(n[0])} = {self(cast(NonterminalASTNode, n[2])[0])};"
-                        )
+                        return f"{self(n[0])} = {self(n[2])};"
 
-                    # "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)" | "stoi" "\(" <operand> "\)"
-                    case 3 | 4 | 5:
+                    # "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)" | "stoi" "\(" <operand> "\)" | <function> "\(" <flattened_parameter_list>? "\)"
+                    case 3 | 4 | 5 | 6:
                         # todo: annotation
-                        return f"{self(n[0])} = {n[2][0].lexeme}({self(n[2][2])});"
-
-                    # <function> "\(" <flattened_parameter_list>? "\)"
-                    case 6:
-                        # todo: annotation
-                        return f"{self(n[0])} = {n[2][0][0].lexeme}({self(n[2][2])});"
+                        return f"{self(n[0])} = {self(n[2][0])}({self(n[2][2])});"
 
                     case _:  # pragma: no cover
                         assert False
 
-            # <statement> ::= ("print" | "printi" | "read") "\(" <operand> "\)" ";";
-            case 1:
-                # todo: review casts
-                return f"{cast(TerminalASTNode, cast(NonterminalASTNode, n[0])[0]).lexeme}({self(cast(NonterminalASTNode, n[2])[0])});"
+            # <statement> ::= ("print" | "printi" | "read") "\(" <operand> "\)" ";" | <function> "\(" <flattened_argument_list>? "\)" ";";
+            case 1 | 6:
+                return f"{self(n[0])}({self(n[2])});"
 
             # <statement> ::= "while" "\(" <expression> "\)" <block>;
             case 2:
-                # todo: review cast
                 # <block> ::= <statement> | "{" <statement>* "}";
-                match cast(ChoiceNonterminalASTNode, n[4]).choice:
+                match n[4].choice:
                     # <block> ::= <statement>;
                     case 0:
                         return join(
@@ -195,9 +190,8 @@ class BPrinter(Visitor):
 
             # <statement> ::= "if" "\(" <expression> "\)" <block>;
             case 3:
-                # todo: review cast
                 # <block> ::= <statement> | "{" <statement>* "}";
-                match cast(ChoiceNonterminalASTNode, n[4]).choice:
+                match n[4].choice:
                     # <block> ::= <statement>;
                     case 0:
                         return join(
@@ -219,20 +213,11 @@ class BPrinter(Visitor):
 
             # <statement> ::= "return" <operand>? ";";
             case 5:
-                if len(n[1]) > 0:
-                    return f"return {self(n[1])};"
-
-                else:
-                    return "return;"
-
-            # <statement> ::= <function> "\(" <argument_list>? "\)";
-            case 6:
-                return f"{self(n[0])}({self(n[2])});"
+                return f"return{opt_p(' ', self(n[1]))};"
 
             case _:  # pragma: no cover
                 assert False
 
-    # todo: casting from here down
     def _visit_expression(
         self,
         n: ASTNode,
@@ -408,6 +393,7 @@ class BCompiler(Visitor):
             case 1:
                 return tabbed(self(n[1]))
 
+    # <declaration> ::= "fn" <function> "\(" <parameter_list>? "\)" <block>;
     def _visit_declaration(self, n: ASTNode) -> Any:
         fn_name: str = n[1][0].lexeme
         # todo: no bueno, probably visitor contextualize this
@@ -419,7 +405,7 @@ class BCompiler(Visitor):
         self._csr: dict[str, int] = self._cst["saved"]
         fn_label: str = self._cst["label"]
 
-        # todo: overflowing arguments
+        # todo: could be prettier
         # store arguments in local variables
         commit_args: str = ""
         if len(n[3]) != 0:
@@ -486,7 +472,7 @@ class BCompiler(Visitor):
         n: Node,
     ) -> Any:
         match n.choice:
-            # <statement> ::= (<variable> | <array_access>) "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)" | <function> "\(" <argument_list>? "\)") ";";
+            # <statement> ::= (<variable> | <array_access>) "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)" | <function> "\(" <flattened_argument_list>? "\)") ";";
             case 0:
                 main_course: str = ""
                 dessert: str = (
@@ -534,7 +520,7 @@ class BCompiler(Visitor):
                             f"set t0 a1 # t0 = a1;",
                         )
 
-                    # <function> "\(" <argument_list> "\)"
+                    # <function> "\(" <flattened_argument_list> "\)"
                     case 6:
                         # todo: the second instruction is completely avoidable... just commit a0 directly
                         main_course = join(
@@ -628,7 +614,7 @@ class BCompiler(Visitor):
                     "jump ra # pc = ra;",
                 )
 
-            # <statement> ::= <function> "\(" <argument_list>? "\)" ";";
+            # <statement> ::= <function> "\(" <flattened_argument_list>? "\)" ";";
             case 6:
                 return self._call_function(n)
 
@@ -719,7 +705,7 @@ class BCompiler(Visitor):
             case 0:
                 # constant expression optimization
                 if n[1].choice == 3:
-                    val: int = int(n[1][0].lexeme)
+                    val: int = n[1][0].literal
                     val = 1 if val == 0 else 0
                     return f"setv t0 {val} # t0 = {val};"
 

@@ -169,41 +169,11 @@ class BPrinter(Visitor):
 
             # <statement> ::= "while" "\(" <expression> "\)" <block>;
             case 2:
-                # <block> ::= <statement> | "{" <statement>* "}";
-                match n[4].choice:
-                    # <block> ::= <statement>;
-                    case 0:
-                        return join(
-                            f"while ({self(n[2])}) {{",
-                            tabbed(self(n[4])),
-                            "}",
-                        )
-
-                    # <block> ::= "{" <statement>* "}";
-                    case 1:
-                        return f"while ({self(n[2])}) {self(n[4])}"
-
-                    case _:  # pragma: no cover
-                        assert False
+                return f"while ({self(n[2])}) {self(n[4])}"
 
             # <statement> ::= "if" "\(" <expression> "\)" <block>;
             case 3:
-                # <block> ::= <statement> | "{" <statement>* "}";
-                match n[4].choice:
-                    # <block> ::= <statement>;
-                    case 0:
-                        return join(
-                            f"if ({self(n[2])}) {{",
-                            tabbed(self(n[4])),
-                            "}",
-                        )
-
-                    # <block> ::= "{" <statement>* "}";
-                    case 1:
-                        return f"if ({self(n[2])}) {self(n[4])}"
-
-                    case _:  # pragma: no cover
-                        assert False
+                return f"if ({self(n[2])}) {self(n[4])}"
 
             # <statement> ::= <mem_access> "=" <variable> ";";
             case 4:

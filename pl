@@ -71,8 +71,8 @@ def main():
                         fix_this_ugly_thing[1],
                     )(fix_this_ugly_thing[0][0][0])
                 )
-                .then(print)
-                # .then(AAssembler(Machine()))
+                # .then(print)
+                .then(AAssembler(Machine()))
             )
 
 

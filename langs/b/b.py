@@ -33,9 +33,8 @@ class BParser:
 
 # todo: better name
 class BASTCleaner(Visitor):
-    # todo: static?
     @staticmethod
-    def rebuild(v: Visitor, n: ASTNode) -> ASTNode:
+    def _rebuild(v: Visitor, n: ASTNode) -> ASTNode:
         if type(n) is ChoiceNonterminalASTNode:
             n_: ChoiceNonterminalASTNode = ChoiceNonterminalASTNode(
                 n.node_type, n.choice
@@ -54,7 +53,7 @@ class BASTCleaner(Visitor):
 
     def __init__(self):
         super().__init__(
-            default_nonterminal_node_visitor=BASTCleaner.rebuild,
+            default_nonterminal_node_visitor=BASTCleaner._rebuild,
             default_terminal_node_visitor=lambda _, n: n,
         )
 
@@ -159,7 +158,6 @@ class BPrinter(Visitor):
 
                     # "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)" | "stoi" "\(" <operand> "\)" | <function> "\(" <flattened_parameter_list>? "\)"
                     case 3 | 4 | 5 | 6:
-                        # todo: annotation
                         return f"{self(n[0])} = {self(n[2][0])}({self(n[2][2])});"
 
                     case _:  # pragma: no cover
@@ -309,7 +307,7 @@ class BSymbolTableGenerator(Visitor):
         saved["ra"] = self._var()
 
         # todo: this shifting is kinda bad
-        # allocate slots for extra argumentsat at on the bottom
+        # allocate slots for extra arguments at on the bottom
         self._current_locals = {
             var_name: self._current_extra_args + var_idx
             for var_name, var_idx in self._current_locals.items()
@@ -431,7 +429,6 @@ class BCompiler(Visitor):
             f"{fn_label}:",
             tabbed(
                 join(
-                    # todo
                     # allocate stack frame
                     f"subv sp sp {self._cst['stack_frame']} # sp = sp - {self._cst['stack_frame']};",
                     # todo: optimize this away if there are no fn calls?
@@ -442,7 +439,6 @@ class BCompiler(Visitor):
             ),
         )
         main_course: str = ""
-        # todo: stack frame allocation
         dessert: str = tabbed(
             join(
                 # reload ra

@@ -2,7 +2,8 @@ import os
 import sys
 
 import common
-import lexer
-import langs.a
+import lexical
 import grammar
-import ast
+import syntax
+import langs.a
+import langs.b

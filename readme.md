@@ -30,25 +30,25 @@ try these examples:
 
 - [echo.a](./langs/a/code/echo.a):
     ```sh
-    ./pl a ./langs/a/code/echo.a
+    ./pl a run ./langs/a/code/echo.a
     ```
 
 - [fact.a](./langs/a/code/fact.a)
     ```sh
-    ./pl a ./langs/a/code/fact.a
+    ./pl a run ./langs/a/code/fact.a
     ```
 
 - [fizz.b](./langs/b/code/fizz.b)
     ```sh
-    ./pl b ./langs/b/code/fizz.b
+    ./pl b run ./langs/b/code/fizz.b
     ```
 
 - [pfact.b](./langs/b/code/pfact.b)
     ```sh
-    ./pl b ./langs/b/code/pfact.b
+    ./pl b run ./langs/b/code/pfact.b
     ```
 
 - [fib_memo.b](./langs/b/code/fib_memo.b)
     ```sh
-    ./pl b ./langs/b/code/fib_memo.b
+    ./pl b run ./langs/b/code/fib_memo.b
     ```

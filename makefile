@@ -1,12 +1,12 @@
 .PHONY: install test requirements clean
 
-MODULES = common lexer
+MODULES = common lexical syntax grammar langs.a langs.b
 
 install:
 	python -m pip install -r requirements.txt
 
 test:
-	python -m pytest $(foreach module,$(MODULES),--cov=$(module)) --cov-report html
+	python -m pytest $(foreach module,$(modules),--cov=$(module)) --cov-report html
 
 requirements:
 	python -m pip freeze > requirements.txt

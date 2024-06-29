@@ -2,27 +2,19 @@
 
 from argparse import ArgumentParser
 
-from common import Monad, Log
-from langs.a import AAssembler, Machine
-from langs.b import (
-    BParser,
-    BAggregator,
-    BAllocator,
-    BCompiler,
-    BPrinter,
-    BASTCleaner,
-    BSymbolTableGenerator,
-)
+from common import Log
+from pl import run_a, print_b, compile_b, run_b
 
 
 def main():
     parser = ArgumentParser(prog="pl", description="toy languages")
     parser.add_argument("lang")
+    parser.add_argument("cmd")
     parser.add_argument("prog")
     parser.add_argument("-l", "--log-level", type=str, default="e")
-    # todo: --action={execute, print_tree, print, ...}, --log-level
     args = parser.parse_args()
 
+    # todo: move this logic to Log
     match args.log_level.lower():
         case "n" | "none":
             Log.level = Log.Level.NONE
@@ -42,38 +34,15 @@ def main():
     with open(args.prog) as f:
         prog = "".join(f.readlines())
 
-    match args.lang:
-        case "a":
-            Monad(prog).then(AAssembler(Machine()))
-
-        case "b":
-            (
-                Monad(prog)
-                .then(BParser())
-                .then(BASTCleaner())
-                # .then(BPrinter())
-                # .then(print)
-                .keep_then(BAggregator())
-                .keep_then(
-                    lambda fix_this_ugly_thing_too: BAllocator()(
-                        fix_this_ugly_thing_too[0]
-                    )
-                )
-                .keep_then(
-                    lambda also_fix_this_ugly_thing: BSymbolTableGenerator()(
-                        also_fix_this_ugly_thing[0][0]
-                    )
-                )
-                .then(
-                    lambda fix_this_ugly_thing: BCompiler(
-                        fix_this_ugly_thing[0][0][1],
-                        fix_this_ugly_thing[0][1],
-                        fix_this_ugly_thing[1],
-                    )(fix_this_ugly_thing[0][0][0])
-                )
-                # .then(print)
-                .then(AAssembler(Machine()))
-            )
+    # todo: defaultdict error message
+    {
+        "a": {"run": run_a},
+        "b": {
+            "print": print_b,
+            "compile": compile_b,
+            "run": run_b,
+        },
+    }[args.lang][args.cmd](prog)
 
 
 if __name__ == "__main__":

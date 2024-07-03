@@ -1,8 +1,7 @@
 from __future__ import annotations
-from copy import copy
 from typing import NamedTuple, Optional
 
-from common import Log, Arglist, slowdown
+from common import Log
 from lexical import Token
 
 from .ast import ASTNode, NonterminalASTNode, ChoiceNonterminalASTNode, TerminalASTNode
@@ -52,9 +51,7 @@ class Parser:
         node_parsers: Optional[dict[str, Callable[[Parser], Optional[ASTNode]]]] = None,
         entry_point: Optional[str] = None,
     ):
-        if grammar is not None and (
-            node_parsers is not None or entry_point is not None
-        ):
+        if grammar is not None and node_parsers is not None:
             Log.w("more than sufficient arguments provided", tag="Parser")
 
         if node_parsers is None:
@@ -72,6 +69,10 @@ class Parser:
                 grammar.node_parsers
             )
             self._entry_point: str = grammar.entry_point
+
+            # entry point override
+            if entry_point is not None:
+                self._entry_point = entry_point
 
         elif entry_point is None:
             error: ValueError = ValueError(
@@ -145,10 +146,6 @@ class Parser:
         else:
             return self.__peek()
 
-    # todo: delete
-    def peek(self) -> Token:
-        return self.__safe_peek()
-
     def expect(self, token_type: str) -> Optional[Token]:
         Log.t(f"expecting {token_type}", tag="Parser")
 
@@ -183,7 +180,7 @@ class Parser:
     ) -> Callable[[Parser], Optional[ChoiceNonterminalASTNode]]:
 
         def nonterminal_parser(
-            parser: Parser, entry_point=True
+            parser: Parser, entry_point: bool = True
         ) -> Optional[ChoiceNonterminalASTNode]:
             choices = {}
 

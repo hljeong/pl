@@ -1,6 +1,6 @@
 from .cursor import Cursor, CursorRange
 from .pretty import (
-    to_tree_string,
+    ast_to_tree_string,
     tabbed,
     join,
     sjoin,
@@ -10,6 +10,9 @@ from .pretty import (
     Text,
     SPACE,
     opt_p,
+    dict_to_kwargs_str,
 )
 from .logger import Log
-from .lib import R, Monad, Arglist, slowdown
+from .lib import Bit, Bits, Arglist, slowdown, Placeholder, unescape
+from .monad import Monad
+from .mutable import Mutable

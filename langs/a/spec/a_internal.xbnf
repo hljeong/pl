@@ -1,14 +1,10 @@
-<a> ::= <section>*;
+<a> ::= <code_section> <data_section>;
 
-<section> ::=  <code_section> | <data_section>;
+<data_section> ::= <constant_definition>*;
 
-<data_section> ::= "\[data\]" <constant_definition>*;
+<constant_definition> ::= escaped_string;
 
-<constant_definition> ::= <label> escaped_string;
-
-<code_section> ::= "\[code\]" <labeled_instruction>*;
-
-<labeled_instruction> ::= <label>* <instruction>;
+<code_section> ::= <instruction>*;
 
 <instruction> ::= <legal_instruction> | <pseudoinstruction>;
 
@@ -74,12 +70,6 @@
 
   "b" <reg> <imm> |
 
-  "b" <reg> <lbl> |
-
-  "beq" <reg> <reg> <lbl> |
-
-  "bne" <reg> <reg> <lbl> |
-
   "ne" <reg> <reg> <reg> |
 
   "nei" <reg> <reg> <imm> |
@@ -123,8 +113,6 @@
   "lsv" <reg> <reg> <val> |
 
   "rsv" <reg> <reg> <val>;
-
-<label> ::= identifier ":";
 
 <reg> ::= identifier;
 

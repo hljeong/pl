@@ -1,32 +1,34 @@
 from __future__ import annotations
 from abc import ABC
-from typing import Iterator, Union
+from typing import Any, Iterator, Union
 
+from common import dict_to_kwargs_str
 from lexical import Token
 
 
 class ASTNode(ABC):
-    def __init__(
-        self,
-        node_type: str,
-    ):
-        self._node_type: str = node_type
+    no_extras: dict[str, Any] = {}
+
+    # janky way to circumvent tricky bug with static default parameter...
+    def __init__(self, node_type: str, extras: dict[str, Any] = no_extras):
+        self.node_type: str = node_type
+        self.extras: dict[str, Any] = extras
+        if self.extras is ASTNode.no_extras:
+            self.extras = {}
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({str(self)})"
-
-    @property
-    def node_type(self) -> str:
-        return self._node_type
 
 
 class NonterminalASTNode(ASTNode):
     def __init__(
         self,
         node_type: str,
+        *children: ASTNode,
+        extras: dict[str, Any] = ASTNode.no_extras,
     ):
-        super().__init__(node_type)
-        self._children: list[ASTNode] = []
+        super().__init__(node_type, extras)
+        self._children: list[ASTNode] = list(children)
 
     def __getitem__(self, key: int) -> ASTNode:
         return self._children[key]
@@ -41,7 +43,15 @@ class NonterminalASTNode(ASTNode):
         self._children.append(child)
 
     def __str__(self) -> str:
-        return f'{self.node_type}{{{", ".join(map(str, self._children))}}}'
+        return f'{self.summary}{{{", ".join(map(str, self._children))}}}'
+
+    @property
+    def summary(self) -> str:
+        if self.extras:
+            return f"{self.node_type}[{dict_to_kwargs_str(self.extras)}]"
+
+        else:
+            return f"{self.node_type}"
 
     @property
     def children(self) -> tuple[ASTNode, ...]:
@@ -53,8 +63,10 @@ class ChoiceNonterminalASTNode(NonterminalASTNode):
         self,
         node_type: str,
         choice: int = 0,
+        *children: ASTNode,
+        extras: dict[str, Any] = ASTNode.no_extras,
     ):
-        super().__init__(node_type)
+        super().__init__(node_type, *children, extras=extras)
         self._choice = choice
 
     @property

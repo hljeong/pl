@@ -1,12 +1,12 @@
 .PHONY: install test requirements clean
 
-modules = lexical syntax langs.a langs.b
+modules = lexical syntax langs.a langs.b runtime
 
 install:
 	python -m pip install -r requirements.txt
 
 test:
-	python -m pytest -x $(foreach module,$(modules),--cov=$(module)) --cov-report html
+	python -m pytest -vx $(foreach module,$(modules),--cov=$(module)) --cov-report html
 
 requirements:
 	python -m pip freeze > requirements.txt

@@ -1,5 +1,9 @@
 from __future__ import annotations
-from typing import Any, Iterable, Union, cast
+from typing import Any, Iterable
+
+
+def dict_to_kwargs_str(d: dict) -> str:
+    return ", ".join(f"{k}={v}" for k, v in d.items())
 
 
 # an internal node by duck typing must have node_type, __iter__, and __len__
@@ -12,7 +16,7 @@ def is_internal_node(x: Any):
         return False
 
 
-def to_tree_string(
+def ast_to_tree_string(
     node: Any,
     prefix: str = "",
     last: bool = False,
@@ -29,11 +33,11 @@ def to_tree_string(
             prefix += "│  "
 
     if is_internal_node(node):
-        lines = [f"{use_prefix}{node.node_type}"]
+        lines = [f"{use_prefix}{node.summary}"]
         for idx, child in enumerate(node):
             is_last = idx == len(node) - 1
             lines.append(
-                to_tree_string(
+                ast_to_tree_string(
                     child,
                     prefix,
                     is_last,

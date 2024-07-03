@@ -1,29 +1,54 @@
 from __future__ import annotations
-from typing import Protocol, TypeVar, Callable, Any, Generic
+from typing import TypeVar, Callable, Any, Union
 from functools import total_ordering
 from time import sleep
+from dataclasses import dataclass
 
 T = TypeVar("T")
 R = TypeVar("R")
 
 
-class Monad(Generic[T]):
-    def __init__(self, value: T):
-        self._value: T = value
+def unescape(s: str) -> str:
+    return bytes(s, "utf-8").decode("unicode_escape")
 
-    def then(self, f: Callable[[T], R]) -> Monad[R]:
-        return Monad(f(self._value))
 
-    def keep_then(self, f: Callable[[T], R]) -> Monad[tuple[T, R]]:
-        return Monad((self._value, f(self._value)))
+Bit = bool
 
-    def also(self, f: Callable[[T], Any]) -> Monad[T]:
-        f(self._value)
-        return self
+
+class Bits(list[Bit]):
+    @staticmethod
+    def of(bits: list[Bit]) -> Bits:
+        return Bits(sum(b << i for i, b in enumerate(bits)), len(bits))
+
+    def __init__(self, value: int, bitwidth: int) -> None:
+        super().__init__(list(bool((value >> i) & 1) for i in range(bitwidth)))
+
+    def split(self, *sizes: int) -> tuple[Bits, ...]:
+        at: int = len(self)
+        fragments: list[Bits] = []
+        for size in sizes:
+            fragments.append(Bits.of(self[at - size : at]))
+            at -= size
+        return tuple(fragments)
 
     @property
-    def value(self) -> T:
-        return self._value
+    def value(self) -> int:
+        return sum(b << i for i, b in enumerate(self))
+
+    @property
+    def svalue(self) -> int:
+        bitwidth: int = len(self)
+        nominal_value: int = self.value
+        if nominal_value >= (1 << (bitwidth - 1)):
+            return (1 << (bitwidth - 1)) - nominal_value
+
+        else:
+            return nominal_value
+
+
+@dataclass(frozen=True)
+class Placeholder:
+    key: Union[str, int] = "value"
 
 
 class Arglist:

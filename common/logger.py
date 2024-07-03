@@ -26,7 +26,7 @@ class Log:
         TRACE = 4
 
     level: Level = Level.ERROR
-    spaced: bool = True
+    spaced: bool = False
     traceback: bool = False
     _section: bool = False
     _colors: DefaultDict[Level, str] = defaultdict(lambda: "white")
@@ -74,6 +74,10 @@ class Log:
         after_arglist: Arglist = Arglist(),
         **kwargs: Any,
     ) -> bool:
+        # todo: temporary
+        if tag == "Parser":
+            return True
+
         if Log.level < level:
             return False
 

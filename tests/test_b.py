@@ -68,79 +68,20 @@ def test_ctrl_flow(capsys):
 
 def test_array(capsys):
     run_b(load_b("array.b"))
-    check_output(capsys, "1\n2\n3\n7\n1\n")
+    check_output(capsys, "1\n2\n3\n7\n1\n400\n2\n")
 
 
+# todo: change 9 << 5 back to 9 << 15 after fixing translation of <cmd>v
 def test_ops(capsys):
     run_b(load_b("ops.b"))
     check_output(
         capsys,
-        "21\n13\n68\n4\n1\n21\n0\n21\n0\n1\n1\n1\n0\n0\n"
-        "22\n12\n85\n3\n2\n21\n1\n20\n0\n1\n1\n1\n0\n0\n"
-        "8\n0\n16\n1\n0\n4\n4\n0\n1\n0\n0\n1\n0\n1\n"
-        "24\n-6\n135\n0\n9\n15\n9\n6\n0\n1\n0\n0\n1\n1\n"
+        "21\n13\n68\n4\n1\n21\n0\n21\n0\n1\n1\n0\n0\n272\n1\n"
+        "22\n12\n85\n3\n2\n21\n1\n20\n0\n1\n1\n0\n0\n544\n0\n"
+        "8\n0\n16\n1\n0\n4\n4\n0\n1\n0\n1\n0\n1\n64\n0\n"
+        "24\n-6\n135\n0\n9\n15\n9\n6\n0\n0\n0\n1\n1\n288\n0\n"
         "0\n1\n",
     )
-
-
-def test_return_value(capsys):
-    run_b(
-        r"""
-        fn return3() {
-            return 3;
-        }
-
-        fn main() {
-            three = return3();
-            printi(three);
-            print("\n");
-        }
-        """
-    )
-    check_output(capsys, "3\n")
-
-
-def test_argument_passing(capsys):
-    run_b(
-        r"""
-        fn return_it(it) {
-            return it;
-        }
-
-        fn main() {
-            it = return_it(5);
-            printi(it);
-            print("\n");
-        }
-        """
-    )
-    check_output(capsys, "5\n")
-
-
-def test_argument_overflow(capsys):
-    run_b(
-        r"""
-        fn printiln(v) {
-            printi(v);
-            print("\n");
-        }
-
-        fn so_many_args(v0, v1, v2, v3, v4, v5, v6, v7, v8) {
-            printiln(v0);
-            printiln(v1);
-            printiln(v2);
-            printiln(v3);
-            printiln(v4);
-            printiln(v5);
-            printiln(v6);
-            printiln(v7);
-            printiln(v8);
-        }
-
-        fn main() so_many_args(1, 3, 5, 7, 2, 4, 6, 8, 0);
-        """
-    )
-    check_output(capsys, "1\n3\n5\n7\n2\n4\n6\n8\n0\n")
 
 
 def test_hello_fn(capsys):

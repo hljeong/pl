@@ -3,7 +3,7 @@
 from argparse import ArgumentParser
 
 from common import Log
-from pl import run_a, print_b, compile_b, run_b
+from pl import print_a, run_a, print_b, compile_b, run_b
 
 
 def main():
@@ -36,7 +36,10 @@ def main():
 
     # todo: defaultdict error message
     {
-        "a": {"run": run_a},
+        "a": {
+            "print": print_a,
+            "run": run_a,
+        },
         "b": {
             "print": print_b,
             "compile": compile_b,

@@ -48,7 +48,7 @@ fn list_get(list, i) {
 fn list_size(list) return list[1];
 
 fn list_init() {
-  list = alloc(7);
+  list = alloc(28);
   list[0] = 5;
   list[1] = 0;
   return list;
@@ -61,7 +61,9 @@ fn list_realloc(list) {
   capacity = capacity * 3;
   capacity = capacity / 2;
 
-  new_list = alloc(capacity);
+  bytes = capacity * 4;
+  bytes = bytes + 8;
+  new_list = alloc(bytes);
   new_list[0] = capacity;
   new_list[1] = size;
 

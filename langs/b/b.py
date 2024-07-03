@@ -21,18 +21,19 @@ from syntax import (
 )
 
 with open("langs/b/spec/b.xbnf") as b_xbnf_f:
-    b_xbnf = "".join(b_xbnf_f.readlines())
+    b_xbnf: str = b_xbnf_f.read()
 
-b_grammar = Grammar("b", b_xbnf)
+b_grammar: Grammar = Grammar("b", b_xbnf)
 
 
-class BParser:
+class BParse:
     def __call__(self, prog) -> ASTNode:
         return Monad(prog).then(Lexer(b_grammar)).then(Parser(b_grammar)).value
 
 
 # todo: better name
 class BASTCleaner(Visitor):
+    # todo: use the official one
     @staticmethod
     def _rebuild(v: Visitor, n: ASTNode) -> ASTNode:
         if type(n) is ChoiceNonterminalASTNode:
@@ -104,7 +105,7 @@ class BASTCleaner(Visitor):
         return n_
 
 
-class BPrinter(Visitor):
+class BPrint(Visitor):
     def __init__(self):
         super().__init__(
             default_nonterminal_node_visitor=Visitor.visit_all(joini),
@@ -112,7 +113,7 @@ class BPrinter(Visitor):
         )
 
     def _visit_b(self, n: ASTNode) -> str:
-        return "\n\n".join(self(c) for c in n)
+        return sjoini(self(c) for c in n)
 
     def _visit_declaration(self, n: ASTNode) -> str:
         return f"fn {self(n[1])}({self(n[3])}) {self(n[5])}"
@@ -217,40 +218,23 @@ class BPrinter(Visitor):
 
 # pass for aggregating string constants...
 # might just be a construct created by myself
-class BAggregator(Visitor):
+class BAggregate(Visitor):
     def __init__(self):
         super().__init__()
 
-    def _visit_b(self, n: ASTNode) -> dict[str, int]:
-        self._constant_aggregate: dict[str, int] = {}
+    def _visit_b(self, n: ASTNode) -> dict[str, str]:
+        self._constant_aggregate: dict[str, str] = {}
         self._constant_idx: int = 0
         self._builtin_visit_all(n)
         return self._constant_aggregate
 
     def _visit_string(self, n: ASTNode) -> Any:
         if n[0].literal not in self._constant_aggregate:
-            self._constant_aggregate[n[0].literal] = self._constant_idx
+            self._constant_aggregate[n[0].literal] = f"s{self._constant_idx}"
             self._constant_idx += 1
 
 
-class BAllocator(Visitor):
-    def __init__(self):
-        super().__init__()
-        self._alloc: dict[str, int] = {}
-        self._next_reg_alloc: int = 0
-
-    def _visit_b(self, n: ASTNode) -> Any:
-        self._builtin_visit_all(n)
-        return self._alloc
-
-    def _visit_variable(self, n: ASTNode) -> Any:
-        var_name: str = n[0].lexeme
-        if var_name not in self._alloc:
-            self._alloc[var_name] = self._next_reg_alloc
-            self._next_reg_alloc += 1
-
-
-class BSymbolTableGenerator(Visitor):
+class BGenerateSymbolTable(Visitor):
     def __init__(self):
         super().__init__()
 
@@ -269,7 +253,7 @@ class BSymbolTableGenerator(Visitor):
         fn_name: str = n[1][0].lexeme
         # todo: no bueno, maybe implement visitor context
         self._current_locals: dict[str, int] = {}
-        self._current_var_idx: int = 0
+        self._current_var_loc: int = 0
         self._current_extra_args: int = 0
         self._builtin_visit_all(n)
 
@@ -279,26 +263,27 @@ class BSymbolTableGenerator(Visitor):
         # todo: this shifting is kinda bad
         # allocate slots for extra arguments at on the bottom
         self._current_locals = {
-            var_name: self._current_extra_args + var_idx
-            for var_name, var_idx in self._current_locals.items()
+            var_name: self._current_extra_args * 4 + var_loc
+            for var_name, var_loc in self._current_locals.items()
         }
         saved = {
-            reg: self._current_extra_args + var_idx for reg, var_idx in saved.items()
+            reg: self._current_extra_args * 4 + var_loc
+            for reg, var_loc in saved.items()
         }
         for i in range(self._current_extra_args):
-            self._current_locals[f"#a{6 + i}"] = i
+            self._current_locals[f"#a{6 + i}"] = i * 4
 
         self._symbol_table[fn_name] = {
             "label": self._fn_label(),
             "locals": self._current_locals,
             "saved": saved,
-            "stack_frame": len(self._current_locals) + len(saved),
+            "stack_frame": (len(self._current_locals) + len(saved)) * 4,
         }
 
     def _var(self) -> int:
-        var_idx = self._current_var_idx
-        self._current_var_idx += 1
-        return var_idx
+        var_loc: int = self._current_var_loc
+        self._current_var_loc += 4
+        return var_loc
 
     def _local(self, var_name: str) -> None:
         if var_name not in self._current_locals:
@@ -314,27 +299,21 @@ class BSymbolTableGenerator(Visitor):
         self._local(var_name)
 
 
-class BCompiler(Visitor):
+class BCompile(Visitor):
     def __init__(
         self,
-        constant_aggregate: dict[str, int],
-        symbol_table: dict[str, int],
-        actual_symbol_table: dict[str, dict[str, Any]],
+        constant_aggregate: dict[str, str],
+        symbol_table: dict[str, dict[str, Any]],
     ):
         super().__init__(
             default_nonterminal_node_visitor=Visitor.visit_all(joini),
         )
-        self._c: dict[str, int] = constant_aggregate
-        self._a: dict[str, int] = symbol_table
-        self._s: dict[str, dict[str, Any]] = actual_symbol_table
+        self._c: dict[str, str] = constant_aggregate
+        self._s: dict[str, dict[str, Any]] = symbol_table
 
     # todo: incredibly ugly
     def _generate_data_section(self) -> str:
-        constant_string: list[str] = [""] * len(self._c)
-        for s in self._c:
-            constant_string[self._c[s]] = f'"{s}"'
-
-        return join(".data", tabbed(join(*constant_string)))
+        return join("[data]", joini(f'{self._c[s]}: "{s}"' for s in self._c))
 
     def _label(self) -> str:
         label = f"l{self._label_num}"
@@ -345,7 +324,7 @@ class BCompiler(Visitor):
         self._label_num: int = 0
         return sjoin(
             self._generate_data_section(),
-            join(".code", tabbed(sjoini(self(c) for c in n))),
+            join("[code]", tabbed(sjoini(self(c) for c in n))),
         )
 
     def _visit_block(
@@ -388,7 +367,7 @@ class BCompiler(Visitor):
                     commit_args,
                     joini(
                         join(
-                            f"load t0 sp {self._cst['stack_frame'] + i - 6} # t0 = [sp + {self._cst['stack_frame'] + i - 6}]",
+                            f"l t0 sp {self._cst['stack_frame'] + (i - 6) * 4} # t0 = [sp + {self._cst['stack_frame'] + (i - 6) * 4}]",
                             self._commit_var(n[3][0][i][0].lexeme, "t0"),
                         )
                         for i in range(6, len(n[3][0]))
@@ -403,7 +382,7 @@ class BCompiler(Visitor):
                     f"subv sp sp {self._cst['stack_frame']} # sp = sp - {self._cst['stack_frame']};",
                     # todo: optimize this away if there are no fn calls?
                     # push ra onto stack
-                    f"store ra sp {self._csr['ra']} # [sp + {self._csr['ra']}] = ra;",
+                    f"s ra sp {self._csr['ra']} # [sp + {self._csr['ra']}] = ra;",
                     commit_args,
                 )
             ),
@@ -412,11 +391,11 @@ class BCompiler(Visitor):
         dessert: str = tabbed(
             join(
                 # reload ra
-                f"load ra sp {self._csr['ra']} # ra = [sp + {self._csr['ra']}];",
+                f"l ra sp {self._csr['ra']} # ra = [sp + {self._csr['ra']}];",
                 # deallocate stack frame
                 f"addv sp sp {self._cst['stack_frame']} # sp = sp + {self._cst['stack_frame']};",
                 # go back
-                "jump ra # pc = ra;",
+                "jr ra # pc = ra;",
             )
         )
 
@@ -459,8 +438,8 @@ class BCompiler(Visitor):
                     # <mem_access> ::= "\[" <variable> "+" decimal_integer "\]";
                     case 2:
                         main_course = join(
-                            f"load t1 r1 {self._cl[n[2][0][1][0].lexeme]} # t1 = [sp + alloc[{n[2][0][1][0].lexeme}]];",
-                            f"load t0 t1 {n[2][0][3].lexeme} # t0 = [t1 + {n[2][0][3].lexeme}]",
+                            f"l t1 r1 {self._cl[n[2][0][1][0].lexeme]} # t1 = [sp + alloc[{n[2][0][1][0].lexeme}]];",
+                            f"l t0 t1 {n[2][0][3].lexeme} # t0 = [t1 + {n[2][0][3].lexeme}]",
                         )
 
                     # todo: wait free() does not belong here lol
@@ -473,7 +452,7 @@ class BCompiler(Visitor):
                         main_course = join(
                             f"setv a0 {n[2].choice + 1} # a0 = {n[2].choice + 1}; ({n[2][0].lexeme})",
                             load_operand,
-                            f"sys # a0 = {n[2][0].lexeme}(a1);",
+                            f"e # a0 = {n[2][0].lexeme}(a1);",
                             f"set t0 a0 # t0 = a0;",
                         )
 
@@ -484,7 +463,7 @@ class BCompiler(Visitor):
                         main_course = join(
                             "setv a0 2 # a0 = 2; (stoi)",
                             load_operand,
-                            f"sys # a0 = {n[2][0].lexeme}(a1);",
+                            f"e # a0 = {n[2][0].lexeme}(a1);",
                             f"set t0 a0 # t0 = a0;",
                         )
 
@@ -511,21 +490,21 @@ class BCompiler(Visitor):
                     case 0:
                         main_course = join(
                             "setv a0 0 # a0 = 0; (print)",
-                            "sys # print(a1);",
+                            "e # print(a1);",
                         )
 
                     # "printi"
                     case 1:
                         main_course = join(
                             "setv a0 3 # a0 = 3; (printi)",
-                            "sys # printi(a1);",
+                            "e # printi(a1);",
                         )
 
                     # "read"
                     case 2:
                         main_course = join(
                             "setv a0 1 # a0 = 1; (read)",
-                            "sys # read(a1);",
+                            "e # read(a1);",
                         )
 
                     case _:  # pragma: no cover
@@ -542,10 +521,10 @@ class BCompiler(Visitor):
                     f"{start_label}:",
                     self(n[2]),
                     f"eqv t0 t0 0 # t0 = (t0 == 0);",
-                    f"jumpifv {end_label} t0 # if (t0) goto {end_label};",
+                    f"b t0 {end_label} # if (t0) goto {end_label};",
                 )
                 dessert: str = join(
-                    f"jumpv {start_label} # goto {start_label};",
+                    f"j {start_label} # goto {start_label};",
                     f"{end_label}:",
                 )
 
@@ -558,7 +537,7 @@ class BCompiler(Visitor):
                 appetizer: str = join(
                     self(n[2]),
                     f"eqv t0 t0 0 # t0 = (t0 == 0);",
-                    f"jumpifv {label} t0 # if (t0) goto {label};",
+                    f"b t0 {label} # if (t0) goto {label};",
                 )
                 dessert: str = f"{label}:"
 
@@ -567,9 +546,9 @@ class BCompiler(Visitor):
             # <statement> ::= <mem_access> "=" <variable> ";";
             case 4:
                 return join(
-                    f"load t0 r1 {self._cl[n[0][1][0].lexeme]} # t0 = [sp + alloc[{self._cl[n[0][1][0].lexeme]}]];",
-                    f"load t1 r1 {self._cl[n[2][0].lexeme]} # t1 = [sp + alloc[{self._cl[n[2][0].lexeme]}]];",
-                    f"store t1 t0 {n[0][3].lexeme} # [t0 + {n[0][3].lexeme}] = t1;",
+                    f"l t0 r1 {self._cl[n[0][1][0].lexeme]} # t0 = [sp + alloc[{self._cl[n[0][1][0].lexeme]}]];",
+                    f"l t1 r1 {self._cl[n[2][0].lexeme]} # t1 = [sp + alloc[{self._cl[n[2][0].lexeme]}]];",
+                    f"s t1 t0 {n[0][3].lexeme} # [t0 + {n[0][3].lexeme}] = t1;",
                 )
 
             # <statement> ::= "return" <operand>? ";";
@@ -584,11 +563,11 @@ class BCompiler(Visitor):
                 return join(
                     return_operand,
                     # reload ra
-                    f"load ra sp {self._csr['ra']} # ra = [sp + {self._csr['ra']}];",
+                    f"l ra sp {self._csr['ra']} # ra = [sp + {self._csr['ra']}];",
                     # deallocate stack frame
                     f"addv sp sp {self._cst['stack_frame']} # sp = sp + {self._cst['stack_frame']};",
                     # go back
-                    "jump ra # pc = ra;",
+                    "jr ra # pc = ra;",
                 )
 
             # <statement> ::= <function> "\(" <flattened_argument_list>? "\)" ";";
@@ -626,32 +605,32 @@ class BCompiler(Visitor):
         return join(
             fetch_args,
             "addv ra pc 8 # t0 = pc + 8;",
-            f"jumpv {fn_label} # goto {fn_label};",
+            f"j {fn_label} # goto {fn_label};",
         )
 
     def _commit_var(self, var_name: str, reg: str) -> str:
-        return (
-            f"store {reg} sp {self._cl[var_name]} # [sp + alloc[{var_name}]] = {reg};"
-        )
+        return f"s {reg} sp {self._cl[var_name]} # [sp + alloc[{var_name}]] = {reg};"
 
     def _commit_array_access(self, n: ASTNode, reg: str) -> str:
         return join(
             self._fetch_var(n[0], "t2"),
             self._fetch_operand(n[2], "t3"),
-            f"add t2 t2 t3",
-            f"store {reg} t2 0 # {reg} = [t2 + 0];",
+            f"lsv t3 t3 2 # t3 = t3 << 2;",
+            f"add t2 t2 t3 # t2 = t2 + t3;",
+            f"s {reg} t2 0 # {reg} = [t2 + 0];",
         )
 
     def _fetch_var(self, n: ASTNode, reg: str) -> str:
         var_name: str = n[0].lexeme
-        return f"load {reg} sp {self._cl[var_name]} # {reg} = [sp + alloc[{var_name}]];"
+        return f"l {reg} sp {self._cl[var_name]} # {reg} = [sp + alloc[{var_name}]];"
 
     def _fetch_array_access(self, n: ASTNode, reg: str) -> str:
         return join(
             self._fetch_var(n[0], "t2"),
             self._fetch_operand(n[2], "t3"),
-            f"add t2 t2 t3",
-            f"load {reg} t2 0 # {reg} = [t2 + 0];",
+            f"lsv t3 t3 2 # t3 = t3 << 2;",
+            f"add t2 t2 t3 # t2 = t2 + t3;",
+            f"l {reg} t2 0 # {reg} = [t2 + 0];",
         )
 
     def _fetch_operand(self, n: ASTNode, reg: str) -> str:
@@ -663,7 +642,9 @@ class BCompiler(Visitor):
 
             # <operand> ::= <string>;
             case 1:
-                return f"addv {reg} pc ={self._c[n[0][0].literal]} # {reg} = {n[0][0].lexeme};"
+                return (
+                    f"setv {reg} {self._c[n[0][0].literal]} # {reg} = {n[0][0].lexeme};"
+                )
 
             # <operand> ::= <array_access>;
             case 2:
@@ -728,6 +709,10 @@ class BCompiler(Visitor):
                         12: lambda x, y: 1 if x < y else 0,
                         # <binary_operator> ::= "<=";
                         13: lambda x, y: 1 if x <= y else 0,
+                        # <binary_operator> ::= "<<";
+                        14: lambda x, y: x << y,
+                        # <binary_operator> ::= ">>";
+                        15: lambda x, y: x >> y,
                     }[n[1].choice]
 
                     lop_val: int = lop[0].literal
@@ -755,15 +740,19 @@ class BCompiler(Visitor):
                     # <binary_operator> ::= "==";
                     8: "eq",
                     # <binary_operator> ::= "!=";
-                    9: "neq",
+                    9: "ne",
                     # <binary_operator> ::= ">";
                     10: "gt",
                     # <binary_operator> ::= ">=";
-                    11: "geq",
+                    11: "ge",
                     # <binary_operator> ::= "<";
                     12: "lt",
                     # <binary_operator> ::= "<=";
-                    13: "leq",
+                    13: "le",
+                    # <binary_operator> ::= "<<";
+                    14: "ls",
+                    # <binary_operator> ::= ">>";
+                    15: "rs",
                 }[n[1].choice]
 
                 # todo: fix lazy comment (print it as binary operation)

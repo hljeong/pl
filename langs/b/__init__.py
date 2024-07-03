@@ -1,9 +1,8 @@
 from .b import (
-    BParser,
+    BParse,
     BASTCleaner,
-    BPrinter,
-    BAggregator,
-    BAllocator,
-    BSymbolTableGenerator,
-    BCompiler,
+    BPrint,
+    BAggregate,
+    BGenerateSymbolTable,
+    BCompile,
 )

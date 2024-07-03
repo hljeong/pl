@@ -1,12 +1,12 @@
 from __future__ import annotations
 from collections import defaultdict
-from typing import cast, Any, Callable, Union, Iterable, no_type_check_decorator
+from typing import cast, Any, Callable, Union, Iterable
 
-from common import Log
 from syntax import ASTNode, NonterminalASTNode, TerminalASTNode
 
 from .ast import ChoiceNonterminalASTNode, TerminalASTNode
 
+# note: kwargs (ctx) not captured in these type aliases
 TerminalASTNodeVisitor = Callable[["Visitor", TerminalASTNode], Any]
 ChoiceNonterminalASTNodeVisitor = Callable[["Visitor", ChoiceNonterminalASTNode], Any]
 # todo: review
@@ -21,9 +21,11 @@ ASTNodeVisitor = Union[
 
 # funny little hack because cant use self in default parameter
 USE_DEFAULT_DEFAULT_NONTERMINAL_AST_NODE_VISITOR: NonterminalASTNodeVisitor = (
-    lambda *_: None
+    lambda *_, **ctx: None
 )
-DEFAULT_DEFAULT_TERMINAL_AST_NODE_VISITOR: TerminalASTNodeVisitor = lambda *_: None
+DEFAULT_DEFAULT_TERMINAL_AST_NODE_VISITOR: TerminalASTNodeVisitor = (
+    lambda *_, **ctx: None
+)
 
 
 class Visitor:
@@ -32,12 +34,34 @@ class Visitor:
     def visit_all(
         combine: Callable[[Iterable[Any]], Any] = tuple
     ) -> NonterminalASTNodeVisitor:
-        return lambda v, n: v(n[0]) if len(n) == 1 else combine(v(c) for c in n)
+        return lambda v, n, **ctx: (
+            v(n[0], **ctx) if len(n) == 1 else combine(v(c, **ctx) for c in n)
+        )
+
+    @staticmethod
+    def rebuild(v: Visitor, n: NonterminalASTNode, **ctx: Any) -> NonterminalASTNode:
+        n_: NonterminalASTNode
+        if type(n) is ChoiceNonterminalASTNode:
+            n_ = ChoiceNonterminalASTNode(n.node_type, n.choice, extras=dict(n.extras))
+
+        elif type(n) is NonterminalASTNode:
+            n_ = NonterminalASTNode(n.node_type, extras=dict(n.extras))
+
+        else:  # pragma: no cover
+            assert False
+
+        for c in n:
+            n_.add(v(c, **ctx))
+
+        return n_
 
     def _builtin_visit_all(
-        self, n: NonterminalASTNode, combine: Callable[[Iterable[Any]], Any] = tuple
+        self,
+        n: NonterminalASTNode,
+        combine: Callable[[Iterable[Any]], Any] = tuple,
+        **ctx: Any,
     ) -> Any:
-        return self(n[0]) if len(n) == 1 else combine(self(c) for c in n)
+        return self(n[0], **ctx) if len(n) == 1 else combine(self(c, **ctx) for c in n)
 
     def __init__(
         self,
@@ -53,20 +77,10 @@ class Visitor:
         self._node_visitor: defaultdict[str, ASTNodeVisitor] = defaultdict(
             lambda: cast(
                 AgnosticASTNodeVisitor,
-                lambda v, n: (
-                    default_terminal_node_visitor(v, cast(TerminalASTNode, n))
+                lambda v, n, **ctx: (
+                    default_terminal_node_visitor(v, n, **ctx)
                     if isinstance(n, TerminalASTNode)
-                    else (
-                        cast(
-                            ChoiceNonterminalASTNodeVisitor,
-                            default_nonterminal_node_visitor,
-                        )(v, cast(ChoiceNonterminalASTNode, n))
-                        if isinstance(n, ChoiceNonterminalASTNode)
-                        else cast(
-                            PureNonterminalASTNodeVisitor,
-                            default_nonterminal_node_visitor,
-                        )(v, cast(NonterminalASTNode, n))
-                    )
+                    else default_nonterminal_node_visitor(v, n, **ctx)
                 ),
             ),
             {
@@ -77,8 +91,8 @@ class Visitor:
             },
         )
 
-    def __call__(self, n: ASTNode) -> Any:
-        return self[n](self, n)
+    def __call__(self, n: ASTNode, **ctx: Any) -> Any:
+        return self[n](self, n, **ctx)
 
     def __getitem__(self, n: ASTNode):
         if n.node_type.endswith(">"):

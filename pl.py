@@ -1,45 +1,56 @@
-from common import Monad, Log
-from langs.a import AAssembler, Machine
-from langs.b import (
-    BParser,
-    BAggregator,
-    BAllocator,
-    BCompiler,
-    BPrinter,
-    BASTCleaner,
-    BSymbolTableGenerator,
+from common import Monad, Log, ast_to_tree_string
+from langs.a import (
+    AParse,
+    APrint,
+    ABuildInternalAST,
+    ATranslate,
+    AAssemble,
 )
+from langs.b import (
+    BParse,
+    BPrint,
+    BASTCleaner,
+    BAggregate,
+    BGenerateSymbolTable,
+    BCompile,
+)
+from runtime import MP0
+
+
+def print_a(prog):
+    Monad(prog).then(AParse()).then(APrint()).then(print)
 
 
 def run_a(prog):
-    Monad(prog).then(AAssembler(Machine()))
+    (
+        Monad(prog)
+        .then(AParse())
+        .then(ABuildInternalAST())
+        .then(ATranslate())
+        .then(AAssemble())
+        .then(MP0())
+    )
 
 
 def print_b(prog):
-    Monad(prog).then(BParser()).then(BASTCleaner()).then(BPrinter()).then(print)
+    Monad(prog).then(BParse()).then(BASTCleaner()).then(BPrint()).then(print)
 
 
 def compile_b(prog):
     (
         Monad(prog)
-        .then(BParser())
+        .then(BParse())
         .then(BASTCleaner())
-        .keep_then(BAggregator())
-        .keep_then(
-            lambda fix_this_ugly_thing_too: BAllocator()(fix_this_ugly_thing_too[0])
+        .keep(BAggregate(), returns="constant_aggregate")
+        .keep(BGenerateSymbolTable(), returns="symbol_table")
+        .keep(
+            Monad.create(BCompile),
+            returns="compile",
+            args=(Monad.use("constant_aggregate"), Monad.use("symbol_table")),
         )
-        .keep_then(
-            lambda also_fix_this_ugly_thing: BSymbolTableGenerator()(
-                also_fix_this_ugly_thing[0][0]
-            )
-        )
-        .then(
-            lambda fix_this_ugly_thing: BCompiler(
-                fix_this_ugly_thing[0][0][1],
-                fix_this_ugly_thing[0][1],
-                fix_this_ugly_thing[1],
-            )(fix_this_ugly_thing[0][0][0])
-        )
+        .then(Monad.use("compile"))
+        # todo: implement this
+        # .also(Monad.F(lambda it: it).then(print))
         .then(print)
     )
 
@@ -47,23 +58,19 @@ def compile_b(prog):
 def run_b(prog):
     (
         Monad(prog)
-        .then(BParser())
+        .then(BParse())
         .then(BASTCleaner())
-        .keep_then(BAggregator())
-        .keep_then(
-            lambda fix_this_ugly_thing_too: BAllocator()(fix_this_ugly_thing_too[0])
+        .keep(BAggregate(), returns="constant_aggregate")
+        .keep(BGenerateSymbolTable(), returns="symbol_table")
+        .keep(
+            Monad.create(BCompile),
+            returns="compile",
+            args=(Monad.use("constant_aggregate"), Monad.use("symbol_table")),
         )
-        .keep_then(
-            lambda also_fix_this_ugly_thing: BSymbolTableGenerator()(
-                also_fix_this_ugly_thing[0][0]
-            )
-        )
-        .then(
-            lambda fix_this_ugly_thing: BCompiler(
-                fix_this_ugly_thing[0][0][1],
-                fix_this_ugly_thing[0][1],
-                fix_this_ugly_thing[1],
-            )(fix_this_ugly_thing[0][0][0])
-        )
-        .then(AAssembler(Machine()))
+        .then(Monad.use("compile"))
+        .then(AParse())
+        .then(ABuildInternalAST())
+        .then(ATranslate())
+        .then(AAssemble())
+        .then(MP0())
     )

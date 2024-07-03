@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Any, Optional, cast
 
 from common import Monad, joini, sjoini, Mutable, unescape
+from common.lib import Placeholder
 from lexical import Lexer
 from runtime import MP0
 from syntax import (
@@ -21,8 +22,32 @@ class A:
 
     grammar: Grammar = Grammar("a", xbnf, ignore=["#[^\n]*"])
 
+    @staticmethod
+    def count_instructions_generated(prog: str) -> int:
+        ins_count: Mutable[int] = Mutable(0)
+        translated_ast: ASTNode = (
+            Monad(prog)
+            .then(A.Parse())
+            .then(A.BuildInternalAST())
+            .then(A.Translate())
+            .value
+        )
+        A.Assemble()(translated_ast, ins_count=ins_count)
+        return ins_count.value
+
+    @staticmethod
+    def assemble(prog: str) -> Prog:
+        return (
+            Monad(prog)
+            .then(A.Parse())
+            .then(A.BuildInternalAST())
+            .then(A.Translate())
+            .then(A.Assemble())
+            .value
+        )
+
     class Parse:
-        def __call__(self, prog, entry_point: Optional[str] = None) -> ASTNode:
+        def __call__(self, prog: str, entry_point: Optional[str] = None) -> ASTNode:
             return (
                 Monad(prog)
                 .then(Lexer(A.grammar))
@@ -332,11 +357,15 @@ class A:
                 default_terminal_node_visitor=lambda *_, **ctx: Prog(),
             )
 
-        def _visit_a(self, n: ASTNode) -> Prog:
+        def _visit_a(self, n: ASTNode, ins_count: Mutable[int] = Mutable(0)) -> Prog:
             label_map: dict[str, int] = A.Assemble.ResolveLabels()(n)
-            return A.Assemble._combine(self, n, label_map=label_map)
+            return A.Assemble._combine(
+                self, n, label_map=label_map, ins_count=ins_count
+            )
 
-        def _visit_legal_instruction(self, n: ASTNode, **_) -> Ins:
+        def _visit_legal_instruction(
+            self, n: ASTNode, ins_count: Mutable[int], **_: Any
+        ) -> Ins:
             ins: Ins.Frag = Ins.Frag()
             match n.choice:
                 # <legal_instruction> ::= <b_type_instruction>;
@@ -384,33 +413,34 @@ class A:
                     ins += self(n[0][0])
                     ins += Ins.Frag(0, 25)
 
+            ins_count += 1
             return ins()
 
-        def _visit_b_type_command(self, n: ASTNode, **_) -> Ins.Frag:
+        def _visit_b_type_command(self, n: ASTNode, **_: Any) -> Ins.Frag:
             return Ins.Frag(n.choice, 1)
 
-        def _visit_oi_type_command(self, n: ASTNode, **_) -> Ins.Frag:
+        def _visit_oi_type_command(self, n: ASTNode, **_: Any) -> Ins.Frag:
             return Ins.Frag(n.choice, 4)
 
-        def _visit_m_type_command(self, n: ASTNode, **_) -> Ins.Frag:
+        def _visit_m_type_command(self, n: ASTNode, **_: Any) -> Ins.Frag:
             return Ins.Frag(n.choice, 1)
 
-        def _visit_o_type_command(self, n: ASTNode, **_) -> Ins.Frag:
+        def _visit_o_type_command(self, n: ASTNode, **_: Any) -> Ins.Frag:
             return Ins.Frag(n.choice, 4)
 
-        def _visit_j_type_command(self, n: ASTNode, **_) -> Ins.Frag:
+        def _visit_j_type_command(self, n: ASTNode, **_: Any) -> Ins.Frag:
             return Ins.Frag(n.choice, 0)
 
-        def _visit_e_type_command(self, n: ASTNode, **_) -> Ins.Frag:
+        def _visit_e_type_command(self, n: ASTNode, **_: Any) -> Ins.Frag:
             return Ins.Frag(n.choice, 1)
 
         def _resolve(
-            self, n: ASTNode, label_n: ASTNode, label_map: dict[str, int]
+            self, n: ASTNode, label_n: ASTNode, label_map: dict[str, int], **_: Any
         ) -> int:
             return label_map[label_n[0].lexeme] - n.extras["loc"]
 
         def _visit_pseudoinstruction(
-            self, n: ASTNode, label_map: dict[str, int]
+            self, n: ASTNode, label_map: dict[str, int], **ctx: Any
         ) -> Ins:
             def ins(code: str) -> ASTNode:
                 n_: ASTNode = A.Parse()(code, entry_point="<instruction>")
@@ -419,14 +449,17 @@ class A:
             match n.choice:
                 # <pseudoinstruction> ::= "j" <lbl>;
                 case 1:
-                    return self(ins(f"addi pc pc {self._resolve(n, n[1], label_map)}"))
+                    return self(
+                        ins(f"addi pc pc {self._resolve(n, n[1], label_map)}"), **ctx
+                    )
 
                 # <pseudoinstruction> ::= "bne" <reg> zr <lbl>;
                 case 3:
                     return self(
                         ins(
                             f"bne {n[1][0].lexeme} zr {self._resolve(n, n[3], label_map)}"
-                        )
+                        ),
+                        **ctx,
                     )
 
                 # <pseudoinstruction> ::= "beq" <reg> <reg> <lbl>;
@@ -434,7 +467,8 @@ class A:
                     return self(
                         ins(
                             f"bne {n[1][0].lexeme} {n[2][0].lexeme} {self._resolve(n, n[3], label_map)}"
-                        )
+                        ),
+                        **ctx,
                     )
 
                 # <pseudoinstruction> ::= "bne" <reg> <reg> <lbl>;
@@ -442,7 +476,8 @@ class A:
                     return self(
                         ins(
                             f"bne {n[1][0].lexeme} {n[2][0].lexeme} {self._resolve(n, n[3], label_map)}"
-                        )
+                        ),
+                        **ctx,
                     )
 
                 # <pseudoinstruction> ::= "setv" <reg> <lbl>;
@@ -450,7 +485,8 @@ class A:
                     return self(
                         ins(
                             f"addi {n[1][0].lexeme} pc {self._resolve(n, n[2], label_map)}"
-                        )
+                        ),
+                        **ctx,
                     )
 
                 case _:  # pragma: no cover

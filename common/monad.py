@@ -96,6 +96,21 @@ class Monad(Generic[T]):
 
         return self._next(kept=dict(self._kept, **to_keep))
 
+    def first(
+        self,
+        f: Union[Callable[[Any], R], Placeholder],
+        args: tuple[Any, ...] = (Placeholder(),),
+    ) -> Monad[T]:
+        f_: Callable[[T], R] = cast(Callable[[T], R], self._dispatch(f))
+        args_: Iterable[Any] = (self._dispatch(arg) for arg in args)
+
+        f_(*args_)
+
+        return self._next(
+            history=self._history,
+            kept=dict(self._kept),
+        )
+
     def also(
         self,
         f: Union[Callable[[Any], R], Placeholder],

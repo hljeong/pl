@@ -6,7 +6,10 @@ install:
 	python -m pip install -r requirements.txt
 
 test:
+	rm -f benchmark
 	python -m pytest -vx $(foreach module,$(modules),--cov=$(module)) --cov-report html
+	@echo '[benchmark]'
+	@cat benchmark
 
 requirements:
 	python -m pip freeze > requirements.txt

@@ -94,6 +94,12 @@ class MP0:
     def reg(reg: str) -> Ins.Frag:
         return Ins.Frag(MP0._regs.index(MP0._unalias(reg)), 5)
 
+    @staticmethod
+    def count_instructions_executed(prog: Prog) -> int:
+        m: MP0 = MP0()
+        m(prog)
+        return m.ins_count
+
     def __init__(
         self,
         mem_size: int = DEFAULT_MEM_SIZE,
@@ -103,6 +109,11 @@ class MP0:
         self._mem_size: int = mem_size
         self._m: Mem = Mem(self._mem_size)
         self._stack_size: int = stack_size
+        self._ins_count: int = 0
+
+    @property
+    def ins_count(self) -> int:
+        return self._ins_count
 
     # todo: this is not great...
     def _decode_type(self, frag: Bits) -> tuple[Decode, Bits]:
@@ -286,6 +297,7 @@ class MP0:
 
         self._r[MP0._unalias("pc")] = self._next_pc
         self._next_pc = self._r[MP0._unalias("pc")] + 4
+        self._ins_count += 1
 
     def _fmt(self, reg_or_addr: Union[str, int]) -> str:
         if type(reg_or_addr) is str:

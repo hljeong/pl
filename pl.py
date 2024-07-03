@@ -4,8 +4,18 @@ from langs.b import B
 from runtime import MP0
 
 
-def print_a(prog):
-    Monad(prog).then(A.Parse()).then(A.Print()).then(print)
+def nop(*args, **kwargs):
+    pass
+
+
+def print_a(prog, output=True):
+    return (
+        Monad(prog)
+        .then(A.Parse())
+        .then(A.Print())
+        .first(print if output else nop)
+        .value
+    )
 
 
 def run_a(prog):
@@ -19,12 +29,19 @@ def run_a(prog):
     )
 
 
-def print_b(prog):
-    Monad(prog).then(B.Parse()).then(B.BuildInternalAST()).then(B.Print()).then(print)
+def print_b(prog, output=True):
+    return (
+        Monad(prog)
+        .then(B.Parse())
+        .then(B.BuildInternalAST())
+        .then(B.Print())
+        .first(print if output else nop)
+        .value
+    )
 
 
-def compile_b(prog):
-    (
+def compile_b(prog, output=True):
+    return (
         Monad(prog)
         .then(B.Parse())
         .then(B.BuildInternalAST())
@@ -38,7 +55,8 @@ def compile_b(prog):
         .then(Monad.use("compile"))
         # todo: implement this
         # .also(Monad.F(lambda it: it).then(print))
-        .then(print)
+        .first(print if output else nop)
+        .value
     )
 
 

@@ -3,12 +3,15 @@ import sys
 from io import StringIO
 from git import Repo
 from contextlib import contextmanager
+from time import time
 
-from pl import run_b, print_b
+from langs.a import A
+from runtime import MP0
+from pl import run_b, print_b, compile_b
 
 
 @contextmanager
-def input(input):
+def pipe(input):
     foo = sys.stdin
     sys.stdin = StringIO(input)
     yield
@@ -40,40 +43,117 @@ def check_output(capsys, expected):
     assert_same(out, expected)
 
 
+def report(
+    filename, num_ins_generated, compilation_time, num_ins_executed, execution_time
+):
+    first_entry = os.path.isfile("./benchmark")
+
+    with open("./benchmark", "a") as f:
+        if first_entry:
+            f.write("\n")
+
+        f.write(
+            f"{filename}:\n"
+            f"  compiled {num_ins_generated} instructions in {compilation_time:.03f}s\n"
+            f"  executed {num_ins_executed} instructions in {execution_time:.03f}s\n"
+        )
+
+
+def runtime(f, n=5):
+    if not n:
+        n = 1
+    times = []
+    for _ in range(n):
+        start_time: float = time()
+        f()
+        end_time: float = time()
+        delta_time: float = end_time - start_time
+        times.append(delta_time)
+    return sum(times) / n
+
+
+def benchmark(filename, input=None):
+    prog = load_b(filename)
+    num_ins_generated = A.count_instructions_generated(compile_b(prog, False))
+    compile = lambda: compile_b(prog, False)
+    if input:
+        with pipe(input):
+            num_ins_executed = MP0.count_instructions_executed(
+                A.assemble(compile_b(prog, False))
+            )
+
+    else:
+        num_ins_executed = MP0.count_instructions_executed(
+            A.assemble(compile_b(prog, False))
+        )
+    execute = lambda: run_b(prog)
+    if input:
+
+        def execute_with_input():
+            with pipe(input):
+                run_b(prog)
+
+        execute = execute_with_input
+
+    report(
+        filename,
+        num_ins_generated,
+        runtime(compile),
+        num_ins_executed,
+        runtime(execute),
+    )
+
+
 def test_nop():
-    run_b(load_b("nop.b"))
+    f = "nop.b"
+    run_b(load_b(f))
+    benchmark(f)
 
 
 def test_hello(capsys):
-    run_b(load_b("hello.b"))
+    f = "hello.b"
+    run_b(load_b(f))
     check_output(capsys, "hello\n")
+    benchmark(f)
 
 
 def test_echo(capsys):
-    with input("hello"):
-        run_b(load_b("echo.b"))
+    f = "echo.b"
+    i = "hello"
+    with pipe(i):
+        run_b(load_b(f))
+
     check_output(capsys, "hello\n")
+    benchmark(f, i)
 
 
 def test_read_int(capsys):
-    with input("15"):
-        run_b(load_b("read_int.b"))
+    f = "read_int.b"
+    i = "15"
+    with pipe(i):
+        run_b(load_b(f))
     check_output(capsys, "15\n")
+    benchmark(f, i)
 
 
 def test_ctrl_flow(capsys):
-    run_b(load_b("ctrl_flow.b"))
+    f = "ctrl_flow.b"
+    run_b(load_b(f))
     check_output(capsys, "0\n1\n2\n3\ni > 3\n")
+    benchmark(f)
 
 
 def test_array(capsys):
-    run_b(load_b("array.b"))
+    f = "array.b"
+    run_b(load_b(f))
     check_output(capsys, "1\n2\n3\n7\n1\n400\n2\n")
+    benchmark(f)
 
 
 # todo: change 9 << 5 back to 9 << 15 after fixing translation of <cmd>v
 def test_ops(capsys):
-    run_b(load_b("ops.b"))
+    f = "ops.b"
+    run_b(load_b(f))
     check_output(
         capsys,
         "21\n13\n68\n4\n1\n21\n0\n21\n0\n1\n1\n0\n0\n272\n1\n"
@@ -82,42 +162,53 @@ def test_ops(capsys):
         "24\n-6\n135\n0\n9\n15\n9\n6\n0\n0\n0\n1\n1\n288\n0\n"
         "0\n1\n",
     )
+    benchmark(f)
 
 
 def test_hello_fn(capsys):
-    run_b(load_b("hello_fn.b"))
+    f = "hello_fn.b"
+    run_b(load_b(f))
     check_output(capsys, "hello\n")
+    benchmark(f)
 
 
 def test_nested_fn_calls(capsys):
-    run_b(load_b("nested_fn_calls.b"))
+    f = "nested_fn_calls.b"
+    run_b(load_b(f))
     check_output(capsys, "hello\nhow are you\nbye\n")
+    benchmark(f)
 
 
 def test_return_value(capsys):
-    run_b(load_b("return_value.b"))
+    f = "return_value.b"
+    run_b(load_b(f))
     check_output(capsys, "3\n")
+    benchmark(f)
 
 
 def test_argument_passing(capsys):
-    run_b(load_b("argument_passing.b"))
+    f = "argument_passing.b"
+    run_b(load_b(f))
     check_output(capsys, "5\n")
+    benchmark(f)
 
 
 def test_argument_overflow(capsys):
-    run_b(load_b("argument_overflow.b"))
+    f = "argument_overflow.b"
+    run_b(load_b(f))
     check_output(capsys, "1\n3\n5\n7\n2\n4\n6\n8\n0\n")
+    benchmark(f)
 
 
 def test_recursion(capsys):
-    run_b(load_b("recursion.b"))
+    f = "recursion.b"
+    run_b(load_b(f))
     check_output(capsys, "13\n")
+    benchmark(f)
 
 
 def test_print(capsys):
-    print_b(load_b("clueless.b"))
-    printed, _ = capsys.readouterr()
-    assert_same(printed, load_b("clueless.b"))
+    assert_same(print_b(load_b("clueless.b"), False), load_b("clueless.b")[:-1])
 
-    run_b(printed)
+    run_b(load_b("clueless.b"))
     check_output(capsys, "13\n0\n1\n2\n3\ni > 3\nhello\n")

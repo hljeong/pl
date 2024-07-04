@@ -54,12 +54,12 @@ def report(
 
         f.write(
             f"{filename}:\n"
-            f"  compiled {num_ins_generated} instructions in {compilation_time:.03f}s\n"
+            f"  generated {num_ins_generated} instructions in {compilation_time:.03f}s\n"
             f"  executed {num_ins_executed} instructions in {execution_time:.03f}s\n"
         )
 
 
-def runtime(f, n=5):
+def runtime(f, n=1):
     if not n:
         n = 1
     times = []

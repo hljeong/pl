@@ -3,9 +3,13 @@ from dataclasses import dataclass
 
 from common import Log, Bits
 
+Reg = str
 
-class RegFile(dict[str, int]):
-    def __init__(self, regs: list[str]):
+Addr = int
+
+
+class RegFile(dict[Reg, int]):
+    def __init__(self, regs: list[Reg]):
         super().__init__({reg: 0 for reg in regs})
 
 

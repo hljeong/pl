@@ -3,7 +3,7 @@ from typing import Union, cast, Callable
 
 from common import Log, Bits, Monad, Placeholder
 
-from .common import RegFile, Mem, Ins, Prog
+from .common import Reg, Addr, RegFile, Mem, Ins, Prog
 
 # 2 mb mem
 DEFAULT_MEM_SIZE: int = 2 * 1024 * 1024
@@ -11,11 +11,11 @@ DEFAULT_MEM_SIZE: int = 2 * 1024 * 1024
 # 16 kb stack
 DEFAULT_STACK_SIZE: int = 16 * 1024
 
-BTypeDispatch = Callable[[str, str, int], None]
-OITypeDispatch = Callable[[str, str, int], None]
-MTypeDispatch = Callable[[str, str, int], None]
-OTypeDispatch = Callable[[str, str, str], None]
-JTypeDispatch = Callable[[int], None]
+BTypeDispatch = Callable[[Reg, Reg, Addr], None]
+OITypeDispatch = Callable[[Reg, Reg, Addr], None]
+MTypeDispatch = Callable[[Reg, Reg, Addr], None]
+OTypeDispatch = Callable[[Reg, Reg, Reg], None]
+JTypeDispatch = Callable[[Addr], None]
 ETypeDispatch = Callable[[], None]
 Dispatch = Union[
     BTypeDispatch,
@@ -25,11 +25,11 @@ Dispatch = Union[
     JTypeDispatch,
     ETypeDispatch,
 ]
-Decode = Callable[[Bits], tuple[Dispatch, dict[str, Union[str, int]]]]
+Decode = Callable[[Bits], tuple[Dispatch, dict[str, Union[Reg, int]]]]
 
 
 class MP0:
-    _reg_to_alias: dict[str, str] = {
+    _reg_to_alias: dict[Reg, Reg] = {
         "r0": "zr",
         "r1": "pc",
         "r2": "sp",
@@ -64,18 +64,18 @@ class MP0:
         "r31": "s11",
     }
 
-    _alias_to_reg: dict[str, str] = {alias: reg for reg, alias in _reg_to_alias.items()}
+    _alias_to_reg: dict[Reg, Reg] = {alias: reg for reg, alias in _reg_to_alias.items()}
 
-    _regs: list[str] = list(_reg_to_alias.keys())
+    _regs: list[Reg] = list(_reg_to_alias.keys())
 
-    _aliases: list[str] = list(_alias_to_reg.keys())
+    _aliases: list[Reg] = list(_alias_to_reg.keys())
 
     @staticmethod
-    def _is_reg_or_alias(reg_or_alias: str) -> bool:
+    def _is_reg_or_alias(reg_or_alias: Reg) -> bool:
         return reg_or_alias in MP0._regs or reg_or_alias in MP0._aliases
 
     @staticmethod
-    def _alias(reg: str) -> str:
+    def _alias(reg: Reg) -> Reg:
         if not MP0._is_reg_or_alias(reg):
             # todo
             raise RuntimeError(f"register '{reg}' does not exist")
@@ -83,7 +83,7 @@ class MP0:
         return MP0._reg_to_alias[reg] if reg in MP0._regs else reg
 
     @staticmethod
-    def _unalias(alias: str) -> str:
+    def _unalias(alias: Reg) -> Reg:
         if not MP0._is_reg_or_alias(alias):
             # todo
             raise RuntimeError(f"register '{alias}' does not exist")
@@ -91,7 +91,7 @@ class MP0:
         return MP0._alias_to_reg[alias] if alias in MP0._aliases else alias
 
     @staticmethod
-    def reg(reg: str) -> Ins.Frag:
+    def reg(reg: Reg) -> Ins.Frag:
         return Ins.Frag(MP0._regs.index(MP0._unalias(reg)), 5)
 
     @staticmethod
@@ -139,7 +139,7 @@ class MP0:
             # todo
             raise ValueError(f"cannot decode type of instruction: {frag}")
 
-    def _decode_b_type(self, frag: Bits) -> tuple[Dispatch, dict[str, Union[str, int]]]:
+    def _decode_b_type(self, frag: Bits) -> tuple[Dispatch, dict[str, Union[Reg, int]]]:
         opcode, src1, src2, off = frag.split(1, 5, 5, 20)
         dispatch: BTypeDispatch = [
             self._beq,
@@ -156,7 +156,7 @@ class MP0:
 
     def _decode_oi_type(
         self, frag: Bits
-    ) -> tuple[OITypeDispatch, dict[str, Union[str, int]]]:
+    ) -> tuple[OITypeDispatch, dict[str, Union[Reg, int]]]:
         opcode, dst, src, imm = frag.split(4, 5, 5, 16)
         dispatch: OITypeDispatch = [
             self._addi,
@@ -186,7 +186,7 @@ class MP0:
 
     def _decode_m_type(
         self, frag: Bits
-    ) -> tuple[MTypeDispatch, dict[str, Union[str, int]]]:
+    ) -> tuple[MTypeDispatch, dict[str, Union[Reg, int]]]:
         opcode, reg, base, off = frag.split(1, 5, 5, 18)
         match opcode.value:
             case 0:
@@ -215,7 +215,7 @@ class MP0:
 
     def _decode_o_type(
         self, frag: Bits
-    ) -> tuple[OTypeDispatch, dict[str, Union[str, int]]]:
+    ) -> tuple[OTypeDispatch, dict[str, Union[Reg, int]]]:
         opcode, dst, src1, src2, _ = frag.split(4, 5, 5, 5, 9)
         dispatch: OTypeDispatch = [
             self._add,
@@ -245,7 +245,7 @@ class MP0:
 
     def _decode_j_type(
         self, frag: Bits
-    ) -> tuple[JTypeDispatch, dict[str, Union[str, int]]]:
+    ) -> tuple[JTypeDispatch, dict[str, Union[Reg, int]]]:
         return (
             self._j,
             {
@@ -255,7 +255,7 @@ class MP0:
 
     def _decode_e_type(
         self, frag: Bits
-    ) -> tuple[ETypeDispatch, dict[str, Union[str, int]]]:
+    ) -> tuple[ETypeDispatch, dict[str, Union[Reg, int]]]:
         opcode, _ = frag.split(1, 25)
         dispatch: ETypeDispatch = [self._e, self._eb][opcode.value]
         return (dispatch, {})
@@ -285,9 +285,9 @@ class MP0:
     def _clk(self) -> None:
         pc: int = self._r[MP0._unalias("pc")]
         dispatch: Dispatch
-        operands: dict[str, Union[str, int]]
+        operands: dict[str, Union[Reg, int]]
         dispatch, operands = cast(
-            tuple[Dispatch, dict[str, Union[str, int]]],
+            tuple[Dispatch, dict[str, Union[Reg, int]]],
             Monad(Bits(self[pc], 32))
             .then_and_keep(self._decode_type, returns=("decode", "value"))
             .then(Placeholder("decode"))
@@ -299,9 +299,9 @@ class MP0:
         self._next_pc = self._r[MP0._unalias("pc")] + 4
         self._ins_count += 1
 
-    def _fmt(self, reg_or_addr: Union[str, int]) -> str:
-        if type(reg_or_addr) is str:
-            reg: str = MP0._unalias(reg_or_addr)
+    def _fmt(self, reg_or_addr: Union[Reg, Addr]) -> str:
+        if type(reg_or_addr) is Reg:
+            reg: Reg = MP0._unalias(reg_or_addr)
 
             if reg == MP0._alias(reg):
                 return f"[bold][yellow]{reg}[/yellow][/bold]"
@@ -312,8 +312,8 @@ class MP0:
                 # tired of seeing the unaliased version when debugging...
                 # return f"[bold][yellow]{MP0._alias(reg)}[/yellow][/bold] ([bold][yellow]{reg}[/yellow][/bold])"
 
-        elif type(reg_or_addr) is int:
-            addr: int = reg_or_addr
+        elif type(reg_or_addr) is Addr:
+            addr: Addr = reg_or_addr
 
             return f"[bold][[blue]{addr}[/blue]][/bold]"
 
@@ -326,9 +326,9 @@ class MP0:
         return f"[bold][{color}]{val}[/{color}] ([white]{' '.join(map(lambda byte: f'{byte:02x}', val_bytes))}[/white])[/bold]"
 
     # todo: cleaner tracking
-    def __getitem__(self, reg_or_addr: Union[str, int]) -> int:
-        if type(reg_or_addr) is str:
-            reg: str = self._unalias(reg_or_addr)
+    def __getitem__(self, reg_or_addr: Union[Reg, Addr]) -> int:
+        if type(reg_or_addr) is Reg:
+            reg: Reg = self._unalias(reg_or_addr)
             # hard wired 0
             if reg == "r0":
                 return 0
@@ -336,8 +336,8 @@ class MP0:
             if val > (1 << 31):
                 val -= 1 << 32
 
-        elif type(reg_or_addr) is int:
-            addr: int = reg_or_addr
+        elif type(reg_or_addr) is Addr:
+            addr: Addr = reg_or_addr
             if addr < 0 or addr + 4 > self._mem_size:
                 raise RuntimeError(f"segment fault: 0x{addr:08x}")
 
@@ -349,9 +349,9 @@ class MP0:
         Log.tf(f"{self._fmt(reg_or_addr)} = {self._fmtv(val)}", tag="Runtime")
         return val
 
-    def __setitem__(self, reg_or_addr: Union[str, int], val: int) -> None:
-        if type(reg_or_addr) is str:
-            reg: str = self._unalias(reg_or_addr)
+    def __setitem__(self, reg_or_addr: Union[Reg, Addr], val: int) -> None:
+        if type(reg_or_addr) is Reg:
+            reg: Reg = self._unalias(reg_or_addr)
             old_val: int = self._r[reg]
             # hard wired 0
             if reg == "r0":
@@ -361,8 +361,8 @@ class MP0:
             else:
                 self._r[reg] = val
 
-        elif type(reg_or_addr) is int:
-            addr: int = reg_or_addr
+        elif type(reg_or_addr) is Addr:
+            addr: Addr = reg_or_addr
             if addr < 0 or addr + 4 > self._mem_size:
                 raise RuntimeError(f"segment fault: 0x{addr:08x}")
 
@@ -378,119 +378,119 @@ class MP0:
             tag="Runtime",
         )
 
-    def _beq(self, src1: str, src2: str, off: int) -> None:
+    def _beq(self, src1: Reg, src2: Reg, off: Addr) -> None:
         if self[src1] == self[src2]:
             self._next_pc = self["pc"] + off
 
-    def _bne(self, src1: str, src2: str, off: int) -> None:
+    def _bne(self, src1: Reg, src2: Reg, off: Addr) -> None:
         if self[src1] != self[src2]:
             self._next_pc = self["pc"] + off
 
-    def _addi(self, dst: str, src: str, imm: int) -> None:
+    def _addi(self, dst: Reg, src: Reg, imm: int) -> None:
         self[dst] = self[src] + imm
 
-    def _subi(self, dst: str, src: str, imm: int) -> None:
+    def _subi(self, dst: Reg, src: Reg, imm: int) -> None:
         self[dst] = self[src] - imm
 
     # todo: fact.a runs fine on n = 100... need to validate regs
-    def _muli(self, dst: str, src: str, imm: int) -> None:
+    def _muli(self, dst: Reg, src: Reg, imm: int) -> None:
         self[dst] = self[src] * imm
 
-    def _divi(self, dst: str, src: str, imm: int) -> None:
+    def _divi(self, dst: Reg, src: Reg, imm: int) -> None:
         self[dst] = self[src] // imm
 
-    def _modi(self, dst: str, src: str, imm: int) -> None:
+    def _modi(self, dst: Reg, src: Reg, imm: int) -> None:
         self[dst] = self[src] % imm
 
-    def _ori(self, dst: str, src: str, imm: int) -> None:
+    def _ori(self, dst: Reg, src: Reg, imm: int) -> None:
         self[dst] = self[src] | imm
 
-    def _andi(self, dst: str, src: str, imm: int) -> None:
+    def _andi(self, dst: Reg, src: Reg, imm: int) -> None:
         self[dst] = self[src] & imm
 
-    def _xori(self, dst: str, src: str, imm: int) -> None:
+    def _xori(self, dst: Reg, src: Reg, imm: int) -> None:
         self[dst] = self[src] ^ imm
 
-    def _eqi(self, dst: str, src: str, imm: int) -> None:
+    def _eqi(self, dst: Reg, src: Reg, imm: int) -> None:
         self[dst] = 1 if self[src] == imm else 0
 
-    def _gti(self, dst: str, src: str, imm: int) -> None:
+    def _gti(self, dst: Reg, src: Reg, imm: int) -> None:
         self[dst] = 1 if self[src] > imm else 0
 
-    def _gei(self, dst: str, src: str, imm: int) -> None:
+    def _gei(self, dst: Reg, src: Reg, imm: int) -> None:
         self[dst] = 1 if self[src] >= imm else 0
 
-    def _lti(self, dst: str, src: str, imm: int) -> None:
+    def _lti(self, dst: Reg, src: Reg, imm: int) -> None:
         self[dst] = 1 if self[src] < imm else 0
 
-    def _lei(self, dst: str, src: str, imm: int) -> None:
+    def _lei(self, dst: Reg, src: Reg, imm: int) -> None:
         self[dst] = 1 if self[src] <= imm else 0
 
-    def _lsi(self, dst: str, src: str, imm: int) -> None:
+    def _lsi(self, dst: Reg, src: Reg, imm: int) -> None:
         self[dst] = self[src] << imm
 
-    def _rsi(self, dst: str, src: str, imm: int) -> None:
+    def _rsi(self, dst: Reg, src: Reg, imm: int) -> None:
         self[dst] = self[src] >> imm
 
-    def _l(self, dst: str, base: str, off: int) -> None:
+    def _l(self, dst: Reg, base: Reg, off: Addr) -> None:
         self[dst] = self[self[base] + off]
 
-    def _s(self, src: str, base: str, off: int) -> None:
+    def _s(self, src: Reg, base: Reg, off: Addr) -> None:
         self[self[base] + off] = self[src]
 
-    def _add(self, dst: str, src1: str, src2: str) -> None:
+    def _add(self, dst: Reg, src1: Reg, src2: Reg) -> None:
         self[dst] = self[src1] + self[src2]
 
-    def _sub(self, dst: str, src1: str, src2: str) -> None:
+    def _sub(self, dst: Reg, src1: Reg, src2: Reg) -> None:
         self[dst] = self[src1] - self[src2]
 
-    def _mul(self, dst: str, src1: str, src2: str) -> None:
+    def _mul(self, dst: Reg, src1: Reg, src2: Reg) -> None:
         self[dst] = self[src1] * self[src2]
 
-    def _div(self, dst: str, src1: str, src2: str) -> None:
+    def _div(self, dst: Reg, src1: Reg, src2: Reg) -> None:
         self[dst] = self[src1] // self[src2]
 
-    def _mod(self, dst: str, src1: str, src2: str) -> None:
+    def _mod(self, dst: Reg, src1: Reg, src2: Reg) -> None:
         self[dst] = self[src1] % self[src2]
 
-    def _or(self, dst: str, src1: str, src2: str) -> None:
+    def _or(self, dst: Reg, src1: Reg, src2: Reg) -> None:
         self[dst] = self[src1] | self[src2]
 
-    def _and(self, dst: str, src1: str, src2: str) -> None:
+    def _and(self, dst: Reg, src1: Reg, src2: Reg) -> None:
         self[dst] = self[src1] & self[src2]
 
-    def _xor(self, dst: str, src1: str, src2: str) -> None:
+    def _xor(self, dst: Reg, src1: Reg, src2: Reg) -> None:
         self[dst] = self[src1] ^ self[src2]
 
-    def _eq(self, dst: str, src1: str, src2: str) -> None:
+    def _eq(self, dst: Reg, src1: Reg, src2: Reg) -> None:
         self[dst] = 1 if self[src1] == self[src2] else 0
 
-    def _gt(self, dst: str, src1: str, src2: str) -> None:
+    def _gt(self, dst: Reg, src1: Reg, src2: Reg) -> None:
         self[dst] = 1 if self[src1] > self[src2] else 0
 
-    def _ge(self, dst: str, src1: str, src2: str) -> None:
+    def _ge(self, dst: Reg, src1: Reg, src2: Reg) -> None:
         self[dst] = 1 if self[src1] >= self[src2] else 0
 
-    def _lt(self, dst: str, src1: str, src2: str) -> None:
+    def _lt(self, dst: Reg, src1: Reg, src2: Reg) -> None:
         self[dst] = 1 if self[src1] < self[src2] else 0
 
-    def _le(self, dst: str, src1: str, src2: str) -> None:
+    def _le(self, dst: Reg, src1: Reg, src2: Reg) -> None:
         self[dst] = 1 if self[src1] <= self[src2] else 0
 
-    def _ls(self, dst: str, src1: str, src2: str) -> None:
+    def _ls(self, dst: Reg, src1: Reg, src2: Reg) -> None:
         self[dst] = self[src1] << self[src2]
 
-    def _rs(self, dst: str, src1: str, src2: str) -> None:
+    def _rs(self, dst: Reg, src1: Reg, src2: Reg) -> None:
         self[dst] = self[src1] >> self[src2]
 
-    def _j(self, off: int) -> None:
+    def _j(self, off: Addr) -> None:
         self._next_pc = self["pc"] + off
 
     def _e(self) -> None:
         match self["a0"]:
             # print
             case 0:
-                addr: int = self._r[MP0._unalias("a1")]
+                addr: Addr = self._r[MP0._unalias("a1")]
                 while addr < len(self._m) and self._m[addr] != 0:
                     print(chr(self._m[addr]), end="")
                     addr += 1
@@ -501,14 +501,14 @@ class MP0:
 
             # read
             case 1:
-                base: int = self._r[MP0._unalias("a1")]
-                read = input()
-                for off in range(len(read)):
+                base: Addr = self._r[MP0._unalias("a1")]
+                read: str = input()
+                for off, c in enumerate(read):
                     if base + off >= len(self._m):
                         # todo
                         raise RuntimeError(f"segment fault: 0x{base:08x}")
 
-                    self._m[base + off] = ord(read[off])
+                    self._m[base + off] = ord(c)
 
                 if base + len(read) >= len(self._m):
                     # todo
@@ -519,7 +519,7 @@ class MP0:
 
             # stoi
             case 2:
-                addr: int = self._r[MP0._unalias("a1")]
+                addr: Addr = self._r[MP0._unalias("a1")]
                 int_str: str = ""
                 while addr < len(self._m) and self._m[addr] != 0:
                     int_str += chr(self._m[addr])

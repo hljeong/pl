@@ -74,10 +74,7 @@ class A(Lang):
             return " ".join(self(c) for c in n)
 
         def _visit_constant_definition(self, n: ASTNode) -> str:
-            return " ".join(self(c) for c in n)
-
-        def _visit_label(self, n: ASTNode) -> str:
-            return "".join(self(c) for c in n)
+            return " ".join(f"{self(n.label)}: {self(n.string)}")
 
     class BuildInternalAST(Visitor):
         def __init__(self):
@@ -143,7 +140,7 @@ class A(Lang):
 
             if n.labels:
                 for c in n.labels:
-                    labels.append(self(c))
+                    labels.append(self(c.label))
 
             n_.add(self(n.ins)[0])
             # add labels to n_.ins since <instruction> layer will be stripped in translation
@@ -152,7 +149,7 @@ class A(Lang):
             return n_
 
         def _visit_label(self, n: ASTNode) -> str:
-            return n.label.lexeme
+            return n.lexeme
 
     class Translate(Visitor):
 

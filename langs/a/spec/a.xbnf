@@ -4,11 +4,11 @@
 
 <data_section> ::= "\[data\]" definitions=<constant_definition>*;
 
-<constant_definition> ::= label=<label> string=escaped_string;
+<constant_definition> ::= label=<label> ":" string=escaped_string;
 
 <code_section> ::= "\[code\]" instructions=<labeled_instruction>*;
 
-<labeled_instruction> ::= labels=<label>* ins=<instruction>;
+<labeled_instruction> ::= labels=(label=<label> ":")* ins=<instruction>;
 
 <instruction> ::= ins=<legal_instruction> | ins=<pseudoinstruction>;
 
@@ -124,7 +124,7 @@
 
   cmd="rsv" dst=<reg> src=<reg> val=<val>;
 
-<label> ::= label=identifier ":";
+alias <label> ::= identifier;
 
 alias <reg> ::= identifier;
 

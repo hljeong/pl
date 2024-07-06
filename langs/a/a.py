@@ -2,7 +2,6 @@ from __future__ import annotations
 from typing import Any, Optional, cast
 
 from common import Monad, joini, sjoini, Mutable, unescape
-from common.lib import Placeholder
 from lexical import Lexer
 from runtime import MP0
 from syntax import (
@@ -52,7 +51,7 @@ class A(Lang):
         def __call__(self, prog: str, entry_point: Optional[str] = None) -> ASTNode:
             return (
                 Monad(prog)
-                .then(Lexer(A.grammar))
+                .then(Lexer.for_lang(A))
                 .then(Parser.for_lang(A, entry_point=entry_point))
                 .value
             )

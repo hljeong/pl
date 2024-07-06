@@ -4,6 +4,7 @@ import re
 
 from common import Cursor, CursorRange, Log
 
+from .vocabulary import Vocabulary
 from .token import Token
 
 
@@ -48,30 +49,25 @@ class Lexer:
         def __init__(self, msg: str = "an error occurred"):
             super().__init__(msg)
 
+    @staticmethod
+    def for_vocabulary(vocabulary: Vocabulary) -> Lexer:
+        return Lexer(vocabulary)
+
+    @staticmethod
+    def for_grammar(grammar: "Grammar") -> Lexer:  # type: ignore
+        return Lexer(grammar.vocabulary, grammar_name=grammar.name)
+
+    @staticmethod
+    def for_lang(lang: "Lang") -> Lexer:  # type: ignore
+        return Lexer.for_grammar(lang.grammar)
+
     def __init__(
         self,
-        grammar: Optional[Grammar] = None,
-        vocabulary: Optional[Vocabulary] = None,
+        vocabulary: Vocabulary,
+        grammar_name: str = "none",
     ):
-        if grammar is not None and vocabulary is not None:
-            Log.w("more than sufficient arguments provided", tag="Lexer")
-
-        if vocabulary is None:
-            if grammar is None:
-                error: ValueError = ValueError(
-                    "provide either grammar or vocabulary to create a lexer"
-                )
-                if not Log.ef(
-                    "[red]ValueError:[/red] provide either grammar or vocabulary to create a lexer"
-                ):
-                    raise error
-
-            self._grammar_name: str = grammar.name
-            self._vocabulary: Vocabulary = grammar.vocabulary
-
-        else:
-            self._grammar_name: str = "none"
-            self._vocabulary: Vocabulary = vocabulary
+        self._grammar_name: str = grammar_name
+        self._vocabulary: Vocabulary = vocabulary
 
     def __repr__(self) -> str:
         return f"Lexer({self._grammar_name})"

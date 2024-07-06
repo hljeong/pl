@@ -14,10 +14,7 @@ class Grammar:
     @staticmethod
     def from_xbnf(name: str, xbnf: str, ignore: list[str] = []) -> Grammar:
         ast: ASTNode = (
-            Monad(xbnf)
-            .then(Lexer(grammar=XBNF.grammar))
-            .then(Parser.for_lang(XBNF))
-            .value
+            Monad(xbnf).then(Lexer.for_lang(XBNF)).then(Parser.for_lang(XBNF)).value
         )
 
         # todo: add ignore to xbnf

@@ -9,58 +9,35 @@ from .ast import ASTNode, TerminalASTNode, NonterminalASTNode
 from .parser import ExpressionTerm, Parser
 from .visitor import Visitor
 
+NodeParser = Callable[[Parser, Optional[bool]], Optional[ASTNode]]
+
 
 class Grammar:
+    @staticmethod
+    def from_xbnf(name: str, xbnf: str, ignore: list[str] = []) -> Grammar:
+        ast: ASTNode = (
+            Monad(xbnf)
+            .then(Lexer(grammar=XBNF.grammar))
+            .then(Parser(grammar=XBNF.grammar))
+            .value
+        )
+
+        # todo: add ignore to xbnf
+        vocabulary: Vocabulary = GenerateVocabulary(ignore)(ast)
+        node_parsers: dict[str, NodeParser] = GenerateNodeParsers()(ast)
+
+        return Grammar(name, vocabulary, node_parsers)
+
     def __init__(
         self,
         name: str,
-        xbnf: Optional[str] = None,
-        vocabulary: Optional[Vocabulary] = None,
-        node_parsers: Optional[
-            dict[str, Callable[[Parser, Optional[bool]], Optional[ASTNode]]]
-        ] = None,
-        ignore: list[str] = [],
+        vocabulary: Vocabulary,
+        node_parsers: dict[str, NodeParser],
     ):
-        if xbnf is not None and (vocabulary is not None or node_parsers is not None):
-            Log.w("more than sufficient arguments provided", tag="Grammar")
-
-        if vocabulary is None:
-            if xbnf is None:
-                error: ValueError = ValueError(
-                    "provide either xbnf or both vocabulary and node_parsers to create a grammar"
-                )
-                if not Log.ef(
-                    "[red]ValueError:[/red] provide either xbnf or both vocabulary and node_parsers to create a grammar"
-                ):
-                    raise error
-
-            ast: ASTNode = (
-                # todo: review cast
-                Monad(cast(str, xbnf))
-                .then(Lexer(grammar=xbnf_grammar))
-                .then(Parser(grammar=xbnf_grammar))
-                .value
-            )
-
-            vocabulary = VocabularyGenerator(ignore).generate(ast)
-            # todo: type annotation
-            node_parsers = NodeParsersGenerator().generate(ast)
-
-        elif node_parsers is None:
-            error: ValueError = ValueError(
-                "provide either xbnf or both vocabulary and node_parsers to create a grammar"
-            )
-            if not Log.ef(
-                "[red]ValueError:[/red] provide either xbnf or both vocabulary and node_parsers to create a grammar"
-            ):
-                raise error
-
         # todo: validate input grammar
         self._name: str = name
         self._vocabulary: Vocabulary = vocabulary
-        self._node_parsers: dict[
-            str, Callable[[Parser, Optional[bool]], Optional[ASTNode]]
-        ] = node_parsers
+        self._node_parsers: dict[str, NodeParser] = node_parsers
 
     # todo: does this make sense
     def __repr__(self) -> str:
@@ -75,7 +52,7 @@ class Grammar:
         return self._vocabulary
 
     @property
-    def node_parsers(self) -> dict[str : Callable[[Parser], Optional[ASTNode]]]:
+    def node_parsers(self) -> dict[str, NodeParser]:
         return self._node_parsers
 
     @property
@@ -83,183 +60,183 @@ class Grammar:
         return f"<{self._name}>"
 
 
-xbnf_vocabulary = Vocabulary(
-    {
-        '"<"': Vocabulary.Definition.make("<"),
-        "identifier": Vocabulary.Definition.builtin["identifier"],
-        '">"': Vocabulary.Definition.make(">"),
-        '"::="': Vocabulary.Definition.make("::="),
-        '"\\+"': Vocabulary.Definition.make("\\+"),
-        '";"': Vocabulary.Definition.make(";"),
-        '"alias"': Vocabulary.Definition.make("alias"),
-        "escaped_string": Vocabulary.Definition.builtin["escaped_string"],
-        '"\\("': Vocabulary.Definition.make("\\("),
-        '"\\?"': Vocabulary.Definition.make("\\?"),
-        '"\\)"': Vocabulary.Definition.make("\\)"),
-        '"\\*"': Vocabulary.Definition.make("\\*"),
-        '"\\|"': Vocabulary.Definition.make("\\|"),
+class XBNF:
+    vocabulary = Vocabulary(
+        {
+            '"<"': Vocabulary.Definition.make("<"),
+            "identifier": Vocabulary.Definition.builtin["identifier"],
+            '">"': Vocabulary.Definition.make(">"),
+            '"::="': Vocabulary.Definition.make("::="),
+            '"\\+"': Vocabulary.Definition.make("\\+"),
+            '";"': Vocabulary.Definition.make(";"),
+            '"alias"': Vocabulary.Definition.make("alias"),
+            "escaped_string": Vocabulary.Definition.builtin["escaped_string"],
+            '"\\("': Vocabulary.Definition.make("\\("),
+            '"\\?"': Vocabulary.Definition.make("\\?"),
+            '"\\)"': Vocabulary.Definition.make("\\)"),
+            '"\\*"': Vocabulary.Definition.make("\\*"),
+            '"\\|"': Vocabulary.Definition.make("\\|"),
+        }
+    )
+
+    node_parsers = {
+        "<xbnf>": Parser.generate_nonterminal_parser(
+            "<xbnf>",
+            [
+                [ExpressionTerm("<production>"), ExpressionTerm("<rule>", "*")],
+            ],
+        ),
+        "<rule>": Parser.generate_nonterminal_parser(
+            "<rule>",
+            [[ExpressionTerm("<production>")], [ExpressionTerm("<alias>")]],
+        ),
+        "<production>": Parser.generate_nonterminal_parser(
+            "<production>",
+            [
+                [
+                    ExpressionTerm("<nonterminal>"),
+                    ExpressionTerm('"::="'),
+                    ExpressionTerm("<body>"),
+                    ExpressionTerm('";"'),
+                ],
+            ],
+        ),
+        "<alias>": Parser.generate_nonterminal_parser(
+            "<alias>",
+            [
+                [
+                    ExpressionTerm('"alias"'),
+                    ExpressionTerm("<nonterminal>"),
+                    ExpressionTerm('"::="'),
+                    ExpressionTerm("<terminal>"),
+                    ExpressionTerm('";"'),
+                ],
+            ],
+        ),
+        "<nonterminal>": Parser.generate_nonterminal_parser(
+            "<nonterminal>",
+            [
+                [
+                    ExpressionTerm('"<"'),
+                    ExpressionTerm("identifier"),
+                    ExpressionTerm('">"'),
+                ],
+            ],
+        ),
+        "<body>": Parser.generate_nonterminal_parser(
+            "<body>",
+            [
+                [
+                    ExpressionTerm("<expression>"),
+                    ExpressionTerm("<body>:1", "*"),
+                ],
+            ],
+        ),
+        "<body>:1": Parser.generate_nonterminal_parser(
+            "<body>:1",
+            [
+                [
+                    ExpressionTerm('"\\|"'),
+                    ExpressionTerm("<expression>"),
+                ],
+            ],
+        ),
+        "<expression>": Parser.generate_nonterminal_parser(
+            "<expression>",
+            [
+                [
+                    ExpressionTerm("<expression>:0", "+"),
+                ],
+            ],
+        ),
+        "<expression>:0": Parser.generate_nonterminal_parser(
+            "<expression>:0",
+            [
+                [
+                    ExpressionTerm("<group>"),
+                    ExpressionTerm("<multiplicity>", "?"),
+                ],
+            ],
+        ),
+        "<group>": Parser.generate_nonterminal_parser(
+            "<group>",
+            [
+                [ExpressionTerm("<term>")],
+                [
+                    ExpressionTerm('"\\("'),
+                    ExpressionTerm("<body>"),
+                    ExpressionTerm('"\\)"'),
+                ],
+            ],
+        ),
+        "<term>": Parser.generate_nonterminal_parser(
+            "<term>",
+            [
+                [ExpressionTerm("<nonterminal>")],
+                [ExpressionTerm("<terminal>")],
+            ],
+        ),
+        "<terminal>": Parser.generate_nonterminal_parser(
+            "<terminal>",
+            [
+                [ExpressionTerm("escaped_string")],
+                [ExpressionTerm("identifier")],
+            ],
+        ),
+        "<multiplicity>": Parser.generate_nonterminal_parser(
+            "<multiplicity>",
+            [
+                [ExpressionTerm('"\\?"')],
+                [ExpressionTerm('"\\*"')],
+                [ExpressionTerm('"\\+"')],
+                [ExpressionTerm("decimal_integer")],
+            ],
+        ),
+        '"::="': Parser.generate_terminal_parser('"::="'),
+        '";"': Parser.generate_terminal_parser('";"'),
+        '"alias"': Parser.generate_terminal_parser('"alias"'),
+        '"<"': Parser.generate_terminal_parser('"<"'),
+        '">"': Parser.generate_terminal_parser('">"'),
+        '"\\|"': Parser.generate_terminal_parser('"\\|"'),
+        '"\\("': Parser.generate_terminal_parser('"\\("'),
+        '"\\)"': Parser.generate_terminal_parser('"\\)"'),
+        "escaped_string": Parser.generate_terminal_parser("escaped_string"),
+        "identifier": Parser.generate_terminal_parser("identifier"),
+        '"\\?"': Parser.generate_terminal_parser('"\\?"'),
+        '"\\*"': Parser.generate_terminal_parser('"\\*"'),
+        '"\\+"': Parser.generate_terminal_parser('"\\+"'),
+        "decimal_integer": Parser.generate_terminal_parser("decimal_integer"),
     }
-)
 
-xbnf_node_parsers = {
-    "<xbnf>": Parser.generate_nonterminal_parser(
-        "<xbnf>",
-        [
-            [ExpressionTerm("<production>"), ExpressionTerm("<rule>", "*")],
-        ],
-    ),
-    "<rule>": Parser.generate_nonterminal_parser(
-        "<rule>",
-        [[ExpressionTerm("<production>")], [ExpressionTerm("<alias>")]],
-    ),
-    "<production>": Parser.generate_nonterminal_parser(
-        "<production>",
-        [
-            [
-                ExpressionTerm("<nonterminal>"),
-                ExpressionTerm('"::="'),
-                ExpressionTerm("<body>"),
-                ExpressionTerm('";"'),
-            ],
-        ],
-    ),
-    "<alias>": Parser.generate_nonterminal_parser(
-        "<alias>",
-        [
-            [
-                ExpressionTerm('"alias"'),
-                ExpressionTerm("<nonterminal>"),
-                ExpressionTerm('"::="'),
-                ExpressionTerm("<terminal>"),
-                ExpressionTerm('";"'),
-            ],
-        ],
-    ),
-    "<nonterminal>": Parser.generate_nonterminal_parser(
-        "<nonterminal>",
-        [
-            [
-                ExpressionTerm('"<"'),
-                ExpressionTerm("identifier"),
-                ExpressionTerm('">"'),
-            ],
-        ],
-    ),
-    "<body>": Parser.generate_nonterminal_parser(
-        "<body>",
-        [
-            [
-                ExpressionTerm("<expression>"),
-                ExpressionTerm("<body>:1", "*"),
-            ],
-        ],
-    ),
-    "<body>:1": Parser.generate_nonterminal_parser(
-        "<body>:1",
-        [
-            [
-                ExpressionTerm('"\\|"'),
-                ExpressionTerm("<expression>"),
-            ],
-        ],
-    ),
-    "<expression>": Parser.generate_nonterminal_parser(
-        "<expression>",
-        [
-            [
-                ExpressionTerm("<expression>:0", "+"),
-            ],
-        ],
-    ),
-    "<expression>:0": Parser.generate_nonterminal_parser(
-        "<expression>:0",
-        [
-            [
-                ExpressionTerm("<group>"),
-                ExpressionTerm("<multiplicity>", "?"),
-            ],
-        ],
-    ),
-    "<group>": Parser.generate_nonterminal_parser(
-        "<group>",
-        [
-            [ExpressionTerm("<term>")],
-            [
-                ExpressionTerm('"\\("'),
-                ExpressionTerm("<body>"),
-                ExpressionTerm('"\\)"'),
-            ],
-        ],
-    ),
-    "<term>": Parser.generate_nonterminal_parser(
-        "<term>",
-        [
-            [ExpressionTerm("<nonterminal>")],
-            [ExpressionTerm("<terminal>")],
-        ],
-    ),
-    "<terminal>": Parser.generate_nonterminal_parser(
-        "<terminal>",
-        [
-            [ExpressionTerm("escaped_string")],
-            [ExpressionTerm("identifier")],
-        ],
-    ),
-    "<multiplicity>": Parser.generate_nonterminal_parser(
-        "<multiplicity>",
-        [
-            [ExpressionTerm('"\\?"')],
-            [ExpressionTerm('"\\*"')],
-            [ExpressionTerm('"\\+"')],
-            [ExpressionTerm("decimal_integer")],
-        ],
-    ),
-    '"::="': Parser.generate_terminal_parser('"::="'),
-    '";"': Parser.generate_terminal_parser('";"'),
-    '"alias"': Parser.generate_terminal_parser('"alias"'),
-    '"<"': Parser.generate_terminal_parser('"<"'),
-    '">"': Parser.generate_terminal_parser('">"'),
-    '"\\|"': Parser.generate_terminal_parser('"\\|"'),
-    '"\\("': Parser.generate_terminal_parser('"\\("'),
-    '"\\)"': Parser.generate_terminal_parser('"\\)"'),
-    "escaped_string": Parser.generate_terminal_parser("escaped_string"),
-    "identifier": Parser.generate_terminal_parser("identifier"),
-    '"\\?"': Parser.generate_terminal_parser('"\\?"'),
-    '"\\*"': Parser.generate_terminal_parser('"\\*"'),
-    '"\\+"': Parser.generate_terminal_parser('"\\+"'),
-    "decimal_integer": Parser.generate_terminal_parser("decimal_integer"),
-}
-
-xbnf_grammar: Grammar = Grammar(
-    "xbnf",
-    vocabulary=xbnf_vocabulary,
-    node_parsers=xbnf_node_parsers,
-)
+    grammar: Grammar = Grammar(
+        "xbnf",
+        vocabulary=vocabulary,
+        node_parsers=node_parsers,
+    )
 
 
-class VocabularyGenerator(Visitor):
+class GenerateVocabulary(Visitor):
     def __init__(self, ignore: list[str] = []):
         super().__init__()
         self._ignore: list[str] = Vocabulary.DEFAULT_IGNORE
         self._ignore.extend(ignore)
-
-    def generate(self, ast: ASTNode) -> Vocabulary:
         self._dictionary: dict[str, Vocabulary.Definition] = {}
-        self(ast)
+
+    def _visit_xbnf(self, n: ASTNode) -> Vocabulary:
+        self._builtin_visit_all(n)
         return Vocabulary(self._dictionary, ignore=self._ignore)
 
     def _visit_escaped_string(
         self,
         n: ASTNode,
     ) -> None:
-        # todo: duplicate casts look ugly
-        if cast(TerminalASTNode, n).lexeme not in self._dictionary:
+        if n.lexeme not in self._dictionary:
             self._dictionary[cast(TerminalASTNode, n).lexeme] = (
-                Vocabulary.Definition.make(cast(TerminalASTNode, n).literal)
+                Vocabulary.Definition.make(n.literal)
             )
 
 
-class NodeParsersGenerator(Visitor):
+class GenerateNodeParsers(Visitor):
     def __init__(self):
         super().__init__()
 
@@ -273,12 +250,10 @@ class NodeParsersGenerator(Visitor):
             str, Callable[[Parser, Optional[bool]], Optional[ASTNode]]
         ] = {}
 
-    def generate(
-        self, ast: ASTNode
-    ) -> dict[str, Callable[[Parser], Optional[ASTNode]]]:
+    def _visit_xbnf(self, n: ASTNode) -> dict[str, NodeParser]:
         # entry point is used
-        self._used.add(f"<{ast[0][0][1].lexeme}>")
-        self(ast)
+        self._used.add(f"<{n[0][0][1].lexeme}>")
+        self._builtin_visit_all(n)
 
         for node_type in self._used:
             if node_type not in self._node_parsers:
@@ -328,18 +303,6 @@ class NodeParsersGenerator(Visitor):
                 f"multiple production definitions for {nonterminal} are disregarded",
                 tag="Grammar",
             )
-
-    # todo: define __call__ to properly use visitor interface
-
-    def _visit_xbnf(
-        self,
-        n: ASTNode,
-    ) -> Any:
-        # n[0]: <production>
-        # n[1]: <rule>*
-        self(n[0])
-        for rule in n[1]:
-            self(rule)
 
     def _visit_production(
         self,

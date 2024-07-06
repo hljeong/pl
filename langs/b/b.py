@@ -25,7 +25,7 @@ class B:
     with open("langs/b/spec/b.xbnf") as xbnf_f:
         xbnf: str = xbnf_f.read()
 
-    grammar: Grammar = Grammar("b", xbnf, ignore=["#[^\n]*"])
+    grammar: Grammar = Grammar.from_xbnf("b", xbnf, ignore=["#[^\n]*"])
 
     class Parse:
         def __call__(self, prog) -> ASTNode:

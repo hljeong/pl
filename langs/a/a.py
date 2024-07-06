@@ -20,7 +20,7 @@ class A:
     with open("langs/a/spec/a.xbnf") as xbnf_f:
         xbnf: str = xbnf_f.read()
 
-    grammar: Grammar = Grammar("a", xbnf, ignore=["#[^\n]*"])
+    grammar: Grammar = Grammar.from_xbnf("a", xbnf, ignore=["#[^\n]*"])
 
     @staticmethod
     def count_instructions_generated(prog: str) -> int:

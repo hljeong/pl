@@ -18,7 +18,6 @@
   ) "=" rhs=(
     <operand> |
     <expression> |
-    <mem_access> |
     fn="alloc" "\(" arg=<operand> "\)" |
     fn="free" "\(" arg=<operand> "\)" |
     fn="stoi" "\(" arg=<operand> "\)" |
@@ -31,8 +30,6 @@
 
   "if" "\(" cond=<expression> "\)" body=<block> |
 
-  <mem_access> "=" <variable> ";" |
-
   "return" ret=<operand>? ";" |
 
   fn=<function> "\(" args=<argument_list>? "\)" ";";
@@ -42,8 +39,6 @@
 <argument_list> ::= first=<operand> rest=("," arg=<operand>)*;
 
 <array_access> ::= arr=<variable> "\[" idx=<operand> "\]";
-
-<mem_access> ::= "\[" <variable>  "\+" decimal_integer "\]";
 
 <expression> ::=
 

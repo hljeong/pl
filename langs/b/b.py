@@ -131,15 +131,15 @@ class B:
             n: ChoiceNonterminalASTNode,
         ) -> str:
             match n.choice:
-                # <statement> ::= (<variable> | <array_access>) "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)" | "stoi" "\(" <operand> "\)" | <function> "\(" <flattened_parameter_list>? "\)") ";";
+                # <statement> ::= (<variable> | <array_access>) "=" (<operand> | <expression> | "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)" | "stoi" "\(" <operand> "\)" | <function> "\(" <flattened_parameter_list>? "\)") ";";
                 case 0:
                     match n.rhs.choice:
-                        # <operand> | <expression> | <mem_access>
-                        case 0 | 1 | 2:
+                        # <operand> | <expression>
+                        case 0 | 1:
                             return f"{self(n.lhs)} = {self(n.rhs)};"
 
                         # "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)" | "stoi" "\(" <operand> "\)" | <function> "\(" <flattened_parameter_list>? "\)"
-                        case 3 | 4 | 5 | 6:
+                        case 2 | 3 | 4 | 5:
                             return (
                                 # todo: change n.rhs[2] to n.rhs.args when function calls are unified
                                 f"{self(n.lhs)} = {self(n.rhs.fn)}({self(n.rhs[2])});"
@@ -149,7 +149,7 @@ class B:
                             assert False
 
                 # <statement> ::= ("print" | "printi" | "read") "\(" <operand> "\)" ";" | <function> "\(" <flattened_argument_list>? "\)" ";";
-                case 1 | 6:
+                case 1 | 5:
                     # todo: change n[2] to n.args when function calls are unified
                     return f"{self(n.fn)}({self(n[2])});"
 
@@ -161,12 +161,8 @@ class B:
                 case 3:
                     return f"if ({self(n.cond)}) {self(n.body)}"
 
-                # <statement> ::= <mem_access> "=" <variable> ";";
-                case 4:
-                    return f"{self(n.lhs)} = {self(n.rhs)};"
-
                 # <statement> ::= "return" <operand>? ";";
-                case 5:
+                case 4:
                     return f"return{opt_p(' ', self(n.ret))};"
 
                 case _:  # pragma: no cover
@@ -187,12 +183,6 @@ class B:
 
                 case _:  # pragma: no cover
                     assert False
-
-        def _visit_mem_access(
-            self,
-            n: ASTNode,
-        ) -> str:
-            return f"[{self(n[1])} + {self(n[3])}]"
 
         def _visit_array_access(
             self,
@@ -398,7 +388,7 @@ class B:
             n: Node,
         ) -> Any:
             match n.choice:
-                # <statement> ::= (<variable> | <array_access>) "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)" | <function> "\(" <flattened_argument_list>? "\)") ";";
+                # <statement> ::= (<variable> | <array_access>) "=" (<operand> | <expression> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)" | <function> "\(" <flattened_argument_list>? "\)") ";";
                 case 0:
                     main_course: str = ""
                     dessert: str = (
@@ -416,29 +406,23 @@ class B:
                         case 1:
                             main_course = self(n.rhs[0])
 
-                        # <mem_access> ::= "\[" <variable> "+" decimal_integer "\]";
-                        case 2:
-                            main_course = join(
-                                f"l t1 r1 {self._cl[n.rhs[0][1].lexeme]} # t1 = [sp + alloc[{n.rhs[0][1].lexeme}]];",
-                                f"l t0 t1 {n.rhs[0][3].lexeme} # t0 = [t1 + {n.rhs[0][3].lexeme}]",
-                            )
-
                         # todo: wait free() does not belong here lol
                         # "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)"
-                        case 3 | 4:
+                        case 2 | 3:
                             load_operand: str = self._fetch_operand(n.rhs.arg, "a1")
 
                             # somehow n.rhs.choice works here...
                             # ^ no longer true but only shifted by 1
+                            # ^ yup this came back to bite me now its shifted by 2
                             main_course = join(
-                                f"setv a0 {n.rhs.choice + 1} # a0 = {n.rhs.choice + 1}; ({n.rhs.fn.lexeme})",
+                                f"setv a0 {n.rhs.choice + 2} # a0 = {n.rhs.choice + 2}; ({n.rhs.fn.lexeme})",
                                 load_operand,
                                 f"e # a0 = {n.rhs.fn.lexeme}(a1);",
                                 f"set t0 a0 # t0 = a0;",
                             )
 
                         # "stoi" "\(" <operand> "\)"
-                        case 5:
+                        case 4:
                             load_operand: str = self._fetch_operand(n.rhs.arg, "a1")
 
                             main_course = join(
@@ -449,7 +433,7 @@ class B:
                             )
 
                         # <function> "\(" <flattened_argument_list> "\)"
-                        case 6:
+                        case 5:
                             # todo: the second instruction is completely avoidable... just commit a0 directly
                             main_course = join(
                                 self._call_function(n.rhs),
@@ -525,16 +509,8 @@ class B:
 
                     return join(appetizer, main_course, dessert)
 
-                # <statement> ::= <mem_access> "=" <variable> ";";
-                case 4:
-                    return join(
-                        f"l t0 r1 {self._cl[n[0][1].lexeme]} # t0 = [sp + alloc[{self._cl[n[0][1].lexeme]}]];",
-                        f"l t1 r1 {self._cl[n[2].lexeme]} # t1 = [sp + alloc[{self._cl[n[2].lexeme]}]];",
-                        f"s t1 t0 {n[0][3].lexeme} # [t0 + {n[0][3].lexeme}] = t1;",
-                    )
-
                 # <statement> ::= "return" <operand>? ";";
-                case 5:
+                case 4:
                     return_operand: str = ""
 
                     # todo: operand loading rework
@@ -553,7 +529,7 @@ class B:
                     )
 
                 # <statement> ::= <function> "\(" <flattened_argument_list>? "\)" ";";
-                case 6:
+                case 5:
                     return self._call_function(n)
 
                 case _:  # pragma: no cover

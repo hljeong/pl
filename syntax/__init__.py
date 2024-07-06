@@ -6,5 +6,5 @@ from .ast import (
     AliasASTNode,
 )
 from .grammar import Grammar
-from .parser import ExpressionTerm, Parser
+from .parser import ExpressionTerm, Parser, NodeParser
 from .visitor import Visitor

@@ -58,19 +58,20 @@ class Grammar:
 class XBNF:
     vocabulary = Vocabulary(
         {
+            '"alias"': Vocabulary.Definition.make("alias"),
             '"<"': Vocabulary.Definition.make("<"),
-            "identifier": Vocabulary.Definition.builtin["identifier"],
             '">"': Vocabulary.Definition.make(">"),
             '"::="': Vocabulary.Definition.make("::="),
-            '"\\+"': Vocabulary.Definition.make("\\+"),
+            '"="': Vocabulary.Definition.make("="),
             '";"': Vocabulary.Definition.make(";"),
-            '"alias"': Vocabulary.Definition.make("alias"),
-            "escaped_string": Vocabulary.Definition.builtin["escaped_string"],
             '"\\("': Vocabulary.Definition.make("\\("),
-            '"\\?"': Vocabulary.Definition.make("\\?"),
             '"\\)"': Vocabulary.Definition.make("\\)"),
+            '"\\+"': Vocabulary.Definition.make("\\+"),
+            '"\\?"': Vocabulary.Definition.make("\\?"),
             '"\\*"': Vocabulary.Definition.make("\\*"),
             '"\\|"': Vocabulary.Definition.make("\\|"),
+            "identifier": Vocabulary.Definition.builtin["identifier"],
+            "escaped_string": Vocabulary.Definition.builtin["escaped_string"],
         }
     )
 
@@ -140,23 +141,33 @@ class XBNF:
             "<expression>",
             [
                 [
-                    ExpressionTerm("<expression>:0", "+"),
+                    ExpressionTerm("<term>", "+"),
                 ],
             ],
         ),
-        "<expression>:0": Parser.generate_nonterminal_parser(
-            "<expression>:0",
+        "<term>": Parser.generate_nonterminal_parser(
+            "<term>",
             [
                 [
+                    ExpressionTerm("<term>:0", "?"),
                     ExpressionTerm("<group>"),
                     ExpressionTerm("<multiplicity>", "?"),
+                ],
+            ],
+        ),
+        "<term>:0": Parser.generate_nonterminal_parser(
+            "<term>:0",
+            [
+                [
+                    ExpressionTerm("<label>"),
+                    ExpressionTerm('"="'),
                 ],
             ],
         ),
         "<group>": Parser.generate_nonterminal_parser(
             "<group>",
             [
-                [ExpressionTerm("<term>")],
+                [ExpressionTerm("<item>")],
                 [
                     ExpressionTerm('"\\("'),
                     ExpressionTerm("<body>"),
@@ -164,8 +175,8 @@ class XBNF:
                 ],
             ],
         ),
-        "<term>": Parser.generate_nonterminal_parser(
-            "<term>",
+        "<item>": Parser.generate_nonterminal_parser(
+            "<item>",
             [
                 [ExpressionTerm("<nonterminal>")],
                 [ExpressionTerm("<terminal>")],
@@ -186,20 +197,11 @@ class XBNF:
                 [ExpressionTerm('"\\+"')],
             ],
         ),
-        '"::="': Parser.generate_terminal_parser('"::="'),
-        '";"': Parser.generate_terminal_parser('";"'),
-        '"alias"': Parser.generate_terminal_parser('"alias"'),
-        '"<"': Parser.generate_terminal_parser('"<"'),
-        '">"': Parser.generate_terminal_parser('">"'),
-        '"\\|"': Parser.generate_terminal_parser('"\\|"'),
-        '"\\("': Parser.generate_terminal_parser('"\\("'),
-        '"\\)"': Parser.generate_terminal_parser('"\\)"'),
-        "escaped_string": Parser.generate_terminal_parser("escaped_string"),
-        "identifier": Parser.generate_terminal_parser("identifier"),
-        '"\\?"': Parser.generate_terminal_parser('"\\?"'),
-        '"\\*"': Parser.generate_terminal_parser('"\\*"'),
-        '"\\+"': Parser.generate_terminal_parser('"\\+"'),
-        "decimal_integer": Parser.generate_terminal_parser("decimal_integer"),
+        "<label>": Parser.generate_alias_parser(
+            "<label>",
+            "identifier",
+        ),
+        **Parser.generate_parsers_from_vocabulary(vocabulary),
     }
 
     grammar: Grammar = Grammar(
@@ -368,23 +370,30 @@ class GenerateNodeParsers(Visitor):
     ) -> list[ExpressionTerm]:
         ret = []
 
-        # node[0]: (<group> <multiplicity>?)+
-        # expression_term: <group> <multiplicity>?
-        for expression_term in n[0]:
-            # multiplicity: <multiplicity>?
-            optional_multiplicity: NonterminalASTNode = expression_term[1]
+        # node[0]: <term>+
+        # <term>: (<label> "=")? <group> <multiplicity>?
+        for term in n[0]:
+            label: Optional[str] = None
+            optional_label: NonterminalASTNode = term[0]
 
+            if optional_label:
+                label = optional_label[0][0].lexeme
+
+            # multiplicity: <multiplicity>?
+            optional_multiplicity: NonterminalASTNode = term[2]
+
+            multiplicity: str
             # default multiplicity is 1
-            if len(optional_multiplicity) == 0:
-                multiplicity: str = "1"
+            if not optional_multiplicity:
+                multiplicity = "1"
 
             else:
-                multiplicity: str = self(optional_multiplicity[0])
+                multiplicity = self(optional_multiplicity[0])
 
-            # expression_term[0]: <group>
-            group: str = self(expression_term[0])
+            # expression_term[1]: <group>
+            group: str = self(term[1])
 
-            ret.append(ExpressionTerm(group, multiplicity))
+            ret.append(ExpressionTerm(group, multiplicity, label))
 
         return ret
 
@@ -393,7 +402,7 @@ class GenerateNodeParsers(Visitor):
         n: ASTNode,
     ) -> str:
         match n.choice:
-            # node: <term>
+            # node: <item>
             case 0:
                 # term: <nonterminal> | <terminal>
                 term = n[0]

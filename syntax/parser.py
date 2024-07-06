@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import NamedTuple, Optional, Callable
 
 from common import Log
-from lexical import Token
+from lexical import Token, Vocabulary
 
 from .ast import (
     ASTNode,
@@ -21,9 +21,11 @@ class ExpressionTerm:
         self,
         node_type: str,
         multiplicity: str = "1",
+        label: Optional[str] = None,
     ):
         self._node_type: str = node_type
         self._multiplicity: str = multiplicity
+        self._label: Optional[str] = label
 
     @property
     def node_type(self) -> str:
@@ -32,6 +34,10 @@ class ExpressionTerm:
     @property
     def multiplicity(self) -> str:
         return self._multiplicity
+
+    @property
+    def label(self) -> Optional[str]:
+        return self._label
 
     def __str__(self) -> str:
         if type(self._multiplicity) is int and self._multiplicity == "":
@@ -164,7 +170,7 @@ class Parser:
     @staticmethod
     def generate_nonterminal_parser(
         nonterminal: str, body: list[list[ExpressionTerm]]
-    ) -> Callable[[Parser], Optional[ChoiceNonterminalASTNode]]:
+    ) -> NodeParser:
 
         def nonterminal_parser(
             parser: Parser, entry_point: bool = True
@@ -184,8 +190,8 @@ class Parser:
                     match expression_term.multiplicity:
                         # exactly 1 (default)
                         case "1":
-                            child_parse_result: Parser.Result = parser.parse_node(
-                                expression_term.node_type
+                            child_parse_result: Optional[Parser.Result] = (
+                                parser.parse_node(expression_term.node_type)
                             )
 
                             if child_parse_result is not None:
@@ -193,6 +199,8 @@ class Parser:
                                 child_n_tokens_consumed: int
                                 child_node, child_n_tokens_consumed = child_parse_result
 
+                                if expression_term.label:
+                                    child_node.extras["name"] = expression_term.label
                                 node.add(child_node)
                                 n_tokens_consumed += child_n_tokens_consumed
 
@@ -205,8 +213,8 @@ class Parser:
                             child: NonterminalASTNode = NonterminalASTNode(
                                 f"{nonterminal}:{expression_term_idx}{expression_term.multiplicity}"
                             )
-                            grandchild_parse_result: Parser.Result = parser.parse_node(
-                                expression_term.node_type
+                            grandchild_parse_result: Optional[Parser.Result] = (
+                                parser.parse_node(expression_term.node_type)
                             )
 
                             if grandchild_parse_result is not None:
@@ -219,6 +227,8 @@ class Parser:
                                 child.add(grandchild_node)
                                 n_tokens_consumed += grandchild_n_tokens_consumed
 
+                            if expression_term.label:
+                                child.extras["name"] = expression_term.label
                             node.add(child)
 
                         # any number
@@ -228,7 +238,7 @@ class Parser:
                             )
 
                             while True:
-                                grandchild_parse_result: Parser.Result = (
+                                grandchild_parse_result: Optional[Parser.Result] = (
                                     parser.parse_node(expression_term.node_type)
                                 )
 
@@ -245,6 +255,8 @@ class Parser:
                                 else:
                                     break
 
+                            if expression_term.label:
+                                child.extras["name"] = expression_term.label
                             node.add(child)
 
                         # at least 1
@@ -253,8 +265,8 @@ class Parser:
                                 f"{nonterminal}:{expression_term_idx}{expression_term.multiplicity}"
                             )
 
-                            grandchild_parse_result: Parser.Result = parser.parse_node(
-                                expression_term.node_type
+                            grandchild_parse_result: Optional[Parser.Result] = (
+                                parser.parse_node(expression_term.node_type)
                             )
                             if grandchild_parse_result is not None:
                                 grandchild_node: ASTNode
@@ -271,7 +283,7 @@ class Parser:
                                 break
 
                             while True:
-                                grandchild_parse_result: Parser.Result = (
+                                grandchild_parse_result: Optional[Parser.Result] = (
                                     parser.parse_node(expression_term.node_type)
                                 )
 
@@ -288,6 +300,8 @@ class Parser:
                                 else:
                                     break
 
+                            if expression_term.label:
+                                child.extras["name"] = expression_term.label
                             node.add(child)
 
                         case _:  # pragma: no cover
@@ -314,7 +328,7 @@ class Parser:
     def generate_alias_parser(
         alias: str,
         terminal: str,
-    ) -> Callable[[Parser], Optional[AliasASTNode]]:
+    ) -> NodeParser:
 
         def alias_parser(
             parser: Parser, entry_point: bool = False
@@ -329,7 +343,7 @@ class Parser:
     @staticmethod
     def generate_terminal_parser(
         terminal: str,
-    ) -> Callable[[Parser], Optional[TerminalASTNode]]:
+    ) -> NodeParser:
 
         def terminal_parser(
             parser: Parser, entry_point: bool = False
@@ -340,3 +354,12 @@ class Parser:
             return Parser.Result(TerminalASTNode(terminal, token), 1)
 
         return terminal_parser
+
+    @staticmethod
+    def generate_parsers_from_vocabulary(
+        vocabulary: Vocabulary,
+    ) -> dict[str, NodeParser]:
+        return {
+            terminal: Parser.generate_terminal_parser(terminal)
+            for terminal in vocabulary
+        }

@@ -44,11 +44,6 @@ class Visitor:
         if type(n) is ChoiceNonterminalASTNode:
             n_ = ChoiceNonterminalASTNode(n.node_type, n.choice, extras=dict(n.extras))
 
-        elif type(n) is AliasASTNode:
-            n_ = AliasASTNode(
-                n.node_type, n.aliased_node_type, n.token, extras=dict(n.extras)
-            )
-
         elif type(n) is NonterminalASTNode:
             n_ = NonterminalASTNode(n.node_type, extras=dict(n.extras))
 

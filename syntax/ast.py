@@ -41,6 +41,8 @@ class NonterminalASTNode(ASTNode):
 
     def add(self, child: ASTNode) -> None:
         self._children.append(child)
+        if "name" in child.extras:
+            self.__setattr__(child.extras["name"], child)
 
     def __str__(self) -> str:
         return f'{self.summary}{{{", ".join(map(str, self._children))}}}'

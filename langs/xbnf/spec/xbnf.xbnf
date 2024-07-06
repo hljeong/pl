@@ -8,14 +8,18 @@
 
 <body> ::= <expression> ("\|" <expression>)*;
 
-<expression> ::= (<group> <multiplicity>?)+;
+<expression> ::= <term>+;
 
-<group> ::= <term> | "\(" <body> "\)";
+<term> ::= (<label> "=")? <group> <multiplicity>?;
 
-<term> ::= <nonterminal> | <terminal>;
+<group> ::= <item> | "\(" <body> "\)";
+
+<item> ::= <nonterminal> | <terminal>;
 
 <nonterminal> ::= "<" identifier ">";
 
 <terminal> ::= escaped_string | identifier;
 
 <multiplicity> ::= "\?" | "\*" | "\+";
+
+alias <label> ::= identifier;

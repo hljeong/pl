@@ -1,16 +1,16 @@
-<a> ::= <section>*;
+<a> ::= sections=<section>*;
 
 <section> ::=  <code_section> | <data_section>;
 
-<data_section> ::= "\[data\]" <constant_definition>*;
+<data_section> ::= "\[data\]" definitions=<constant_definition>*;
 
-<constant_definition> ::= <label> escaped_string;
+<constant_definition> ::= label=<label> string=escaped_string;
 
-<code_section> ::= "\[code\]" <labeled_instruction>*;
+<code_section> ::= "\[code\]" instructions=<labeled_instruction>*;
 
-<labeled_instruction> ::= <label>* <instruction>;
+<labeled_instruction> ::= labels=<label>* ins=<instruction>;
 
-<instruction> ::= <legal_instruction> | <pseudoinstruction>;
+<instruction> ::= ins=<legal_instruction> | ins=<pseudoinstruction>;
 
 <legal_instruction> ::=
 
@@ -26,17 +26,17 @@
 
   <e_type_instruction>;
 
-<b_type_instruction> ::= <b_type_command> <reg> <reg> <imm>;
+<b_type_instruction> ::= cmd=<b_type_command> src1=<reg> src2=<reg> off=<imm>;
 
-<oi_type_instruction> ::= <oi_type_command> <reg> <reg> <imm>;
+<oi_type_instruction> ::= cmd=<oi_type_command> dst=<reg> src=<reg> imm=<imm>;
 
-<m_type_instruction> ::= <m_type_command> <reg> <reg> <imm>;
+<m_type_instruction> ::= cmd=<m_type_command> reg=<reg> base=<reg> off=<imm>;
 
-<o_type_instruction> ::= <o_type_command> <reg> <reg> <reg>;
+<o_type_instruction> ::= cmd=<o_type_command> dst=<reg> src1=<reg> src2=<reg>;
 
-<j_type_instruction> ::= <j_type_command> <imm>;
+<j_type_instruction> ::= cmd=<j_type_command> off=<imm>;
 
-<e_type_instruction> ::= <e_type_command>;
+<e_type_instruction> ::= cmd=<e_type_command>;
 
 <b_type_command> ::= "beq" | "bne";
 
@@ -68,63 +68,63 @@
 
 <pseudoinstruction> ::=
 
-  "jr" <reg> |
+  "jr" addr=<reg> |
 
-  "j" <lbl> |
+  "j" off=<lbl> |
 
-  "b" <reg> <imm> |
+  "b" cond=<reg> off=<imm> |
 
-  "b" <reg> <lbl> |
+  "b" cond=<reg> off=<lbl> |
 
-  "beq" <reg> <reg> <lbl> |
+  "beq" src1=<reg> src2=<reg> off=<lbl> |
 
-  "bne" <reg> <reg> <lbl> |
+  "bne" src1=<reg> src2=<reg> off=<lbl> |
 
-  "ne" <reg> <reg> <reg> |
+  "ne" dst=<reg> src1=<reg> src2=<reg> |
 
-  "nei" <reg> <reg> <imm> |
+  "nei" dst=<reg> src=<reg> imm=<imm> |
 
-  "not" <reg> <reg> |
+  "not" dst=<reg> src=<reg> |
 
-  "set" <reg> <reg> |
+  "set" dst=<reg> src=<reg> |
 
-  "setv" <reg> <val> |
+  "setv" dst=<reg> val=<val> |
 
-  "setv" <reg> <lbl> |
+  "setv" dst=<reg> val=<lbl> |
 
-  "addv" <reg> <reg> <val> |
+  cmd="addv" dst=<reg> src=<reg> val=<val> |
 
-  "subv" <reg> <reg> <val> |
+  cmd="subv" dst=<reg> src=<reg> val=<val> |
 
-  "mulv" <reg> <reg> <val> |
+  cmd="mulv" dst=<reg> src=<reg> val=<val> |
 
-  "divv" <reg> <reg> <val> |
+  cmd="divv" dst=<reg> src=<reg> val=<val> |
 
-  "modv" <reg> <reg> <val> |
+  cmd="modv" dst=<reg> src=<reg> val=<val> |
 
-  "orv" <reg> <reg> <val> |
+  cmd="orv" dst=<reg> src=<reg> val=<val> |
 
-  "andv" <reg> <reg> <val> |
+  cmd="andv" dst=<reg> src=<reg> val=<val> |
 
-  "xorv" <reg> <reg> <val> |
+  cmd="xorv" dst=<reg> src=<reg> val=<val> |
 
-  "eqv" <reg> <reg> <val> |
+  cmd="eqv" dst=<reg> src=<reg> val=<val> |
 
-  "nev" <reg> <reg> <val> |
+  cmd="nev" dst=<reg> src=<reg> val=<val> |
 
-  "gtv" <reg> <reg> <val> |
+  cmd="gtv" dst=<reg> src=<reg> val=<val> |
 
-  "gev" <reg> <reg> <val> |
+  cmd="gev" dst=<reg> src=<reg> val=<val> |
 
-  "ltv" <reg> <reg> <val> |
+  cmd="ltv" dst=<reg> src=<reg> val=<val> |
 
-  "lev" <reg> <reg> <val> |
+  cmd="lev" dst=<reg> src=<reg> val=<val> |
 
-  "lsv" <reg> <reg> <val> |
+  cmd="lsv" dst=<reg> src=<reg> val=<val> |
 
-  "rsv" <reg> <reg> <val>;
+  cmd="rsv" dst=<reg> src=<reg> val=<val>;
 
-<label> ::= identifier ":";
+<label> ::= label=identifier ":";
 
 alias <reg> ::= identifier;
 

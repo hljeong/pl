@@ -2,7 +2,7 @@
 
 <declaration> ::=
 
-  "fn" name=<function> "\(" params=<parameter_list>? "\)" body=<block>;
+  "fn" name=<function> "\(" params=<flattened_parameter_list>? "\)" body=<block>;
 
 <block> ::=
 
@@ -22,7 +22,7 @@
     fn="alloc" "\(" arg=<operand> "\)" |
     fn="free" "\(" arg=<operand> "\)" |
     fn="stoi" "\(" arg=<operand> "\)" |
-    fn=<function> "\(" args=<argument_list>? "\)"
+    fn=<function> "\(" args=<flattened_argument_list>? "\)"
   ) ";" |
 
   fn=("print" | "printi" | "read") "\(" arg=<operand> "\)" ";" |
@@ -35,11 +35,11 @@
 
   "return" ret=<operand>? ";" |
 
-  fn=<function> "\(" args=<argument_list>? "\)" ";";
+  fn=<function> "\(" args=<flattened_argument_list>? "\)" ";";
 
-<parameter_list> ::= first=<variable> rest=("," param=<variable>)*;
+<flattened_parameter_list> ::= <variable>*;
 
-<argument_list> ::= first=<operand> rest=("," arg=<operand>)*;
+<flattened_argument_list> ::= <variable>*;
 
 <array_access> ::= arr=<variable> "\[" idx=<operand> "\]";
 

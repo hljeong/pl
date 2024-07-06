@@ -11,6 +11,7 @@ from syntax import (
     Visitor,
     NonterminalASTNode,
     ChoiceNonterminalASTNode,
+    AliasASTNode,
 )
 from runtime import Ins, Prog
 
@@ -89,7 +90,7 @@ class A(Lang):
             n_: NonterminalASTNode = NonterminalASTNode("<a>")
             code_section: NonterminalASTNode = NonterminalASTNode("<code_section>")
             data_section: NonterminalASTNode = NonterminalASTNode("<data_section>")
-            for c in n[0]:
+            for c in n.sections:
                 c_: ChoiceNonterminalASTNode = self(c)
                 match c_.choice:
                     case 0:
@@ -103,52 +104,55 @@ class A(Lang):
                     case _:
                         assert False
 
+            code_section.extras["name"] = "code"
             n_.add(code_section)
+            data_section.extras["name"] = "data"
             n_.add(data_section)
             return n_
 
         def _visit_data_section(self, n: ASTNode) -> ASTNode:
             n_: NonterminalASTNode = NonterminalASTNode("<data_section>")
-            for c in n[1]:
+            for c in n.definitions:
                 n_.add(self(c))
 
+            n_.extras["name"] = "definitions"
             return n_
 
         def _visit_constant_definition(self, n: ASTNode) -> ASTNode:
-            n_: NonterminalASTNode = NonterminalASTNode("<constant_definition>")
+            n_: AliasASTNode = AliasASTNode(
+                "<constant_definition>", "escaped_string", n.string.token
+            )
             # should technically be able to support multiple labels...
             # but there is no reason for that
-            n_.extras["labels"] = [self(n[0])]
-            n_.add(self(n[1]))
-
+            n_.extras["labels"] = [self(n.label)]
             return n_
 
         def _visit_code_section(self, n: ASTNode) -> ASTNode:
             n_: NonterminalASTNode = NonterminalASTNode("<code_section>")
-            for c in n[1]:
+            for c in n.instructions:
                 n_.add(self(c))
 
             return n_
 
         def _visit_labeled_instruction(self, n: ASTNode) -> ASTNode:
             n_: ChoiceNonterminalASTNode = ChoiceNonterminalASTNode(
-                "<instruction>", choice=n[1].choice
+                "<instruction>", choice=n.ins.choice
             )
 
             labels: list[str] = []
 
-            if n[0]:
-                for c in n[0]:
+            if n.labels:
+                for c in n.labels:
                     labels.append(self(c))
 
-            n_.add(self(n[1])[0])
-            # add labels to n_[0] since <instruction> layer will be stripped in translation
-            n_[0].extras["labels"] = labels
+            n_.add(self(n.ins)[0])
+            # add labels to n_.ins since <instruction> layer will be stripped in translation
+            n_.ins.extras["labels"] = labels
 
             return n_
 
         def _visit_label(self, n: ASTNode) -> str:
-            return n[0].lexeme
+            return n.label.lexeme
 
     class Translate(Visitor):
 
@@ -164,11 +168,11 @@ class A(Lang):
                 match c.choice:
                     # <instruction> ::= <legal_instruction>;
                     case 0:
-                        n_.add(self(c[0]))
+                        n_.add(self(c.ins))
 
                     # <instruction> ::= <pseudoinstruction>;
                     case 1:
-                        translated: tuple[ASTNode] = self(c[0])
+                        translated: tuple[ASTNode] = self(c.ins)
 
                         for gc in translated:
                             n_.add(gc)
@@ -177,33 +181,34 @@ class A(Lang):
 
         def _visit_pseudoinstruction(self, n: ASTNode) -> tuple[ASTNode]:
             # todo: probably can't just copy extras if it contains more than labels
+            # todo: now extras contain grammatic term name info... does update work?
             def ins(code: str, extras: dict[str, Any] = {}) -> ASTNode:
                 n_: ASTNode = A.Parse()(code, entry_point="<instruction>")[0]
-                n_.extras = dict(extras)
+                n_.extras.update(dict(extras))
                 return n_
 
             match n.choice:
                 # <pseudoinstruction> ::= "jr" <reg>;
                 # -> addi pc <reg> 0
                 case 0:
-                    return (ins(f"addi pc {n[1].lexeme} 0", n.extras),)
+                    return (ins(f"addi pc {n.addr.lexeme} 0", n.extras),)
 
                 # <pseudoinstruction> ::= "j" <lbl>;
                 # -> j <lbl> # unchanged -- to be resolved
                 case 1:
-                    return (ins(f"j {n[1].lexeme}", n.extras),)
+                    return (ins(f"j {n.off.lexeme}", n.extras),)
 
                 # <pseudoinstruction> ::= "b" <reg> <imm> | "b" <reg> <lbl>;
                 # -> bne <reg> zr <imm|lbl> # latter case to be resolved
                 case 2 | 3:
-                    return (ins(f"bne {n[1].lexeme} zr {n[2].lexeme}", n.extras),)
+                    return (ins(f"bne {n.cond.lexeme} zr {n.off.lexeme}", n.extras),)
 
                 # <pseudoinstruction> ::= "beq" <reg> <reg> <lbl>;
                 # -> beq <reg> <reg> <lbl> # to be resolved
                 case 4:
                     return (
                         ins(
-                            f"beq {n[1].lexeme} {n[2].lexeme} {n[3].lexeme}",
+                            f"beq {n.src1.lexeme} {n.src2.lexeme} {n.off.lexeme}",
                             n.extras,
                         ),
                     )
@@ -213,7 +218,7 @@ class A(Lang):
                 case 5:
                     return (
                         ins(
-                            f"bne {n[1].lexeme} {n[2].lexeme} {n[3].lexeme}",
+                            f"bne {n.src1.lexeme} {n.src2.lexeme} {n.off.lexeme}",
                             n.extras,
                         ),
                     )
@@ -223,7 +228,7 @@ class A(Lang):
                 case 6:
                     return (
                         ins(
-                            f"xor {n[1].lexeme} {n[2].lexeme} {n[3].lexeme}",
+                            f"xor {n.dst.lexeme} {n.src1.lexeme} {n.src2.lexeme}",
                             n.extras,
                         ),
                     )
@@ -233,7 +238,7 @@ class A(Lang):
                 case 7:
                     return (
                         ins(
-                            f"xori {n[1].lexeme} {n[2].lexeme} {n[3].lexeme}",
+                            f"xori {n.dst.lexeme} {n.src.lexeme} {n.imm.lexeme}",
                             n.extras,
                         ),
                     )
@@ -241,23 +246,23 @@ class A(Lang):
                 # <pseudoinstruction> ::= "not" <reg> <reg>;
                 # -> eqi <reg> <reg> <imm>
                 case 8:
-                    return (ins(f"eqi {n[1].lexeme} {n[2].lexeme} 0", n.extras),)
+                    return (ins(f"eqi {n.dst.lexeme} {n.src.lexeme} 0", n.extras),)
 
                 # <pseudoinstruction> ::= "set" <reg> <reg>;
                 # -> addi <reg> <reg> 0
                 case 9:
-                    return (ins(f"addi {n[1].lexeme} {n[2].lexeme} 0", n.extras),)
+                    return (ins(f"addi {n.dst.lexeme} {n.src.lexeme} 0", n.extras),)
 
                 # <pseudoinstruction> ::= "setv" <reg> <val>;
                 # -> addi <reg> zr <val>
                 # todo: big vals
                 case 10:
-                    return (ins(f"addi {n[1].lexeme} zr {n[2].lexeme}", n.extras),)
+                    return (ins(f"addi {n.dst.lexeme} zr {n.val.lexeme}", n.extras),)
 
                 # <pseudoinstruction> ::= "setv" <reg> <lbl>;
                 # -> setv <reg> <lbl> # unchanged -- to be resolved
                 case 11:
-                    return (ins(f"setv {n[1].lexeme} {n[2].lexeme}", n.extras),)
+                    return (ins(f"setv {n.dst.lexeme} {n.val.lexeme}", n.extras),)
 
                 # <pseudoinstruction> ::= "addv" <reg> <reg> <val> |
                 #                         "subv" <reg> <reg> <val> |
@@ -297,7 +302,7 @@ class A(Lang):
                 ):
                     return (
                         ins(
-                            f"{n[0].lexeme[: -1]}i {n[1].lexeme} {n[2].lexeme} {n[3].lexeme}",
+                            f"{n.cmd.lexeme[: -1]}i {n.dst.lexeme} {n.src.lexeme} {n.val.lexeme}",
                             n.extras,
                         ),
                     )
@@ -341,7 +346,7 @@ class A(Lang):
                 self, n: ASTNode, loc: Mutable[int], **ctx: Any
             ) -> None:
                 self._locate_and_map(n, loc=loc, **ctx)
-                loc += len(unescape(n[0].lexeme[1:-1])) + 1
+                loc += len(unescape(n.lexeme[1:-1])) + 1
 
         @staticmethod
         def _combine(v: Visitor, n: ASTNode, **ctx) -> Prog:
@@ -370,46 +375,46 @@ class A(Lang):
                 # <legal_instruction> ::= <b_type_instruction>;
                 case 0:
                     ins += Ins.Frag(0b0, 1)
-                    ins += self(n[0][0])
-                    ins += self(n[0][1])
-                    ins += self(n[0][2])
-                    ins += Ins.Frag(n[0][3].literal, 20, True)
+                    ins += self(n[0].cmd)
+                    ins += self(n[0].src1)
+                    ins += self(n[0].src2)
+                    ins += Ins.Frag(n[0].off.literal, 20, True)
 
                 # <legal_instruction> ::= <oi_type_instruction>;
                 case 1:
                     ins += Ins.Frag(0b10, 2)
-                    ins += self(n[0][0])
-                    ins += self(n[0][1])
-                    ins += self(n[0][2])
-                    ins += Ins.Frag(n[0][3].literal, 16, True)
+                    ins += self(n[0].cmd)
+                    ins += self(n[0].dst)
+                    ins += self(n[0].src)
+                    ins += Ins.Frag(n[0].imm.literal, 16, True)
 
                 # <legal_instruction> ::= <m_type_instruction>;
                 case 2:
                     ins += Ins.Frag(0b110, 3)
-                    ins += self(n[0][0])
-                    ins += self(n[0][1])
-                    ins += self(n[0][2])
-                    ins += Ins.Frag(n[0][3].literal, 18, True)
+                    ins += self(n[0].cmd)
+                    ins += self(n[0].reg)
+                    ins += self(n[0].base)
+                    ins += Ins.Frag(n[0].off.literal, 18, True)
 
                 # <legal_instruction> ::= <o_type_instruction>;
                 case 3:
                     ins += Ins.Frag(0b1110, 4)
-                    ins += self(n[0][0])
-                    ins += self(n[0][1])
-                    ins += self(n[0][2])
-                    ins += self(n[0][3])
+                    ins += self(n[0].cmd)
+                    ins += self(n[0].dst)
+                    ins += self(n[0].src1)
+                    ins += self(n[0].src2)
                     ins += Ins.Frag(0, 9)
 
                 # <legal_instruction> ::= <j_type_instruction>;
                 case 4:
                     ins += Ins.Frag(0b11110, 5)
-                    ins += self(n[0][0])
-                    ins += Ins.Frag(n[0][1].literal, 27, True)
+                    ins += self(n[0].cmd)
+                    ins += Ins.Frag(n[0].off.literal, 27, True)
 
                 # <legal_instruction> ::= <e_type_instruction>;
                 case 5:
                     ins += Ins.Frag(0b111110, 6)
-                    ins += self(n[0][0])
+                    ins += self(n[0].cmd)
                     ins += Ins.Frag(0, 25)
 
             ins_count += 1
@@ -449,14 +454,14 @@ class A(Lang):
                 # <pseudoinstruction> ::= "j" <lbl>;
                 case 1:
                     return self(
-                        ins(f"addi pc pc {self._resolve(n, n[1], label_map)}"), **ctx
+                        ins(f"addi pc pc {self._resolve(n, n.off, label_map)}"), **ctx
                     )
 
                 # <pseudoinstruction> ::= "bne" <reg> zr <lbl>;
                 case 3:
                     return self(
                         ins(
-                            f"bne {n[1].lexeme} zr {self._resolve(n, n[3], label_map)}"
+                            f"bne {n.cond.lexeme} zr {self._resolve(n, n.off, label_map)}"
                         ),
                         **ctx,
                     )
@@ -465,7 +470,7 @@ class A(Lang):
                 case 4:
                     return self(
                         ins(
-                            f"bne {n[1].lexeme} {n[2].lexeme} {self._resolve(n, n[3], label_map)}"
+                            f"bne {n.src1.lexeme} {n.src2.lexeme} {self._resolve(n, n.off, label_map)}"
                         ),
                         **ctx,
                     )
@@ -474,7 +479,7 @@ class A(Lang):
                 case 5:
                     return self(
                         ins(
-                            f"bne {n[1].lexeme} {n[2].lexeme} {self._resolve(n, n[3], label_map)}"
+                            f"bne {n.src1.lexeme} {n.src2.lexeme} {self._resolve(n, n.off, label_map)}"
                         ),
                         **ctx,
                     )
@@ -483,7 +488,7 @@ class A(Lang):
                 case 11:
                     return self(
                         ins(
-                            f"addi {n[1].lexeme} pc {self._resolve(n, n[2], label_map)}"
+                            f"addi {n.dst.lexeme} pc {self._resolve(n, n.val, label_map)}"
                         ),
                         **ctx,
                     )
@@ -495,7 +500,7 @@ class A(Lang):
         def _visit_constant_definition(self, n: ASTNode, **_) -> Prog:
             # do not forget '\0'!!!
             return cast(
-                Prog, bytes(list(ord(c) for c in unescape(n[0].lexeme[1:-1])) + [0])
+                Prog, bytes(list(ord(c) for c in unescape(n.lexeme[1:-1])) + [0])
             )
 
         def _visit_reg(self, n: ASTNode, **_) -> Ins.Frag:

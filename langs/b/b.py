@@ -42,48 +42,48 @@ class B:
             n_: NonterminalASTNode = NonterminalASTNode("<b>")
             main_fn_declared: bool = False
             declarations: dict[str, NonterminalASTNode] = {}
-            for c in n[0]:
+            for c in n.declarations:
                 declaration: NonterminalASTNode = self(c)
-                fn_name: str = declaration[1].lexeme
+                name: str = declaration.name.lexeme
 
-                if fn_name in declarations:
+                if name in declarations:
                     # todo: log error
-                    raise RuntimeError(f"function '{fn_name}' declared multiple times")
+                    raise RuntimeError(f"function '{name}' declared multiple times")
 
-                if fn_name == "main":
+                if name == "main":
                     if main_fn_declared:
                         # todo: log error
-                        raise RuntimeError(
-                            f"function '{fn_name}' declared multiple times"
-                        )
+                        raise RuntimeError(f"function '{name}' declared multiple times")
 
                     n_.add(declaration)
                     main_fn_declared = True
 
                 else:
-                    declarations[fn_name] = declaration
+                    declarations[name] = declaration
 
             if not main_fn_declared:
                 # todo: log error
                 raise RuntimeError("main function not declared")
 
-            for fn_name in declarations:
-                n_.add(declarations[fn_name])
+            for name in declarations:
+                n_.add(declarations[name])
 
             return n_
 
         def _visit_argument_list(self, n: ASTNode) -> ASTNode:
             n_: NonterminalASTNode = NonterminalASTNode("<flattened_argument_list>")
-            n_.add(self(n[0]))
-            for c in n[1]:
-                n_.add(self(c[1]))
+            n_.add(self(n.first))
+            for c in n.rest:
+                n_.add(self(c.arg))
+            n_.extras["name"] = "args"
             return n_
 
         def _visit_parameter_list(self, n: ASTNode) -> ASTNode:
             n_: NonterminalASTNode = NonterminalASTNode("<flattened_parameter_list>")
-            n_.add(self(n[0]))
-            for c in n[1]:
-                n_.add(self(c[1]))
+            n_.add(self(n.first))
+            for c in n.rest:
+                n_.add(self(c.param))
+            n_.extras["name"] = "params"
             return n_
 
     class Print(Visitor):
@@ -97,7 +97,7 @@ class B:
             return sjoini(self(c) for c in n)
 
         def _visit_declaration(self, n: ASTNode) -> str:
-            return f"fn {self(n[1])}({self(n[3])}) {self(n[5])}"
+            return f"fn {self(n.name)}({self(n.params)}) {self(n.body)}"
 
         def _visit_flattened_argument_list(self, n: ASTNode) -> str:
             return ", ".join(self(c) for c in n)
@@ -112,12 +112,12 @@ class B:
             match n.choice:
                 # <block> ::= <statement>;
                 case 0:
-                    return self(n[0])
+                    return self(n.statement)
 
                 # <block> ::= "{" <statement>* "}";
                 case 1:
-                    inner: str = self(n[1])
-                    if len(inner) == 0:
+                    inner: str = self(n.statements)
+                    if not inner:
                         return "{}"
 
                     else:
@@ -133,37 +133,41 @@ class B:
             match n.choice:
                 # <statement> ::= (<variable> | <array_access>) "=" (<operand> | <expression> | <mem_access> | "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)" | "stoi" "\(" <operand> "\)" | <function> "\(" <flattened_parameter_list>? "\)") ";";
                 case 0:
-                    match n[2].choice:
+                    match n.rhs.choice:
                         # <operand> | <expression> | <mem_access>
                         case 0 | 1 | 2:
-                            return f"{self(n[0])} = {self(n[2])};"
+                            return f"{self(n.lhs)} = {self(n.rhs)};"
 
                         # "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)" | "stoi" "\(" <operand> "\)" | <function> "\(" <flattened_parameter_list>? "\)"
                         case 3 | 4 | 5 | 6:
-                            return f"{self(n[0])} = {self(n[2][0])}({self(n[2][2])});"
+                            return (
+                                # todo: change n.rhs[2] to n.rhs.args when function calls are unified
+                                f"{self(n.lhs)} = {self(n.rhs.fn)}({self(n.rhs[2])});"
+                            )
 
                         case _:  # pragma: no cover
                             assert False
 
                 # <statement> ::= ("print" | "printi" | "read") "\(" <operand> "\)" ";" | <function> "\(" <flattened_argument_list>? "\)" ";";
                 case 1 | 6:
-                    return f"{self(n[0])}({self(n[2])});"
+                    # todo: change n[2] to n.args when function calls are unified
+                    return f"{self(n.fn)}({self(n[2])});"
 
                 # <statement> ::= "while" "\(" <expression> "\)" <block>;
                 case 2:
-                    return f"while ({self(n[2])}) {self(n[4])}"
+                    return f"while ({self(n.cond)}) {self(n.body)}"
 
                 # <statement> ::= "if" "\(" <expression> "\)" <block>;
                 case 3:
-                    return f"if ({self(n[2])}) {self(n[4])}"
+                    return f"if ({self(n.cond)}) {self(n.body)}"
 
                 # <statement> ::= <mem_access> "=" <variable> ";";
                 case 4:
-                    return f"{self(n[0])} = {self(n[2])};"
+                    return f"{self(n.lhs)} = {self(n.rhs)};"
 
                 # <statement> ::= "return" <operand>? ";";
                 case 5:
-                    return f"return{opt_p(' ', self(n[1]))};"
+                    return f"return{opt_p(' ', self(n.ret))};"
 
                 case _:  # pragma: no cover
                     assert False
@@ -175,11 +179,11 @@ class B:
             match n.choice:
                 # <expression> ::= <unary_operator> <operand>;
                 case 0:
-                    return f"{self(n[0])}{self(n[1])}"
+                    return f"{self(n.uop)}{self(n.op)}"
 
                 # <expression> ::= <operand> <binary_operator> <operand>;
                 case 1:
-                    return f"{self(n[0])} {self(n[1])} {self(n[2])}"
+                    return f"{self(n.lop)} {self(n.bop)} {self(n.rop)}"
 
                 case _:  # pragma: no cover
                     assert False
@@ -194,7 +198,7 @@ class B:
             self,
             n: ASTNode,
         ) -> str:
-            return f"{self(n[0])}[{self(n[2])}]"
+            return f"{self(n.arr)}[{self(n.idx)}]"
 
     # pass for aggregating string constants...
     # might just be a construct created by myself
@@ -311,11 +315,11 @@ class B:
             match n.choice:
                 # <block> ::= <statement>;
                 case 0:
-                    return self(n[0])
+                    return self(n.statement)
 
                 # <block> ::= "{" <statement>* "}";
                 case 1:
-                    return tabbed(self(n[1]))
+                    return tabbed(self(n.statements))
 
         # <declaration> ::= "fn" <function> "\(" <parameter_list>? "\)" <block>;
         def _visit_declaration(self, n: ASTNode) -> Any:
@@ -332,22 +336,22 @@ class B:
             # todo: could be prettier
             # store arguments in local variables
             commit_args: str = ""
-            if len(n[3]) != 0:
+            if n.params:
                 commit_args = joini(
                     self._commit_var(c.lexeme, f"a{i}")
-                    for i, c in enumerate(n[3][0])
+                    for i, c in enumerate(n.params[0])
                     if i < 6
                 )
 
-                if len(n[3][0]) > 6:
+                if len(n.params[0]) > 6:
                     commit_args = join(
                         commit_args,
                         joini(
                             join(
                                 f"l t0 sp {self._cst['stack_frame'] + (i - 6) * 4} # t0 = [sp + {self._cst['stack_frame'] + (i - 6) * 4}]",
-                                self._commit_var(n[3][0][i].lexeme, "t0"),
+                                self._commit_var(n.params[0][i].lexeme, "t0"),
                             )
-                            for i in range(6, len(n[3][0]))
+                            for i in range(6, len(n.params[0]))
                         ),
                     )
 
@@ -377,12 +381,12 @@ class B:
             )
 
             # <block> ::= <statement> | "{" <statements>* "}";
-            match n[5].choice:
+            match n.body.choice:
                 case 0:
-                    main_course = tabbed(self(n[5]))
+                    main_course = tabbed(self(n.body))
 
                 case 1:
-                    main_course = self(n[5])
+                    main_course = self(n.body)
 
                 case _:  # pragma: no cover
                     assert False
@@ -398,49 +402,49 @@ class B:
                 case 0:
                     main_course: str = ""
                     dessert: str = (
-                        self._commit_var(n[0][0].lexeme, "t0")
-                        if n[0].choice == 0
-                        else self._commit_array_access(n[0][0], "t0")
+                        self._commit_var(n.lhs[0].lexeme, "t0")
+                        if n.lhs.choice == 0
+                        else self._commit_array_access(n.lhs[0], "t0")
                     )
 
-                    match n[2].choice:
+                    match n.rhs.choice:
                         # <operand> ::= <variable> | <string> | <array_access> | decimal_integer;
                         case 0:
-                            main_course = self._fetch_operand(n[2][0], "t0")
+                            main_course = self._fetch_operand(n.rhs[0], "t0")
 
                         # <expression>
                         case 1:
-                            main_course = self(n[2][0])
+                            main_course = self(n.rhs[0])
 
                         # <mem_access> ::= "\[" <variable> "+" decimal_integer "\]";
                         case 2:
                             main_course = join(
-                                f"l t1 r1 {self._cl[n[2][0][1].lexeme]} # t1 = [sp + alloc[{n[2][0][1].lexeme}]];",
-                                f"l t0 t1 {n[2][0][3].lexeme} # t0 = [t1 + {n[2][0][3].lexeme}]",
+                                f"l t1 r1 {self._cl[n.rhs[0][1].lexeme]} # t1 = [sp + alloc[{n.rhs[0][1].lexeme}]];",
+                                f"l t0 t1 {n.rhs[0][3].lexeme} # t0 = [t1 + {n.rhs[0][3].lexeme}]",
                             )
 
                         # todo: wait free() does not belong here lol
                         # "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)"
                         case 3 | 4:
-                            load_operand: str = self._fetch_operand(n[2][2], "a1")
+                            load_operand: str = self._fetch_operand(n.rhs.arg, "a1")
 
-                            # somehow n[2].choice works here...
+                            # somehow n.rhs.choice works here...
                             # ^ no longer true but only shifted by 1
                             main_course = join(
-                                f"setv a0 {n[2].choice + 1} # a0 = {n[2].choice + 1}; ({n[2][0].lexeme})",
+                                f"setv a0 {n.rhs.choice + 1} # a0 = {n.rhs.choice + 1}; ({n.rhs.fn.lexeme})",
                                 load_operand,
-                                f"e # a0 = {n[2][0].lexeme}(a1);",
+                                f"e # a0 = {n.rhs.fn.lexeme}(a1);",
                                 f"set t0 a0 # t0 = a0;",
                             )
 
                         # "stoi" "\(" <operand> "\)"
                         case 5:
-                            load_operand: str = self._fetch_operand(n[2][2], "a1")
+                            load_operand: str = self._fetch_operand(n.rhs.arg, "a1")
 
                             main_course = join(
                                 "setv a0 2 # a0 = 2; (stoi)",
                                 load_operand,
-                                f"e # a0 = {n[2][0].lexeme}(a1);",
+                                f"e # a0 = {n.rhs.fn.lexeme}(a1);",
                                 f"set t0 a0 # t0 = a0;",
                             )
 
@@ -448,7 +452,7 @@ class B:
                         case 6:
                             # todo: the second instruction is completely avoidable... just commit a0 directly
                             main_course = join(
-                                self._call_function(n[2]),
+                                self._call_function(n.rhs),
                                 "set t0 a0 # t0 = a0;",
                             )
 
@@ -459,11 +463,11 @@ class B:
 
                 # <statement> ::= ("print" | "printi" | "read") "\(" <operand> "\)" ";";
                 case 1:
-                    appetizer: str = self._fetch_operand(n[2], "a1")
+                    appetizer: str = self._fetch_operand(n.arg, "a1")
 
                     main_course: str = ""
                     # "print" | "printi" | "read"
-                    match n[0].choice:
+                    match n.fn.choice:
                         # "print"
                         case 0:
                             main_course = join(
@@ -494,10 +498,10 @@ class B:
                 case 2:
                     start_label: str = self._label()
                     end_label: str = self._label()
-                    main_course: str = tabbed(self(n[4]))
+                    main_course: str = tabbed(self(n.body))
                     appetizer: str = join(
                         f"{start_label}:",
-                        self(n[2]),
+                        self(n.cond),
                         f"eqv t0 t0 0 # t0 = (t0 == 0);",
                         f"b t0 {end_label} # if (t0) goto {end_label};",
                     )
@@ -511,9 +515,9 @@ class B:
                 # <statement> ::= "if" "\(" <expression> "\)" <block>;
                 case 3:
                     label: str = self._label()
-                    main_course: str = tabbed(self(n[4]))
+                    main_course: str = tabbed(self(n.body))
                     appetizer: str = join(
-                        self(n[2]),
+                        self(n.cond),
                         f"eqv t0 t0 0 # t0 = (t0 == 0);",
                         f"b t0 {label} # if (t0) goto {label};",
                     )
@@ -535,7 +539,7 @@ class B:
 
                     # todo: operand loading rework
                     if len(n[1]) != 0:
-                        return_operand = self._fetch_operand(n[1][0], "a0")
+                        return_operand = self._fetch_operand(n.ret[0], "a0")
 
                     # todo: duplicate of function dessert
                     return join(
@@ -556,27 +560,27 @@ class B:
                     assert False
 
         def _call_function(self, n: ASTNode) -> str:
-            fn_name: str = n[0].lexeme
+            fn_name: str = n.fn.lexeme
             fn_label: str = self._s[fn_name]["label"]
 
             fetch_args: str = ""
-            if len(n[2]) != 0:
+            if n.args:
                 # todo: support argument overflow
                 fetch_args = joini(
                     self._fetch_operand(c, f"a{i}")
-                    for i, c in enumerate(n[2][0])
+                    for i, c in enumerate(n.args[0])
                     if i < 6
                 )
 
-                if len(n[2][0]) > 6:
+                if len(n.args[0]) > 6:
                     fetch_args = join(
                         fetch_args,
                         joini(
                             join(
-                                self._fetch_operand(n[2][0][i], "t0"),
+                                self._fetch_operand(n.args[0][i], "t0"),
                                 self._commit_var(f"#a{i}", "t0"),
                             )
-                            for i in range(6, len(n[2][0]))
+                            for i in range(6, len(n.args[0]))
                         ),
                     )
 
@@ -595,8 +599,8 @@ class B:
 
         def _commit_array_access(self, n: ASTNode, reg: str) -> str:
             return join(
-                self._fetch_var(n[0], "t2"),
-                self._fetch_operand(n[2], "t3"),
+                self._fetch_var(n.arr, "t2"),
+                self._fetch_operand(n.idx, "t3"),
                 f"lsv t3 t3 2 # t3 = t3 << 2;",
                 f"add t2 t2 t3 # t2 = t2 + t3;",
                 f"s {reg} t2 0 # {reg} = [t2 + 0];",
@@ -610,8 +614,8 @@ class B:
 
         def _fetch_array_access(self, n: ASTNode, reg: str) -> str:
             return join(
-                self._fetch_var(n[0], "t2"),
-                self._fetch_operand(n[2], "t3"),
+                self._fetch_var(n.arr, "t2"),
+                self._fetch_operand(n.idx, "t3"),
                 f"lsv t3 t3 2 # t3 = t3 << 2;",
                 f"add t2 t2 t3 # t2 = t2 + t3;",
                 f"l {reg} t2 0 # {reg} = [t2 + 0];",
@@ -646,25 +650,22 @@ class B:
                 # <unary_operator> <operand>
                 case 0:
                     # constant expression optimization
-                    if n[1].choice == 3:
-                        val: int = n[1][0].literal
+                    if n.op.choice == 3:
+                        val: int = n.op[0].literal
                         val = 1 if val == 0 else 0
                         return f"setv t0 {val} # t0 = {val};"
 
                     else:
                         # todo: optimize constant
                         return join(
-                            self._fetch_operand(n[1], "t1"),
+                            self._fetch_operand(n.op, "t1"),
                             f"eqv t0 t1 0 # t0 = t1 == 0;",
                         )
 
                 # <operand> <binary_operator> <operand>
                 case 1:
-                    lop: ASTNode = n[0]
-                    rop: ASTNode = n[2]
-
                     # constant expression optimization
-                    if lop.choice == 3 and rop.choice == 3:
+                    if n.lop.choice == 3 and n.rop.choice == 3:
                         binop = {
                             # <binary_operator> ::= "\+";
                             0: lambda x, y: x + y,
@@ -698,10 +699,10 @@ class B:
                             14: lambda x, y: x << y,
                             # <binary_operator> ::= ">>";
                             15: lambda x, y: x >> y,
-                        }[n[1].choice]
+                        }[n.bop.choice]
 
-                        lop_val: int = lop[0].literal
-                        rop_val: int = rop[0].literal
+                        lop_val: int = n.lop[0].literal
+                        rop_val: int = n.rop[0].literal
                         val: int = binop(lop_val, rop_val)
                         return f"setv t0 {val} # t0 = {val};"
 
@@ -738,14 +739,14 @@ class B:
                         14: "ls",
                         # <binary_operator> ::= ">>";
                         15: "rs",
-                    }[n[1].choice]
+                    }[n.bop.choice]
 
                     # todo: fix lazy comment (print it as binary operation)
                     # todo: constant optimizations
                     # todo: very very sloppy
                     return join(
-                        self._fetch_operand(lop, "t1"),
-                        self._fetch_operand(rop, "t2"),
+                        self._fetch_operand(n.lop, "t1"),
+                        self._fetch_operand(n.rop, "t2"),
                         f"{inst} t0 t1 t2 # t0 = {inst}(t1, t2);",
                     )
 

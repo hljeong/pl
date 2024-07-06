@@ -18,4 +18,4 @@
 
 <terminal> ::= escaped_string | identifier;
 
-<multiplicity> ::= "\?" | "\*" | "\+" | decimal_integer;
+<multiplicity> ::= "\?" | "\*" | "\+";

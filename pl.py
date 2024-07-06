@@ -1,6 +1,5 @@
 from common import Monad, Log, ast_to_tree_string
-from langs.a import A
-from langs.b import B
+from langs import A, B
 from runtime import MP0
 
 

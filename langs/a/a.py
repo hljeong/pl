@@ -15,8 +15,10 @@ from syntax import (
 )
 from runtime import Ins, Prog
 
+from ..lang import Lang
 
-class A:
+
+class A(Lang):
     with open("langs/a/spec/a.xbnf") as xbnf_f:
         xbnf: str = xbnf_f.read()
 
@@ -51,7 +53,7 @@ class A:
             return (
                 Monad(prog)
                 .then(Lexer(A.grammar))
-                .then(Parser(A.grammar, entry_point=entry_point))
+                .then(Parser.for_lang(A, entry_point=entry_point))
                 .value
             )
 

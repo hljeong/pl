@@ -6,10 +6,8 @@ from common import Monad, Log
 from lexical import Vocabulary, Lexer
 
 from .ast import ASTNode, TerminalASTNode, NonterminalASTNode
-from .parser import ExpressionTerm, Parser
+from .parser import ExpressionTerm, Parser, NodeParser
 from .visitor import Visitor
-
-NodeParser = Callable[[Parser, Optional[bool]], Optional[ASTNode]]
 
 
 class Grammar:
@@ -18,7 +16,7 @@ class Grammar:
         ast: ASTNode = (
             Monad(xbnf)
             .then(Lexer(grammar=XBNF.grammar))
-            .then(Parser(grammar=XBNF.grammar))
+            .then(Parser.for_lang(XBNF))
             .value
         )
 
@@ -189,7 +187,6 @@ class XBNF:
                 [ExpressionTerm('"\\?"')],
                 [ExpressionTerm('"\\*"')],
                 [ExpressionTerm('"\\+"')],
-                [ExpressionTerm("decimal_integer")],
             ],
         ),
         '"::="': Parser.generate_terminal_parser('"::="'),
@@ -382,10 +379,10 @@ class GenerateNodeParsers(Visitor):
 
             # default multiplicity is 1
             if len(optional_multiplicity) == 0:
-                multiplicity: Union[str, int] = 1
+                multiplicity: str = "1"
 
             else:
-                multiplicity: Union[str, int] = self(optional_multiplicity[0])
+                multiplicity: str = self(optional_multiplicity[0])
 
             # expression_term[0]: <group>
             group: str = self(expression_term[0])
@@ -443,12 +440,5 @@ class GenerateNodeParsers(Visitor):
     def _visit_multiplicity(
         self,
         n: ASTNode,
-    ) -> Union[str, int]:
-        match n.choice:
-            # node: "\?" | "\*" | "\+"
-            case 0 | 1 | 2:
-                return n[0].lexeme
-
-            # node: decimal_integer
-            case 1:
-                return n[0].literal
+    ) -> str:
+        return n[0].lexeme

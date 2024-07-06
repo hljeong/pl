@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import NamedTuple, Optional
+from typing import NamedTuple, Optional, Callable
 
 from common import Log
 from lexical import Token
@@ -12,27 +12,29 @@ from .ast import (
     TerminalASTNode,
 )
 
+NodeParser = Callable[["Parser", Optional[bool]], Optional[ASTNode]]
+
 
 # todo: use dataclass?
 class ExpressionTerm:
     def __init__(
         self,
         node_type: str,
-        multiplicity: Union[str, int] = 1,
+        multiplicity: str = "1",
     ):
         self._node_type: str = node_type
-        self._multiplicity: Union[str, int] = multiplicity
+        self._multiplicity: str = multiplicity
 
     @property
     def node_type(self) -> str:
         return self._node_type
 
     @property
-    def multiplicity(self) -> Union[str, int]:
+    def multiplicity(self) -> str:
         return self._multiplicity
 
     def __str__(self) -> str:
-        if type(self._multiplicity) is int and self._multiplicity == 1:
+        if type(self._multiplicity) is int and self._multiplicity == "":
             return f"{self._node_type}"
         else:
             return f"{self._node_type}{self._multiplicity}"
@@ -51,49 +53,27 @@ class Parser:
         def __init__(self, msg: str = "an error occured"):
             super().__init__(msg)
 
+    @staticmethod
+    def for_grammar(grammar: "Grammar", entry_point: Optional[str] = None):  # type: ignore
+        return Parser(
+            grammar.node_parsers,
+            grammar.entry_point if entry_point is None else entry_point,
+            grammar_name=grammar.name,
+        )
+
+    @staticmethod
+    def for_lang(lang: "Lang", entry_point: Optional[str] = None):  # type: ignore
+        return Parser.for_grammar(lang.grammar, entry_point)
+
     def __init__(
         self,
-        grammar: Optional[Grammar] = None,
-        node_parsers: Optional[dict[str, Callable[[Parser], Optional[ASTNode]]]] = None,
-        entry_point: Optional[str] = None,
+        node_parsers: dict[str, NodeParser],
+        entry_point: str,
+        grammar_name: str = "none",
     ):
-        if grammar is not None and node_parsers is not None:
-            Log.w("more than sufficient arguments provided", tag="Parser")
-
-        if node_parsers is None:
-            if grammar is None:
-                error: ValueError = ValueError(
-                    "provide either grammar or both node_parsers and entry_point to create a parser"
-                )
-                if not Log.ef(
-                    "[red]ValueError:[/red] provide either grammar or both node_parsers and entry_point to create a parser"
-                ):
-                    raise error
-
-            self._grammar_name: str = grammar.name
-            self._node_parsers: dict[str, Callable[[Parser], Optional[ASTNode]]] = (
-                grammar.node_parsers
-            )
-            self._entry_point: str = grammar.entry_point
-
-            # entry point override
-            if entry_point is not None:
-                self._entry_point = entry_point
-
-        elif entry_point is None:
-            error: ValueError = ValueError(
-                "provide either grammar or both node_parsers and entry_point to create a parser"
-            )
-            if not Log.ef(
-                "[red]ValueError:[/red] provide either grammar or both node_parsers and entry_point to create a parser"
-            ):
-                raise error
-
-            self._grammar_name: str = "none"
-            self._node_parsers: dict[str, Callable[[Parser], Optional[ASTNode]]] = (
-                node_parsers
-            )
-            self._entry_point: str = entry_point
+        self._grammar_name: str = grammar_name
+        self._node_parsers: dict[str, NodeParser] = node_parsers
+        self._entry_point: str = entry_point
 
     def __repr__(self) -> str:
         return f"Parser(grammar={self._grammar_name})"
@@ -203,7 +183,7 @@ class Parser:
                 for expression_term_idx, expression_term in enumerate(expression_terms):
                     match expression_term.multiplicity:
                         # exactly 1 (default)
-                        case 1:
+                        case "1":
                             child_parse_result: Parser.Result = parser.parse_node(
                                 expression_term.node_type
                             )
@@ -218,39 +198,6 @@ class Parser:
 
                             else:
                                 good = False
-                                break
-
-                        # constant number > 1
-                        case _ if type(
-                            expression_term.multiplicity
-                        ) is int and expression_term.multiplicity > 1:
-                            child: NonterminalASTNode = NonterminalASTNode(
-                                f"{nonterminal}:{expression_term_idx}{expression_term.multiplicity}"
-                            )
-
-                            for _ in range(expression_term.multiplicity):
-                                grandchild_parse_result: Parser.Result = (
-                                    parser.parse_node(expression_term.node_type)
-                                )
-
-                                if grandchild_parse_result is not None:
-                                    grandchild_node: ASTNode
-                                    grandchild_n_tokens_consumed: int
-                                    grandchild_node, grandchild_n_tokens_consumed = (
-                                        grandchild_parse_result
-                                    )
-
-                                    child.add(grandchild_node)
-                                    n_tokens_consumed += grandchild_n_tokens_consumed
-
-                                else:
-                                    good = False
-                                    break
-
-                            if good:
-                                node.add(child)
-
-                            else:
                                 break
 
                         # optional
@@ -342,6 +289,9 @@ class Parser:
                                     break
 
                             node.add(child)
+
+                        case _:  # pragma: no cover
+                            assert False
 
                 if good:
                     choices[idx] = Parser.Result(node, n_tokens_consumed)

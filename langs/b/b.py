@@ -29,7 +29,7 @@ class B:
 
     class Parse:
         def __call__(self, prog) -> ASTNode:
-            return Monad(prog).then(Lexer(B.grammar)).then(Parser(B.grammar)).value
+            return Monad(prog).then(Lexer(B.grammar)).then(Parser.for_lang(B)).value
 
     class BuildInternalAST(Visitor):
         def __init__(self):

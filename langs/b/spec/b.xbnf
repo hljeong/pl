@@ -48,8 +48,8 @@
 
   "<"  | "<=" | "<<" | ">>";
 
-<function> ::= identifier;
+alias <function> ::= identifier;
 
-<variable> ::= identifier;
+alias <variable> ::= identifier;
 
-<string> ::= escaped_string;
+alias <string> ::= escaped_string;

@@ -2,7 +2,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import cast, Any, Callable, Union, Iterable
 
-from syntax import ASTNode, NonterminalASTNode, TerminalASTNode
+from syntax import ASTNode, NonterminalASTNode, AliasASTNode, TerminalASTNode
 
 from .ast import ChoiceNonterminalASTNode, TerminalASTNode
 
@@ -44,6 +44,11 @@ class Visitor:
         if type(n) is ChoiceNonterminalASTNode:
             n_ = ChoiceNonterminalASTNode(n.node_type, n.choice, extras=dict(n.extras))
 
+        elif type(n) is AliasASTNode:
+            n_ = AliasASTNode(
+                n.node_type, n.aliased_node_type, n.token, extras=dict(n.extras)
+            )
+
         elif type(n) is NonterminalASTNode:
             n_ = NonterminalASTNode(n.node_type, extras=dict(n.extras))
 
@@ -68,6 +73,7 @@ class Visitor:
         default_nonterminal_node_visitor: NonterminalASTNodeVisitor = USE_DEFAULT_DEFAULT_NONTERMINAL_AST_NODE_VISITOR,
         default_terminal_node_visitor: TerminalASTNodeVisitor = DEFAULT_DEFAULT_TERMINAL_AST_NODE_VISITOR,
     ):
+        # todo: get rid of this
         if (
             default_nonterminal_node_visitor
             is USE_DEFAULT_DEFAULT_NONTERMINAL_AST_NODE_VISITOR
@@ -79,7 +85,7 @@ class Visitor:
                 AgnosticASTNodeVisitor,
                 lambda v, n, **ctx: (
                     default_terminal_node_visitor(v, n, **ctx)
-                    if isinstance(n, TerminalASTNode)
+                    if isinstance(n, TerminalASTNode) or isinstance(n, AliasASTNode)
                     else default_nonterminal_node_visitor(v, n, **ctx)
                 ),
             ),
@@ -95,8 +101,14 @@ class Visitor:
         return self[n](self, n, **ctx)
 
     def __getitem__(self, n: ASTNode):
-        if n.node_type.endswith(">"):
+        if isinstance(n, NonterminalASTNode):
             return self._node_visitor[n.node_type[1:-1]]
 
-        else:
+        elif isinstance(n, AliasASTNode):
+            return self._node_visitor[n.node_type[1:-1]]
+
+        elif isinstance(n, TerminalASTNode):
             return self._node_visitor[n.node_type]
+
+        else:  # pragma: no cover
+            assert False

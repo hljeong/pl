@@ -44,7 +44,7 @@ class B:
             declarations: dict[str, NonterminalASTNode] = {}
             for c in n[0]:
                 declaration: NonterminalASTNode = self(c)
-                fn_name: str = declaration[1][0].lexeme
+                fn_name: str = declaration[1].lexeme
 
                 if fn_name in declarations:
                     # todo: log error
@@ -209,8 +209,8 @@ class B:
             return self._constant_aggregate
 
         def _visit_string(self, n: ASTNode) -> Any:
-            if n[0].literal not in self._constant_aggregate:
-                self._constant_aggregate[n[0].literal] = f"s{self._constant_idx}"
+            if n.literal not in self._constant_aggregate:
+                self._constant_aggregate[n.literal] = f"s{self._constant_idx}"
                 self._constant_idx += 1
 
     class GenerateSymbolTable(Visitor):
@@ -229,7 +229,7 @@ class B:
             return self._symbol_table
 
         def _visit_declaration(self, n: ASTNode) -> None:
-            fn_name: str = n[1][0].lexeme
+            fn_name: str = n[1].lexeme
             # todo: no bueno, maybe implement visitor context
             self._current_locals: dict[str, int] = {}
             self._current_var_loc: int = 0
@@ -274,8 +274,7 @@ class B:
                 self._current_extra_args = len(n) - 6
 
         def _visit_variable(self, n: ASTNode) -> None:
-            var_name: str = n[0].lexeme
-            self._local(var_name)
+            self._local(n.lexeme)
 
     class Compile(Visitor):
         def __init__(
@@ -320,7 +319,7 @@ class B:
 
         # <declaration> ::= "fn" <function> "\(" <parameter_list>? "\)" <block>;
         def _visit_declaration(self, n: ASTNode) -> Any:
-            fn_name: str = n[1][0].lexeme
+            fn_name: str = n[1].lexeme
             # todo: no bueno, probably visitor contextualize this
             # "current symbol table"
             self._cst: dict[str, Any] = self._s[fn_name]
@@ -335,7 +334,7 @@ class B:
             commit_args: str = ""
             if len(n[3]) != 0:
                 commit_args = joini(
-                    self._commit_var(c[0].lexeme, f"a{i}")
+                    self._commit_var(c.lexeme, f"a{i}")
                     for i, c in enumerate(n[3][0])
                     if i < 6
                 )
@@ -346,7 +345,7 @@ class B:
                         joini(
                             join(
                                 f"l t0 sp {self._cst['stack_frame'] + (i - 6) * 4} # t0 = [sp + {self._cst['stack_frame'] + (i - 6) * 4}]",
-                                self._commit_var(n[3][0][i][0].lexeme, "t0"),
+                                self._commit_var(n[3][0][i].lexeme, "t0"),
                             )
                             for i in range(6, len(n[3][0]))
                         ),
@@ -399,7 +398,7 @@ class B:
                 case 0:
                     main_course: str = ""
                     dessert: str = (
-                        self._commit_var(n[0][0][0].lexeme, "t0")
+                        self._commit_var(n[0][0].lexeme, "t0")
                         if n[0].choice == 0
                         else self._commit_array_access(n[0][0], "t0")
                     )
@@ -416,7 +415,7 @@ class B:
                         # <mem_access> ::= "\[" <variable> "+" decimal_integer "\]";
                         case 2:
                             main_course = join(
-                                f"l t1 r1 {self._cl[n[2][0][1][0].lexeme]} # t1 = [sp + alloc[{n[2][0][1][0].lexeme}]];",
+                                f"l t1 r1 {self._cl[n[2][0][1].lexeme]} # t1 = [sp + alloc[{n[2][0][1].lexeme}]];",
                                 f"l t0 t1 {n[2][0][3].lexeme} # t0 = [t1 + {n[2][0][3].lexeme}]",
                             )
 
@@ -449,7 +448,8 @@ class B:
                         case 6:
                             # todo: the second instruction is completely avoidable... just commit a0 directly
                             main_course = join(
-                                self._call_function(n[2]), "set t0 a0 # t0 = a0;"
+                                self._call_function(n[2]),
+                                "set t0 a0 # t0 = a0;",
                             )
 
                         case _:  # pragma: no cover
@@ -524,8 +524,8 @@ class B:
                 # <statement> ::= <mem_access> "=" <variable> ";";
                 case 4:
                     return join(
-                        f"l t0 r1 {self._cl[n[0][1][0].lexeme]} # t0 = [sp + alloc[{self._cl[n[0][1][0].lexeme]}]];",
-                        f"l t1 r1 {self._cl[n[2][0].lexeme]} # t1 = [sp + alloc[{self._cl[n[2][0].lexeme]}]];",
+                        f"l t0 r1 {self._cl[n[0][1].lexeme]} # t0 = [sp + alloc[{self._cl[n[0][1].lexeme]}]];",
+                        f"l t1 r1 {self._cl[n[2].lexeme]} # t1 = [sp + alloc[{self._cl[n[2].lexeme]}]];",
                         f"s t1 t0 {n[0][3].lexeme} # [t0 + {n[0][3].lexeme}] = t1;",
                     )
 
@@ -556,7 +556,7 @@ class B:
                     assert False
 
         def _call_function(self, n: ASTNode) -> str:
-            fn_name: str = n[0][0].lexeme
+            fn_name: str = n[0].lexeme
             fn_label: str = self._s[fn_name]["label"]
 
             fetch_args: str = ""
@@ -603,7 +603,7 @@ class B:
             )
 
         def _fetch_var(self, n: ASTNode, reg: str) -> str:
-            var_name: str = n[0].lexeme
+            var_name: str = n.lexeme
             return (
                 f"l {reg} sp {self._cl[var_name]} # {reg} = [sp + alloc[{var_name}]];"
             )
@@ -626,7 +626,9 @@ class B:
 
                 # <operand> ::= <string>;
                 case 1:
-                    return f"setv {reg} {self._c[n[0][0].literal]} # {reg} = {n[0][0].lexeme};"
+                    return (
+                        f"setv {reg} {self._c[n[0].literal]} # {reg} = {n[0].lexeme};"
+                    )
 
                 # <operand> ::= <array_access>;
                 case 2:

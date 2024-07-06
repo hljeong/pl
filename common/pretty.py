@@ -172,9 +172,6 @@ SPACE: str = (
 
 
 def join(*lines: str):
-    for line in lines:
-        if line is SPACE:
-            print("wtf")
     return "\n".join(filter(lambda line: line is SPACE or len(line.strip()) > 0, lines))
 
 

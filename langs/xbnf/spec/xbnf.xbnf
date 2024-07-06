@@ -1,8 +1,10 @@
-<xbnf> ::= <production>+;
+<xbnf> ::= <production> <rule>*;
+
+<rule> ::= <production> | <alias>;
 
 <production> ::= <nonterminal> "::=" <body> ";";
 
-<nonterminal> ::= "<" identifier ">";
+<alias> ::= "alias" <nonterminal> "::=" <terminal> ";";
 
 <body> ::= <expression> ("\|" <expression>)*;
 
@@ -11,6 +13,8 @@
 <group> ::= <term> | "\(" <body> "\)";
 
 <term> ::= <nonterminal> | <terminal>;
+
+<nonterminal> ::= "<" identifier ">";
 
 <terminal> ::= escaped_string | identifier;
 

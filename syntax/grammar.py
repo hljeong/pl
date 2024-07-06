@@ -91,6 +91,7 @@ xbnf_vocabulary = Vocabulary(
         '"::="': Vocabulary.Definition.make("::="),
         '"\\+"': Vocabulary.Definition.make("\\+"),
         '";"': Vocabulary.Definition.make(";"),
+        '"alias"': Vocabulary.Definition.make("alias"),
         "escaped_string": Vocabulary.Definition.builtin["escaped_string"],
         '"\\("': Vocabulary.Definition.make("\\("),
         '"\\?"': Vocabulary.Definition.make("\\?"),
@@ -104,8 +105,12 @@ xbnf_node_parsers = {
     "<xbnf>": Parser.generate_nonterminal_parser(
         "<xbnf>",
         [
-            [ExpressionTerm("<production>", "+")],
+            [ExpressionTerm("<production>"), ExpressionTerm("<rule>", "*")],
         ],
+    ),
+    "<rule>": Parser.generate_nonterminal_parser(
+        "<rule>",
+        [[ExpressionTerm("<production>")], [ExpressionTerm("<alias>")]],
     ),
     "<production>": Parser.generate_nonterminal_parser(
         "<production>",
@@ -114,6 +119,18 @@ xbnf_node_parsers = {
                 ExpressionTerm("<nonterminal>"),
                 ExpressionTerm('"::="'),
                 ExpressionTerm("<body>"),
+                ExpressionTerm('";"'),
+            ],
+        ],
+    ),
+    "<alias>": Parser.generate_nonterminal_parser(
+        "<alias>",
+        [
+            [
+                ExpressionTerm('"alias"'),
+                ExpressionTerm("<nonterminal>"),
+                ExpressionTerm('"::="'),
+                ExpressionTerm("<terminal>"),
                 ExpressionTerm('";"'),
             ],
         ],
@@ -199,6 +216,7 @@ xbnf_node_parsers = {
     ),
     '"::="': Parser.generate_terminal_parser('"::="'),
     '";"': Parser.generate_terminal_parser('";"'),
+    '"alias"': Parser.generate_terminal_parser('"alias"'),
     '"<"': Parser.generate_terminal_parser('"<"'),
     '">"': Parser.generate_terminal_parser('">"'),
     '"\\|"': Parser.generate_terminal_parser('"\\|"'),
@@ -259,7 +277,7 @@ class NodeParsersGenerator(Visitor):
         self, ast: ASTNode
     ) -> dict[str, Callable[[Parser], Optional[ASTNode]]]:
         # entry point is used
-        self._used.add(f"<{ast[0][0][0][1].lexeme}>")
+        self._used.add(f"<{ast[0][0][1].lexeme}>")
         self(ast)
 
         for node_type in self._used:
@@ -289,6 +307,15 @@ class NodeParsersGenerator(Visitor):
             self._used.add(terminal)
             self._node_parsers[terminal] = Parser.generate_terminal_parser(terminal)
 
+    def _add_alias(self, alias: str, terminal: str) -> None:
+        if alias not in self._node_parsers:
+            self._node_parsers[alias] = Parser.generate_alias_parser(alias, terminal)
+        else:
+            Log.w(
+                f"multiple alias definitions for {alias} are disregarded",
+                tag="Grammar",
+            )
+
     def _add_nonterminal(
         self, nonterminal: str, body: list[list[ExpressionTerm]]
     ) -> None:
@@ -302,14 +329,17 @@ class NodeParsersGenerator(Visitor):
                 tag="Grammar",
             )
 
+    # todo: define __call__ to properly use visitor interface
+
     def _visit_xbnf(
         self,
         n: ASTNode,
     ) -> Any:
-        # node[0]: <production>+
-        # production: <production>
-        for production in n[0]:
-            self(production)
+        # n[0]: <production>
+        # n[1]: <rule>*
+        self(n[0])
+        for rule in n[1]:
+            self(rule)
 
     def _visit_production(
         self,
@@ -325,6 +355,14 @@ class NodeParsersGenerator(Visitor):
 
         self._idx_stack.pop()
         self._lhs_stack.pop()
+
+    def _visit_alias(
+        self,
+        n: ASTNode,
+    ) -> Any:
+        alias: str = f"<{n[1][1].lexeme}>"
+
+        self._add_alias(alias, self(n[3]))
 
     def _visit_body(
         self,
@@ -405,20 +443,7 @@ class NodeParsersGenerator(Visitor):
 
                 self._idx_stack[-1] += 1
 
-                match term.choice:
-                    # term: <nonterminal>
-                    case 0:
-                        nonterminal = f"<{term[0][1].lexeme}>"
-                        self._used.add(nonterminal)
-                        return nonterminal
-
-                    # term: <terminal>
-                    case 1:
-                        # term[0]: escaped_string | identifier
-                        terminal = term[0][0].lexeme
-
-                        self._add_terminal(terminal)
-                        return terminal
+                return self(term)
 
             # node: "\(" <body> "\)"
             case 1:
@@ -435,6 +460,22 @@ class NodeParsersGenerator(Visitor):
                 self._idx_stack[-1] += 1
 
                 return auxiliary_nonterminal
+
+    def _visit_nonterminal(
+        self,
+        n: ASTNode,
+    ) -> str:
+        nonterminal: str = f"<{n[1].lexeme}>"
+        self._used.add(nonterminal)
+        return nonterminal
+
+    def _visit_terminal(
+        self,
+        n: ASTNode,
+    ) -> str:
+        terminal: str = n[0].lexeme
+        self._add_terminal(terminal)
+        return terminal
 
     def _visit_multiplicity(
         self,

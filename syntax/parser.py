@@ -4,7 +4,13 @@ from typing import NamedTuple, Optional
 from common import Log
 from lexical import Token
 
-from .ast import ASTNode, NonterminalASTNode, ChoiceNonterminalASTNode, TerminalASTNode
+from .ast import (
+    ASTNode,
+    NonterminalASTNode,
+    ChoiceNonterminalASTNode,
+    AliasASTNode,
+    TerminalASTNode,
+)
 
 
 # todo: use dataclass?
@@ -175,6 +181,7 @@ class Parser:
         self._current: int = 0
         return self.__parse()
 
+    @staticmethod
     def generate_nonterminal_parser(
         nonterminal: str, body: list[list[ExpressionTerm]]
     ) -> Callable[[Parser], Optional[ChoiceNonterminalASTNode]]:
@@ -353,6 +360,23 @@ class Parser:
 
         return nonterminal_parser
 
+    @staticmethod
+    def generate_alias_parser(
+        alias: str,
+        terminal: str,
+    ) -> Callable[[Parser], Optional[AliasASTNode]]:
+
+        def alias_parser(
+            parser: Parser, entry_point: bool = False
+        ) -> Optional[Union[Node, Token]]:
+            token: Token = parser.expect(terminal)
+            if token is None:
+                return None
+            return Parser.Result(AliasASTNode(alias, terminal, token), 1)
+
+        return alias_parser
+
+    @staticmethod
     def generate_terminal_parser(
         terminal: str,
     ) -> Callable[[Parser], Optional[TerminalASTNode]]:

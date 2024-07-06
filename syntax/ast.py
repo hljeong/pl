@@ -74,6 +74,38 @@ class ChoiceNonterminalASTNode(NonterminalASTNode):
         return self._choice
 
 
+class AliasASTNode(ASTNode):
+    def __init__(
+        self,
+        node_type: str,
+        aliased_node_type: str,
+        token: Token,
+        extras: dict[str, Any] = ASTNode.no_extras,
+    ):
+        super().__init__(node_type, extras=extras)
+        self.aliased_node_type: str = aliased_node_type
+        self.token: Token = token
+
+    def __str__(self) -> str:
+        return str(self.token)
+
+    def __getitem__(self, *_: Any) -> None:
+        # todo: error
+        raise ValueError(
+            f"cannot subscript terminal of type '{self.node_type}' (alias of '{self.aliased_node_type}')"
+        )
+
+    # todo: how to decouple...
+    @property
+    def lexeme(self) -> str:
+        return self.token.lexeme
+
+    # todo: how to decouple...
+    @property
+    def literal(self) -> Union[str, int]:
+        return self.token.literal
+
+
 class TerminalASTNode(ASTNode):
     def __init__(
         self,
@@ -81,17 +113,21 @@ class TerminalASTNode(ASTNode):
         token: Token,
     ):
         super().__init__(node_type)
-        self._token = token
+        self.token = token
 
     def __str__(self) -> str:
-        return str(self._token)
+        return str(self.token)
+
+    def __getitem__(self, *_: Any) -> None:
+        # todo: error
+        raise ValueError(f"cannot subscript terminal of type '{self.node_type}'")
 
     # todo: how to decouple...
     @property
     def lexeme(self) -> str:
-        return self._token.lexeme
+        return self.token.lexeme
 
     # todo: how to decouple...
     @property
     def literal(self) -> Union[str, int]:
-        return self._token.literal
+        return self.token.literal

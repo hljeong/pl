@@ -126,10 +126,10 @@
 
 <label> ::= identifier ":";
 
-<reg> ::= identifier;
+alias <reg> ::= identifier;
 
-<imm> ::= decimal_integer;
+alias <imm> ::= decimal_integer;
 
-<lbl> ::= identifier;
+alias <lbl> ::= identifier;
 
-<val> ::= decimal_integer;
+alias <val> ::= decimal_integer;

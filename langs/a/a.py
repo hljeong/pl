@@ -185,24 +185,24 @@ class A:
                 # <pseudoinstruction> ::= "jr" <reg>;
                 # -> addi pc <reg> 0
                 case 0:
-                    return (ins(f"addi pc {n[1][0].lexeme} 0", n.extras),)
+                    return (ins(f"addi pc {n[1].lexeme} 0", n.extras),)
 
                 # <pseudoinstruction> ::= "j" <lbl>;
                 # -> j <lbl> # unchanged -- to be resolved
                 case 1:
-                    return (ins(f"j {n[1][0].lexeme}", n.extras),)
+                    return (ins(f"j {n[1].lexeme}", n.extras),)
 
                 # <pseudoinstruction> ::= "b" <reg> <imm> | "b" <reg> <lbl>;
                 # -> bne <reg> zr <imm|lbl> # latter case to be resolved
                 case 2 | 3:
-                    return (ins(f"bne {n[1][0].lexeme} zr {n[2][0].lexeme}", n.extras),)
+                    return (ins(f"bne {n[1].lexeme} zr {n[2].lexeme}", n.extras),)
 
                 # <pseudoinstruction> ::= "beq" <reg> <reg> <lbl>;
                 # -> beq <reg> <reg> <lbl> # to be resolved
                 case 4:
                     return (
                         ins(
-                            f"beq {n[1][0].lexeme} {n[2][0].lexeme} {n[3][0].lexeme}",
+                            f"beq {n[1].lexeme} {n[2].lexeme} {n[3].lexeme}",
                             n.extras,
                         ),
                     )
@@ -212,7 +212,7 @@ class A:
                 case 5:
                     return (
                         ins(
-                            f"bne {n[1][0].lexeme} {n[2][0].lexeme} {n[3][0].lexeme}",
+                            f"bne {n[1].lexeme} {n[2].lexeme} {n[3].lexeme}",
                             n.extras,
                         ),
                     )
@@ -222,7 +222,7 @@ class A:
                 case 6:
                     return (
                         ins(
-                            f"xor {n[1][0].lexeme} {n[2][0].lexeme} {n[3][0].lexeme}",
+                            f"xor {n[1].lexeme} {n[2].lexeme} {n[3].lexeme}",
                             n.extras,
                         ),
                     )
@@ -232,7 +232,7 @@ class A:
                 case 7:
                     return (
                         ins(
-                            f"xori {n[1][0].lexeme} {n[2][0].lexeme} {n[3][0].lexeme}",
+                            f"xori {n[1].lexeme} {n[2].lexeme} {n[3].lexeme}",
                             n.extras,
                         ),
                     )
@@ -240,25 +240,23 @@ class A:
                 # <pseudoinstruction> ::= "not" <reg> <reg>;
                 # -> eqi <reg> <reg> <imm>
                 case 8:
-                    return (ins(f"eqi {n[1][0].lexeme} {n[2][0].lexeme} 0", n.extras),)
+                    return (ins(f"eqi {n[1].lexeme} {n[2].lexeme} 0", n.extras),)
 
                 # <pseudoinstruction> ::= "set" <reg> <reg>;
                 # -> addi <reg> <reg> 0
                 case 9:
-                    return (ins(f"addi {n[1][0].lexeme} {n[2][0].lexeme} 0", n.extras),)
+                    return (ins(f"addi {n[1].lexeme} {n[2].lexeme} 0", n.extras),)
 
                 # <pseudoinstruction> ::= "setv" <reg> <val>;
                 # -> addi <reg> zr <val>
                 # todo: big vals
                 case 10:
-                    return (
-                        ins(f"addi {n[1][0].lexeme} zr {n[2][0].lexeme}", n.extras),
-                    )
+                    return (ins(f"addi {n[1].lexeme} zr {n[2].lexeme}", n.extras),)
 
                 # <pseudoinstruction> ::= "setv" <reg> <lbl>;
                 # -> setv <reg> <lbl> # unchanged -- to be resolved
                 case 11:
-                    return (ins(f"setv {n[1][0].lexeme} {n[2][0].lexeme}", n.extras),)
+                    return (ins(f"setv {n[1].lexeme} {n[2].lexeme}", n.extras),)
 
                 # <pseudoinstruction> ::= "addv" <reg> <reg> <val> |
                 #                         "subv" <reg> <reg> <val> |
@@ -298,7 +296,7 @@ class A:
                 ):
                     return (
                         ins(
-                            f"{n[0].lexeme[: -1]}i {n[1][0].lexeme} {n[2][0].lexeme} {n[3][0].lexeme}",
+                            f"{n[0].lexeme[: -1]}i {n[1].lexeme} {n[2].lexeme} {n[3].lexeme}",
                             n.extras,
                         ),
                     )
@@ -374,7 +372,7 @@ class A:
                     ins += self(n[0][0])
                     ins += self(n[0][1])
                     ins += self(n[0][2])
-                    ins += Ins.Frag(n[0][3][0].literal, 20, True)
+                    ins += Ins.Frag(n[0][3].literal, 20, True)
 
                 # <legal_instruction> ::= <oi_type_instruction>;
                 case 1:
@@ -382,7 +380,7 @@ class A:
                     ins += self(n[0][0])
                     ins += self(n[0][1])
                     ins += self(n[0][2])
-                    ins += Ins.Frag(n[0][3][0].literal, 16, True)
+                    ins += Ins.Frag(n[0][3].literal, 16, True)
 
                 # <legal_instruction> ::= <m_type_instruction>;
                 case 2:
@@ -390,7 +388,7 @@ class A:
                     ins += self(n[0][0])
                     ins += self(n[0][1])
                     ins += self(n[0][2])
-                    ins += Ins.Frag(n[0][3][0].literal, 18, True)
+                    ins += Ins.Frag(n[0][3].literal, 18, True)
 
                 # <legal_instruction> ::= <o_type_instruction>;
                 case 3:
@@ -405,7 +403,7 @@ class A:
                 case 4:
                     ins += Ins.Frag(0b11110, 5)
                     ins += self(n[0][0])
-                    ins += Ins.Frag(n[0][1][0].literal, 27, True)
+                    ins += Ins.Frag(n[0][1].literal, 27, True)
 
                 # <legal_instruction> ::= <e_type_instruction>;
                 case 5:
@@ -437,7 +435,7 @@ class A:
         def _resolve(
             self, n: ASTNode, label_n: ASTNode, label_map: dict[str, int], **_: Any
         ) -> int:
-            return label_map[label_n[0].lexeme] - n.extras["loc"]
+            return label_map[label_n.lexeme] - n.extras["loc"]
 
         def _visit_pseudoinstruction(
             self, n: ASTNode, label_map: dict[str, int], **ctx: Any
@@ -457,7 +455,7 @@ class A:
                 case 3:
                     return self(
                         ins(
-                            f"bne {n[1][0].lexeme} zr {self._resolve(n, n[3], label_map)}"
+                            f"bne {n[1].lexeme} zr {self._resolve(n, n[3], label_map)}"
                         ),
                         **ctx,
                     )
@@ -466,7 +464,7 @@ class A:
                 case 4:
                     return self(
                         ins(
-                            f"bne {n[1][0].lexeme} {n[2][0].lexeme} {self._resolve(n, n[3], label_map)}"
+                            f"bne {n[1].lexeme} {n[2].lexeme} {self._resolve(n, n[3], label_map)}"
                         ),
                         **ctx,
                     )
@@ -475,7 +473,7 @@ class A:
                 case 5:
                     return self(
                         ins(
-                            f"bne {n[1][0].lexeme} {n[2][0].lexeme} {self._resolve(n, n[3], label_map)}"
+                            f"bne {n[1].lexeme} {n[2].lexeme} {self._resolve(n, n[3], label_map)}"
                         ),
                         **ctx,
                     )
@@ -484,7 +482,7 @@ class A:
                 case 11:
                     return self(
                         ins(
-                            f"addi {n[1][0].lexeme} pc {self._resolve(n, n[2], label_map)}"
+                            f"addi {n[1].lexeme} pc {self._resolve(n, n[2], label_map)}"
                         ),
                         **ctx,
                     )
@@ -500,4 +498,4 @@ class A:
             )
 
         def _visit_reg(self, n: ASTNode, **_) -> Ins.Frag:
-            return MP0.reg(n[0].lexeme)
+            return MP0.reg(n.lexeme)

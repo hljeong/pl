@@ -8,7 +8,7 @@ from .vocabulary import Vocabulary
 from .token import Token
 
 
-class Lexer:
+class Lex:
     class Position:
         def __init__(self):
             self._start: int = 0
@@ -50,16 +50,16 @@ class Lexer:
             super().__init__(msg)
 
     @staticmethod
-    def for_vocabulary(vocabulary: Vocabulary) -> Lexer:
-        return Lexer(vocabulary)
+    def for_vocabulary(vocabulary: Vocabulary) -> Lex:
+        return Lex(vocabulary)
 
     @staticmethod
-    def for_grammar(grammar: "Grammar") -> Lexer:  # type: ignore
-        return Lexer(grammar.vocabulary, grammar_name=grammar.name)
+    def for_grammar(grammar: "Grammar") -> Lex:  # type: ignore
+        return Lex(grammar.vocabulary, grammar_name=grammar.name)
 
     @staticmethod
-    def for_lang(lang: "Lang") -> Lexer:  # type: ignore
-        return Lexer.for_grammar(lang.grammar)
+    def for_lang(lang: "Lang") -> Lex:  # type: ignore
+        return Lex.for_grammar(lang.grammar)
 
     def __init__(
         self,
@@ -136,7 +136,7 @@ class Lexer:
 
         if len(token_matches) == 0:
             # todo: do this more elegantly
-            error: Lexer.LexError = Lexer.LexError(
+            error: Lex.LexError = Lex.LexError(
                 f"invalid character '{self._peek}' encountered at {str(self._position.cursor)}"
             )
 
@@ -194,7 +194,7 @@ class Lexer:
 
     def __call__(self, source: str) -> list[Token]:
         self._source: str = source
-        self._position = Lexer.Position()
+        self._position = Lex.Position()
         self._tokens: list[Token] = []
 
         self.__lex()

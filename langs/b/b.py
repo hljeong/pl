@@ -10,10 +10,10 @@ from common import (
     sjoini,
     opt_p,
 )
-from lexical import Lexer
+from lexical import Lex
 from syntax import (
     Grammar,
-    Parser,
+    Parse,
     Visitor,
     ASTNode,
     NonterminalASTNode,
@@ -29,7 +29,7 @@ class B:
 
     class Parse:
         def __call__(self, prog) -> ASTNode:
-            return Monad(prog).then(Lexer.for_lang(B)).then(Parser.for_lang(B)).value
+            return Monad(prog).then(Lex.for_lang(B)).then(Parse.for_lang(B)).value
 
     class BuildInternalAST(Visitor):
         def __init__(self):

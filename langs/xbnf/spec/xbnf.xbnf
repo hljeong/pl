@@ -6,20 +6,20 @@
 
 <alias> ::= "alias" <nonterminal> "::=" <terminal> ";";
 
-<body> ::= <expression> ("\|" <expression>)*;
+<body> ::= <expression> ("|" <expression>)*;
 
 <expression> ::= <term>+;
 
 <term> ::= (<label> "=")? <group> <multiplicity>?;
 
-<group> ::= <item> | "\(" <body> "\)";
+<group> ::= <item> | "(" <body> ")";
 
 <item> ::= <nonterminal> | <terminal>;
 
 <nonterminal> ::= "<" identifier ">";
 
-<terminal> ::= escaped_string | identifier;
+<terminal> ::= escaped_string | regex | identifier;
 
-<multiplicity> ::= "\?" | "\*" | "\+";
+<multiplicity> ::= "?" | "*" | "+";
 
 alias <label> ::= identifier;

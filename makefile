@@ -15,6 +15,7 @@ requirements:
 	python -m pip freeze > requirements.txt
 
 clean:
+	rm -f benchmark
 	rm -rf .coverage .pytest_cache htmlcov # delete pytest and coverage caches
 	python -Bc "import pathlib; [p.unlink() for p in pathlib.Path('.').rglob('*.py[co]')]" # delete .pyc and .pyo files
 	python -Bc "import pathlib; [p.rmdir() for p in pathlib.Path('.').rglob('__pycache__')]" # delete __pycache__ directories

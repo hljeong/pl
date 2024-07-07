@@ -2,7 +2,7 @@
 
 <declaration> ::=
 
-  "fn" name=<function> "\(" params=<parameter_list>? "\)" body=<block>;
+  "fn" name=<function> "(" params=<parameter_list>? ")" body=<block>;
 
 <block> ::=
 
@@ -18,27 +18,27 @@
   ) "=" rhs=(
     <operand> |
     <expression> |
-    fn="alloc" "\(" arg=<operand> "\)" |
-    fn="free" "\(" arg=<operand> "\)" |
-    fn="stoi" "\(" arg=<operand> "\)" |
-    fn=<function> "\(" args=<argument_list>? "\)"
+    fn="alloc" "(" arg=<operand> ")" |
+    fn="free" "(" arg=<operand> ")" |
+    fn="stoi" "(" arg=<operand> ")" |
+    fn=<function> "(" args=<argument_list>? ")"
   ) ";" |
 
-  fn=("print" | "printi" | "read") "\(" arg=<operand> "\)" ";" |
+  fn=("print" | "printi" | "read") "(" arg=<operand> ")" ";" |
 
-  "while" "\(" cond=<expression> "\)" body=<block> |
+  "while" "(" cond=<expression> ")" body=<block> |
 
-  "if" "\(" cond=<expression> "\)" body=<block> |
+  "if" "(" cond=<expression> ")" body=<block> |
 
   "return" ret=<operand>? ";" |
 
-  fn=<function> "\(" args=<argument_list>? "\)" ";";
+  fn=<function> "(" args=<argument_list>? ")" ";";
 
 <parameter_list> ::= first=<variable> rest=("," param=<variable>)*;
 
 <argument_list> ::= first=<operand> rest=("," arg=<operand>)*;
 
-<array_access> ::= arr=<variable> "\[" idx=<operand> "\]";
+<array_access> ::= arr=<variable> "[" idx=<operand> "]";
 
 <expression> ::=
 
@@ -52,9 +52,9 @@
 
 <binary_operator> ::=
 
-  "\+" | "-"  | "\*" | "/"  |
+  "+"  | "-"  | "*"  | "/"  |
 
-  "%"  | "\|" | "&"  | "\^" |
+  "%"  | "|"  | "&"  | "^"  |
 
   "==" | "!=" | ">"  | ">=" |
 

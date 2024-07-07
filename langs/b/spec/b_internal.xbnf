@@ -2,7 +2,7 @@
 
 <declaration> ::=
 
-  "fn" name=<function> "\(" params=<flattened_parameter_list>? "\)" body=<block>;
+  "fn" name=<function> "(" params=<flattened_parameter_list>? ")" body=<block>;
 
 <block> ::=
 
@@ -18,27 +18,27 @@
   ) "=" rhs=(
     <operand> |
     <expression> |
-    fn="alloc" "\(" arg=<operand> "\)" |
-    fn="free" "\(" arg=<operand> "\)" |
-    fn="stoi" "\(" arg=<operand> "\)" |
-    fn=<function> "\(" args=<flattened_argument_list>? "\)"
+    fn="alloc" "(" arg=<operand> ")" |
+    fn="free" "(" arg=<operand> ")" |
+    fn="stoi" "(" arg=<operand> ")" |
+    fn=<function> "(" args=<flattened_argument_list>? ")"
   ) ";" |
 
-  fn=("print" | "printi" | "read") "\(" arg=<operand> "\)" ";" |
+  fn=("print" | "printi" | "read") "(" arg=<operand> ")" ";" |
 
-  "while" "\(" cond=<expression> "\)" body=<block> |
+  "while" "(" cond=<expression> ")" body=<block> |
 
-  "if" "\(" cond=<expression> "\)" body=<block> |
+  "if" "(" cond=<expression> ")" body=<block> |
 
   "return" ret=<operand>? ";" |
 
-  fn=<function> "\(" args=<flattened_argument_list>? "\)" ";";
+  fn=<function> "(" args=<flattened_argument_list>? ")" ";";
 
 <flattened_parameter_list> ::= <variable>*;
 
 <flattened_argument_list> ::= <variable>*;
 
-<array_access> ::= arr=<variable> "\[" idx=<operand> "\]";
+<array_access> ::= arr=<variable> "[" idx=<operand> "]";
 
 <expression> ::=
 

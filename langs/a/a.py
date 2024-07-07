@@ -2,11 +2,11 @@ from __future__ import annotations
 from typing import Any, Optional, cast
 
 from common import Monad, joini, sjoini, Mutable, unescape
-from lexical import Lexer
+from lexical import Lex
 from runtime import MP0
 from syntax import (
     Grammar,
-    Parser,
+    Parse,
     ASTNode,
     Visitor,
     NonterminalASTNode,
@@ -52,8 +52,8 @@ class A(Lang):
         def __call__(self, prog: str, entry_point: Optional[str] = None) -> ASTNode:
             return (
                 Monad(prog)
-                .then(Lexer.for_lang(A))
-                .then(Parser.for_lang(A, entry_point=entry_point))
+                .then(Lex.for_lang(A))
+                .then(Parse.for_lang(A, entry_point=entry_point))
                 .value
             )
 
@@ -138,9 +138,8 @@ class A(Lang):
 
             labels: list[str] = []
 
-            if n.labels:
-                for c in n.labels:
-                    labels.append(self(c.label))
+            for c in n.labels:
+                labels.append(self(c.label))
 
             n_.add(self(n.ins)[0])
             # add labels to n_.ins since <instruction> layer will be stripped in translation

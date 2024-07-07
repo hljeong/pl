@@ -49,7 +49,7 @@ class ExpressionTerm:
         return f"ExpressionTerm({self})"
 
 
-class Parser:
+class Parse:
 
     class Result(NamedTuple):
         node: ASTNode
@@ -61,7 +61,7 @@ class Parser:
 
     @staticmethod
     def for_grammar(grammar: "Grammar", entry_point: Optional[str] = None):  # type: ignore
-        return Parser(
+        return Parse(
             grammar.node_parsers,
             grammar.entry_point if entry_point is None else entry_point,
             grammar_name=grammar.name,
@@ -69,7 +69,7 @@ class Parser:
 
     @staticmethod
     def for_lang(lang: "Lang", entry_point: Optional[str] = None):  # type: ignore
-        return Parser.for_grammar(lang.grammar, entry_point)
+        return Parse.for_grammar(lang.grammar, entry_point)
 
     def __init__(
         self,
@@ -85,15 +85,15 @@ class Parser:
         return f"Parser(grammar={self._grammar_name})"
 
     def __parse(self) -> ASTNode:
-        parse_result: Parser.Result = self._node_parsers[self._entry_point](self)
+        parse_result: Parse.Result = self._node_parsers[self._entry_point](self)
 
         if parse_result is None:
-            error: Parser.ParseError = Parser.ParseError("failed to parse")
+            error: Parse.ParseError = Parse.ParseError("failed to parse")
             if not Log.ef("[red]ParseError:[/red] failed to parse"):
                 raise error
 
         elif not self.at_end():
-            error: Parser.ParseError = Parser.ParseError(
+            error: Parse.ParseError = Parse.ParseError(
                 "did not parse until end of file"
             )
             if not Log.ef("[red]ParseError:[/red] did not parse until end of file"):
@@ -103,15 +103,15 @@ class Parser:
 
     def parse_node(
         self, node_type: str, backtrack: bool = False
-    ) -> Optional[Parser.Result]:
+    ) -> Optional[Parse.Result]:
         Log.t(
             f"parsing {node_type}, next token (index {self._current}) is {self.__safe_peek()}",
             tag="Parser",
         )
 
         # todo: type annotation
-        parser: Any = self._node_parsers[node_type]
-        parse_result: Optional[Parser.Result] = parser(self, False)
+        parse: Any = self._node_parsers[node_type]
+        parse_result: Optional[Parse.Result] = parse(self, False)
 
         Log.begin_t()
         if parse_result is None:
@@ -173,9 +173,9 @@ class Parser:
     ) -> NodeParser:
 
         def nonterminal_parser(
-            parser: Parser, entry_point: bool = True
+            parser: Parse, entry_point: bool = True
         ) -> Optional[ChoiceNonterminalASTNode]:
-            choices = {}
+            choices: dict[int, Parse.Result] = {}
 
             for idx, expression_terms in enumerate(body):
 
@@ -190,7 +190,7 @@ class Parser:
                     match expression_term.multiplicity:
                         # exactly 1 (default)
                         case "1":
-                            child_parse_result: Optional[Parser.Result] = (
+                            child_parse_result: Optional[Parse.Result] = (
                                 parser.parse_node(expression_term.node_type)
                             )
 
@@ -213,7 +213,7 @@ class Parser:
                             child: NonterminalASTNode = NonterminalASTNode(
                                 f"{nonterminal}:{expression_term_idx}{expression_term.multiplicity}"
                             )
-                            grandchild_parse_result: Optional[Parser.Result] = (
+                            grandchild_parse_result: Optional[Parse.Result] = (
                                 parser.parse_node(expression_term.node_type)
                             )
 
@@ -238,7 +238,7 @@ class Parser:
                             )
 
                             while True:
-                                grandchild_parse_result: Optional[Parser.Result] = (
+                                grandchild_parse_result: Optional[Parse.Result] = (
                                     parser.parse_node(expression_term.node_type)
                                 )
 
@@ -265,7 +265,7 @@ class Parser:
                                 f"{nonterminal}:{expression_term_idx}{expression_term.multiplicity}"
                             )
 
-                            grandchild_parse_result: Optional[Parser.Result] = (
+                            grandchild_parse_result: Optional[Parse.Result] = (
                                 parser.parse_node(expression_term.node_type)
                             )
                             if grandchild_parse_result is not None:
@@ -283,7 +283,7 @@ class Parser:
                                 break
 
                             while True:
-                                grandchild_parse_result: Optional[Parser.Result] = (
+                                grandchild_parse_result: Optional[Parse.Result] = (
                                     parser.parse_node(expression_term.node_type)
                                 )
 
@@ -308,7 +308,7 @@ class Parser:
                             assert False
 
                 if good:
-                    choices[idx] = Parser.Result(node, n_tokens_consumed)
+                    choices[idx] = Parse.Result(node, n_tokens_consumed)
                 parser.__backtrack(save)
 
             if len(choices) == 0:
@@ -331,12 +331,12 @@ class Parser:
     ) -> NodeParser:
 
         def alias_parser(
-            parser: Parser, entry_point: bool = False
+            parser: Parse, entry_point: bool = False
         ) -> Optional[Union[Node, Token]]:
             token: Token = parser.expect(terminal)
             if token is None:
                 return None
-            return Parser.Result(AliasASTNode(alias, terminal, token), 1)
+            return Parse.Result(AliasASTNode(alias, terminal, token), 1)
 
         return alias_parser
 
@@ -346,12 +346,12 @@ class Parser:
     ) -> NodeParser:
 
         def terminal_parser(
-            parser: Parser, entry_point: bool = False
+            parser: Parse, entry_point: bool = False
         ) -> Optional[Union[Node, Token]]:
             token: Token = parser.expect(terminal)
             if token is None:
                 return None
-            return Parser.Result(TerminalASTNode(terminal, token), 1)
+            return Parse.Result(TerminalASTNode(terminal, token), 1)
 
         return terminal_parser
 
@@ -360,6 +360,6 @@ class Parser:
         vocabulary: Vocabulary,
     ) -> dict[str, NodeParser]:
         return {
-            terminal: Parser.generate_terminal_parser(terminal)
+            terminal: Parse.generate_terminal_parser(terminal)
             for terminal in vocabulary
         }

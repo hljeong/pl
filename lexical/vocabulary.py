@@ -25,9 +25,37 @@ class Vocabulary:
         def literal_generator(self) -> Callable[[str], Any]:
             return self._literal_generator
 
-        # todo: no regex shenanigans with exact matches (e.g. \*)
         @classmethod
-        def make(
+        def make_exact(
+            cls,
+            pattern: str,
+            literal_generator: Callable[[str], Any] = lambda _: None,
+        ) -> Vocabulary.Definition:
+            escapes: list[str] = [
+                "\\",
+                ".",
+                "+",
+                "*",
+                "?",
+                "^",
+                "$",
+                "(",
+                ")",
+                "[",
+                "]",
+                "{",
+                "}",
+                "|",
+            ]
+            for escape in escapes:
+                pattern = pattern.replace(escape, f"\\{escape}")
+            return cls(
+                re.compile(f"\\A{pattern}"),
+                literal_generator,
+            )
+
+        @classmethod
+        def make_regex(
             cls,
             pattern: str,
             literal_generator: Callable[[str], Any] = lambda _: None,
@@ -40,19 +68,21 @@ class Vocabulary:
         builtin: dict[str, Vocabulary.Definition]
 
     Definition.builtin = {
-        "identifier": Definition.make(
+        "identifier": Definition.make_regex(
             r"[A-Za-z_$][A-Za-z0-9_$]*",
             str,
         ),
-        "decimal_integer": Definition.make(
+        "decimal_integer": Definition.make_regex(
             r"-?(0|[1-9][0-9]*)",
             int,
         ),
-        "escaped_string": Definition.make(
+        "escaped_string": Definition.make_regex(
             r'"(\.|[^\"])*"',
-            # todo: delete
-            # lambda lexeme: bytes(lexeme[1:-1], "utf-8").decode("unicode_escape"),
             lambda lexeme: lexeme[1:-1],
+        ),
+        "regex": Definition.make_regex(
+            r'r"(\.|[^\"])*"',
+            lambda lexeme: lexeme[2:-1],
         ),
     }
 

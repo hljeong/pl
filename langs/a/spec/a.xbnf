@@ -2,11 +2,11 @@
 
 <section> ::=  <code_section> | <data_section>;
 
-<data_section> ::= "\[data\]" definitions=<constant_definition>*;
+<data_section> ::= "[data]" definitions=<constant_definition>*;
 
 <constant_definition> ::= label=<label> ":" string=escaped_string;
 
-<code_section> ::= "\[code\]" instructions=<labeled_instruction>*;
+<code_section> ::= "[code]" instructions=<labeled_instruction>*;
 
 <labeled_instruction> ::= labels=(label=<label> ":")* ins=<instruction>;
 

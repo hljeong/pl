@@ -84,6 +84,8 @@ class Vocabulary:
             r'r"(\.|[^\"])*"',
             lambda lexeme: lexeme[2:-1],
         ),
+        "e": Definition.make_exact(""),
+        "$": Definition.make_regex(r"\Z"),
     }
 
     DEFAULT_IGNORE = ["[ \t\n]+"]

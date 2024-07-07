@@ -1,5 +1,5 @@
 from common import Monad, Log, ast_to_tree_string
-from langs import A, B
+from langs import A, B, Expr
 from runtime import MP0
 
 
@@ -77,4 +77,15 @@ def run_b(prog):
         .then(A.Translate())
         .then(A.Assemble())
         .then(MP0())
+    )
+
+
+def print_expr(prog, output=True):
+    return (
+        Monad(prog)
+        .then(Expr.Parse())
+        .then(Expr.BuildInternalAST())
+        .then(Expr.Print())
+        .first(print if output else nop)
+        .value
     )

@@ -60,10 +60,11 @@ class Cursor:
 
 class CursorRange:
     def __init__(self, start: Cursor, end: Cursor):
-        if end < start:
-            raise ValueError(
-                f"end ({str(end)}) cannot come before start ({str(start)})"
-            )
+        # todo
+        # if end < start:
+        #     raise ValueError(
+        #         f"end ({str(end)}) cannot come before start ({str(start)})"
+        #     )
 
         self._start = copy(start)
         self._end = copy(end)

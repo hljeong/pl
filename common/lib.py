@@ -8,6 +8,12 @@ T = TypeVar("T")
 R = TypeVar("R")
 
 
+def load(filename: str) -> str:
+    with open(filename) as f:
+        data: str = f.read()
+    return data
+
+
 def unescape(s: str) -> str:
     return bytes(s, "utf-8").decode("unicode_escape")
 

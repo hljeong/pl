@@ -20,7 +20,7 @@ class ExpressionTerm:
     def __init__(
         self,
         node_type: str,
-        multiplicity: str = "1",
+        multiplicity: str = "",
         label: Optional[str] = None,
     ):
         self._node_type: str = node_type
@@ -189,7 +189,7 @@ class Parse:
                 for expression_term_idx, expression_term in enumerate(expression_terms):
                     match expression_term.multiplicity:
                         # exactly 1 (default)
-                        case "1":
+                        case "":
                             child_parse_result: Optional[Parse.Result] = (
                                 parser.parse_node(expression_term.node_type)
                             )
@@ -330,6 +330,9 @@ class Parse:
         terminal: str,
     ) -> NodeParser:
 
+        # todo: review (enforce upstream?)
+        assert terminal != "e"
+
         def alias_parser(
             parser: Parse, entry_point: bool = False
         ) -> Optional[Union[Node, Token]]:
@@ -344,6 +347,10 @@ class Parse:
     def generate_terminal_parser(
         terminal: str,
     ) -> NodeParser:
+
+        # todo: review epsilon handling
+        if terminal == "e":
+            return lambda *_: Parse.Result(TerminalASTNode(terminal, Token("e", "")), 0)
 
         def terminal_parser(
             parser: Parse, entry_point: bool = False
@@ -363,3 +370,93 @@ class Parse:
             terminal: Parse.generate_terminal_parser(terminal)
             for terminal in vocabulary
         }
+
+
+class ParseLL1:
+
+    def __init__(
+        self,
+        ll1_parsing_table,
+        rules,
+        entry_point: str,
+        grammar_name: str = "none",
+    ):
+        self._grammar_name: str = grammar_name
+        self._ll1_parsing_table = ll1_parsing_table
+        self._rules = rules
+        self._entry_point: str = entry_point
+
+    def __repr__(self) -> str:
+        return f"Parser(grammar={self._grammar_name})"
+
+    def __parse(self) -> ASTNode:
+        return self.parse_node(self._entry_point)
+
+    def parse_node(self, node_type: str) -> ASTNode:
+        Log.t(
+            f"parsing {node_type}, next token (index {self._current}) is {self.__safe_peek()}",
+            tag="Parser",
+        )
+
+        # todo: terrible start...
+        if node_type.startswith("<"):
+            t: Token = self.__safe_peek2()
+            if t.token_type not in self._ll1_parsing_table[node_type]:
+                raise Parse.ParseError(
+                    f"unexpected token '{t.lexeme}', expecting {{{', '.join(self._ll1_parsing_table[node_type].keys())}}}"
+                )
+            choice: int = self._ll1_parsing_table[node_type][t.token_type]
+            n: NonterminalASTNode = ChoiceNonterminalASTNode(node_type, choice)
+            production = self._rules[node_type][choice]
+            for term in production:
+                n.add(self.parse_node(term.node_type))
+            return n
+        elif node_type == "e":
+            return TerminalASTNode("e", Token("e", ""))
+        else:
+            token = self.expect(node_type)
+            if not token:
+                # todo: need way better error message
+                raise Parse.ParseError(f"did not parse expected {node_type}")
+            return TerminalASTNode(node_type, token)
+
+    def at_end(self) -> bool:
+        return self._current >= len(self._tokens)
+
+    def __peek(self) -> Token:
+        return self._tokens[self._current]
+
+    def __safe_peek2(self) -> Token:
+        if self.at_end():
+            return Token("$", "")
+        else:
+            return self.__peek()
+
+    def __safe_peek(self) -> Token:
+        if self.at_end():
+            return "EOF"
+        else:
+            return self.__peek()
+
+    def expect(self, token_type: str) -> Optional[Token]:
+        Log.t(f"expecting {token_type}", tag="Parser")
+
+        if self.at_end():
+            Log.t(f"got EOF", tag="Parser")
+            return None
+
+        token: Token = self.__peek()
+        Log.t(f"got {token.token_type}", tag="Parser")
+        if token.token_type != token_type:
+            return None
+
+        self.__advance(1)
+        return token
+
+    def __advance(self, n_tokens: int) -> None:
+        self._current += n_tokens
+
+    def __call__(self, tokens: list[Token]) -> ASTNode:
+        self._tokens: list[Token] = tokens
+        self._current: int = 0
+        return self.__parse()

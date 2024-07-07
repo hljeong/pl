@@ -9,6 +9,7 @@ from common import (
     sjoin,
     sjoini,
     opt_p,
+    load,
 )
 from lexical import Lex
 from syntax import (
@@ -22,10 +23,9 @@ from syntax import (
 
 
 class B:
-    with open("langs/b/spec/b.xbnf") as xbnf_f:
-        xbnf: str = xbnf_f.read()
-
-    grammar: Grammar = Grammar.from_xbnf("b", xbnf, ignore=["#[^\n]*"])
+    grammar: Grammar = Grammar.from_xbnf(
+        "b", load("langs/b/spec/b.xbnf"), ignore=["#[^\n]*"]
+    )
 
     class Parse:
         def __call__(self, prog) -> ASTNode:

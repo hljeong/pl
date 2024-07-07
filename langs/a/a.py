@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Any, Optional, cast
 
-from common import Monad, joini, sjoini, Mutable, unescape
+from common import Monad, joini, sjoini, Mutable, unescape, load
 from lexical import Lex
 from runtime import MP0
 from syntax import (
@@ -19,10 +19,9 @@ from ..lang import Lang
 
 
 class A(Lang):
-    with open("langs/a/spec/a.xbnf") as xbnf_f:
-        xbnf: str = xbnf_f.read()
-
-    grammar: Grammar = Grammar.from_xbnf("a", xbnf, ignore=["#[^\n]*"])
+    grammar: Grammar = Grammar.from_xbnf(
+        "a", load("langs/a/spec/a.xbnf"), ignore=["#[^\n]*"]
+    )
 
     @staticmethod
     def count_instructions_generated(prog: str) -> int:

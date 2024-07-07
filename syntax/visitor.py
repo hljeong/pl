@@ -1,6 +1,6 @@
 from __future__ import annotations
 from collections import defaultdict
-from typing import cast, Any, Callable, Union, Iterable
+from typing import cast, Any, Callable, Union, Iterable, Optional
 
 from syntax import ASTNode, NonterminalASTNode, AliasASTNode, TerminalASTNode
 
@@ -51,7 +51,9 @@ class Visitor:
             assert False
 
         for c in n:
-            n_.add(v(c, **ctx))
+            c_: Optional[ASTNode] = v(c, **ctx)
+            if c_ is not None:
+                n_.add(c_)
 
         return n_
 

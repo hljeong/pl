@@ -2,8 +2,7 @@
 
 from argparse import ArgumentParser
 
-from common import Log
-from pl import print_a, run_a, print_b, compile_b, run_b
+from common import Log, load
 
 
 def main():
@@ -31,8 +30,9 @@ def main():
         case "t" | "trace":
             Log.level = Log.Level.TRACE
 
-    with open(args.prog) as f:
-        prog = "".join(f.readlines())
+    from pl import print_a, run_a, print_b, compile_b, run_b, print_expr
+
+    prog: str = load(args.prog)
 
     # todo: defaultdict error message
     {
@@ -44,6 +44,9 @@ def main():
             "print": print_b,
             "compile": compile_b,
             "run": run_b,
+        },
+        "expr": {
+            "print": print_expr,
         },
     }[args.lang][args.cmd](prog)
 

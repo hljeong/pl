@@ -59,17 +59,17 @@ class Parse:
         def __init__(self, msg: str = "an error occured"):
             super().__init__(msg)
 
-    @staticmethod
-    def for_grammar(grammar: "Grammar", entry_point: Optional[str] = None):  # type: ignore
-        return Parse(
+    @classmethod
+    def for_grammar(cls, grammar: "Grammar", entry_point: Optional[str] = None):  # type: ignore
+        return cls(
             grammar.node_parsers,
             grammar.entry_point if entry_point is None else entry_point,
             grammar_name=grammar.name,
         )
 
-    @staticmethod
-    def for_lang(lang: "Lang", entry_point: Optional[str] = None):  # type: ignore
-        return Parse.for_grammar(lang.grammar, entry_point)
+    @classmethod
+    def for_lang(cls, lang: "Lang", entry_point: Optional[str] = None):  # type: ignore
+        return cls.for_grammar(lang.grammar, entry_point)
 
     def __init__(
         self,

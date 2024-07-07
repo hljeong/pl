@@ -16,9 +16,9 @@ Bit = bool
 
 
 class Bits(list[Bit]):
-    @staticmethod
-    def of(bits: list[Bit]) -> Bits:
-        return Bits(sum(b << i for i, b in enumerate(bits)), len(bits))
+    @classmethod
+    def of(cls, bits: list[Bit]) -> Bits:
+        return cls(sum(b << i for i, b in enumerate(bits)), len(bits))
 
     def __init__(self, value: int, bitwidth: int) -> None:
         super().__init__(list(bool((value >> i) & 1) for i in range(bitwidth)))

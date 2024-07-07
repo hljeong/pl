@@ -49,17 +49,17 @@ class Lex:
         def __init__(self, msg: str = "an error occurred"):
             super().__init__(msg)
 
-    @staticmethod
-    def for_vocabulary(vocabulary: Vocabulary) -> Lex:
-        return Lex(vocabulary)
+    @classmethod
+    def for_vocabulary(cls, vocabulary: Vocabulary) -> Lex:
+        return cls(vocabulary)
 
-    @staticmethod
-    def for_grammar(grammar: "Grammar") -> Lex:  # type: ignore
-        return Lex(grammar.vocabulary, grammar_name=grammar.name)
+    @classmethod
+    def for_grammar(cls, grammar: "Grammar") -> Lex:  # type: ignore
+        return cls(grammar.vocabulary, grammar_name=grammar.name)
 
-    @staticmethod
-    def for_lang(lang: "Lang") -> Lex:  # type: ignore
-        return Lex.for_grammar(lang.grammar)
+    @classmethod
+    def for_lang(cls, lang: "Lang") -> Lex:  # type: ignore
+        return cls.for_grammar(lang.grammar)
 
     def __init__(
         self,

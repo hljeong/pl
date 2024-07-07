@@ -11,8 +11,8 @@ from .visitor import Visitor
 
 
 class Grammar:
-    @staticmethod
-    def from_xbnf(name: str, xbnf: str, ignore: list[str] = []) -> Grammar:
+    @classmethod
+    def from_xbnf(cls, name: str, xbnf: str, ignore: list[str] = []) -> Grammar:
         ast: ASTNode = (
             Monad(xbnf).then(Lex.for_lang(XBNF)).then(Parse.for_lang(XBNF)).value
         )
@@ -21,7 +21,7 @@ class Grammar:
         vocabulary: Vocabulary = GenerateVocabulary(ignore)(ast)
         node_parsers: dict[str, NodeParser] = GenerateNodeParsers()(ast)
 
-        return Grammar(name, vocabulary, node_parsers)
+        return cls(name, vocabulary, node_parsers)
 
     def __init__(
         self,

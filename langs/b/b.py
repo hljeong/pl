@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any
+from typing import Any, Callable, Optional
 
 from common import (
     Monad,
@@ -28,8 +28,18 @@ class B:
     )
 
     class Parse:
-        def __call__(self, prog) -> ASTNode:
-            return Monad(prog).then(Lex.for_lang(B)).then(Parse.for_lang(B)).value
+        def __call__(self, prog, entry_point: Optional[str] = None) -> ASTNode:
+            return (
+                Monad(prog)
+                .then(Lex.for_lang(B))
+                .then(Parse.for_lang(B, entry_point=entry_point))
+                .value
+            )
+
+    parse: Callable[[str], ASTNode]
+    build_internal_ast: Callable[[ASTNode], ASTNode]
+    print: Callable[[ASTNode], str]
+    compile: Callable[[ASTNode], None]
 
     class BuildInternalAST(Visitor):
         def __init__(self):
@@ -190,97 +200,93 @@ class B:
         ) -> str:
             return f"{self(n.arr)}[{self(n.idx)}]"
 
-    # pass for aggregating string constants...
-    # might just be a construct created by myself
-    class Aggregate(Visitor):
-        def __init__(self):
-            super().__init__()
-
-        def _visit_b(self, n: ASTNode) -> dict[str, str]:
-            self._constant_aggregate: dict[str, str] = {}
-            self._constant_idx: int = 0
-            self._builtin_visit_all(n)
-            return self._constant_aggregate
-
-        def _visit_string(self, n: ASTNode) -> Any:
-            if n.literal not in self._constant_aggregate:
-                self._constant_aggregate[n.literal] = f"s{self._constant_idx}"
-                self._constant_idx += 1
-
-    class GenerateSymbolTable(Visitor):
-        def __init__(self):
-            super().__init__()
-
-        def _fn_label(self) -> str:
-            fn_label: str = f"f{self._fn_label_idx}"
-            self._fn_label_idx += 1
-            return fn_label
-
-        def _visit_b(self, n: ASTNode) -> dict[str, dict[str, Any]]:
-            self._symbol_table: dict[str, dict[str, Any]] = {}
-            self._fn_label_idx: int = 0
-            self._builtin_visit_all(n)
-            return self._symbol_table
-
-        def _visit_declaration(self, n: ASTNode) -> None:
-            fn_name: str = n[1].lexeme
-            # todo: no bueno, maybe implement visitor context
-            self._current_locals: dict[str, int] = {}
-            self._current_var_loc: int = 0
-            self._current_extra_args: int = 0
-            self._builtin_visit_all(n)
-
-            saved: dict[str, int] = {}
-            saved["ra"] = self._var()
-
-            # todo: this shifting is kinda bad
-            # allocate slots for extra arguments at on the bottom
-            self._current_locals = {
-                var_name: self._current_extra_args * 4 + var_loc
-                for var_name, var_loc in self._current_locals.items()
-            }
-            saved = {
-                reg: self._current_extra_args * 4 + var_loc
-                for reg, var_loc in saved.items()
-            }
-            for i in range(self._current_extra_args):
-                self._current_locals[f"#a{6 + i}"] = i * 4
-
-            self._symbol_table[fn_name] = {
-                "label": self._fn_label(),
-                "locals": self._current_locals,
-                "saved": saved,
-                "stack_frame": (len(self._current_locals) + len(saved)) * 4,
-            }
-
-        def _var(self) -> int:
-            var_loc: int = self._current_var_loc
-            self._current_var_loc += 4
-            return var_loc
-
-        def _local(self, var_name: str) -> None:
-            if var_name not in self._current_locals:
-                self._current_locals[var_name] = self._var()
-
-        def _visit_flattened_argument_list(self, n: ASTNode) -> None:
-            self._builtin_visit_all(n)
-            if len(n) > 6 + self._current_extra_args:
-                self._current_extra_args = len(n) - 6
-
-        def _visit_variable(self, n: ASTNode) -> None:
-            self._local(n.lexeme)
-
     class Compile(Visitor):
+        # pass for aggregating string constants...
+        # might just be a construct created by myself
+        class Aggregate(Visitor):
+            def __init__(self):
+                super().__init__()
+
+            def _visit_b(self, n: ASTNode) -> dict[str, str]:
+                self._constant_aggregate: dict[str, str] = {}
+                self._constant_idx: int = 0
+                self._builtin_visit_all(n)
+                return self._constant_aggregate
+
+            def _visit_string(self, n: ASTNode) -> Any:
+                if n.literal not in self._constant_aggregate:
+                    self._constant_aggregate[n.literal] = f"s{self._constant_idx}"
+                    self._constant_idx += 1
+
+        class GenerateSymbolTable(Visitor):
+            def __init__(self):
+                super().__init__()
+
+            def _fn_label(self) -> str:
+                fn_label: str = f"f{self._fn_label_idx}"
+                self._fn_label_idx += 1
+                return fn_label
+
+            def _visit_b(self, n: ASTNode) -> dict[str, dict[str, Any]]:
+                self._symbol_table: dict[str, dict[str, Any]] = {}
+                self._fn_label_idx: int = 0
+                self._builtin_visit_all(n)
+                return self._symbol_table
+
+            def _visit_declaration(self, n: ASTNode) -> None:
+                fn_name: str = n[1].lexeme
+                # todo: no bueno, maybe implement visitor context
+                self._current_locals: dict[str, int] = {}
+                self._current_var_loc: int = 0
+                self._current_extra_args: int = 0
+                self._builtin_visit_all(n)
+
+                saved: dict[str, int] = {}
+                saved["ra"] = self._var()
+
+                # todo: this shifting is kinda bad
+                # allocate slots for extra arguments at on the bottom
+                self._current_locals = {
+                    var_name: self._current_extra_args * 4 + var_loc
+                    for var_name, var_loc in self._current_locals.items()
+                }
+                saved = {
+                    reg: self._current_extra_args * 4 + var_loc
+                    for reg, var_loc in saved.items()
+                }
+                for i in range(self._current_extra_args):
+                    self._current_locals[f"#a{6 + i}"] = i * 4
+
+                self._symbol_table[fn_name] = {
+                    "label": self._fn_label(),
+                    "locals": self._current_locals,
+                    "saved": saved,
+                    "stack_frame": (len(self._current_locals) + len(saved)) * 4,
+                }
+
+            def _var(self) -> int:
+                var_loc: int = self._current_var_loc
+                self._current_var_loc += 4
+                return var_loc
+
+            def _local(self, var_name: str) -> None:
+                if var_name not in self._current_locals:
+                    self._current_locals[var_name] = self._var()
+
+            def _visit_flattened_argument_list(self, n: ASTNode) -> None:
+                self._builtin_visit_all(n)
+                if len(n) > 6 + self._current_extra_args:
+                    self._current_extra_args = len(n) - 6
+
+            def _visit_variable(self, n: ASTNode) -> None:
+                self._local(n.lexeme)
+
         def __init__(
             self,
-            constant_aggregate: dict[str, str],
-            symbol_table: dict[str, dict[str, Any]],
         ):
             super().__init__(
                 default_nonterminal_node_visitor=Visitor.visit_all(joini),
             )
-            self._c: dict[str, str] = constant_aggregate
-            self._s: dict[str, dict[str, Any]] = symbol_table
 
         # todo: incredibly ugly
         def _generate_data_section(self) -> str:
@@ -292,6 +298,8 @@ class B:
             return label
 
         def _visit_b(self, n: ASTNode) -> str:
+            self._c: dict[str, str] = B.Compile.Aggregate()(n)
+            self._s: dict[str, dict[str, Any]] = B.Compile.GenerateSymbolTable()(n)
             self._label_num: int = 0
             return sjoin(
                 self._generate_data_section(),
@@ -728,3 +736,9 @@ class B:
 
                 case _:  # pragma: no cover
                     assert False
+
+
+B.parse = B.Parse()
+B.build_internal_ast = B.BuildInternalAST()
+B.print = B.Print()
+B.compile = B.Compile()

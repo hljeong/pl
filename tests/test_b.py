@@ -5,7 +5,8 @@ from git import Repo
 from contextlib import contextmanager
 from time import time
 
-from langs.a import A
+from common import load, Monad
+from langs import A
 from runtime import MP0
 from pl import run_b, print_b, compile_b
 
@@ -22,12 +23,6 @@ def from_git_root(path):
     repo = Repo(".", search_parent_directories=True)
     root = repo.git.rev_parse("--show-toplevel")
     return os.path.join(root, path)
-
-
-def load(file):
-    with open(file, "r") as f:
-        code = f.read()
-    return code
 
 
 def load_b(file):
@@ -78,14 +73,25 @@ def benchmark(filename, input=None):
     compile = lambda: compile_b(prog, False)
     if input:
         with pipe(input):
-            num_ins_executed = MP0.count_instructions_executed(
-                A.assemble(compile_b(prog, False))
+            num_ins_executed = (
+                Monad(compile_b(prog, False))
+                .then(A.parse)
+                .then(A.build_internal_ast)
+                .then(A.assemble)
+                .then(MP0.count_instructions_executed)
+                .value
             )
 
     else:
-        num_ins_executed = MP0.count_instructions_executed(
-            A.assemble(compile_b(prog, False))
+        num_ins_executed = (
+            Monad(compile_b(prog, False))
+            .then(A.parse)
+            .then(A.build_internal_ast)
+            .then(A.assemble)
+            .then(MP0.count_instructions_executed)
+            .value
         )
+
     execute = lambda: run_b(prog)
     if input:
 

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, Callable
 
 from common import Monad, load
 from lexical import Lex
@@ -18,8 +18,12 @@ class Expr(Lang):
         "expr", load("langs/expr/spec/expr.xbnf"), ignore=["#[^\n]*"]
     )
 
+    parse: Callable[[str], ASTNode]
+    build_internal_ast: Callable[[ASTNode], ASTNode]
+    print: Callable[[ASTNode], str]
+
     class Parse:
-        def __call__(self, prog: str, entry_point: str = "<expr>") -> ASTNode:
+        def __call__(self, prog: str, entry_point: Optional[str] = None) -> ASTNode:
             return (
                 Monad(prog)
                 .then(Lex.for_lang(Expr))
@@ -65,3 +69,8 @@ class Expr(Lang):
                     return self(n[0])
                 case _:  # pragma: no cover
                     assert False
+
+
+Expr.parse = Expr.Parse()
+Expr.build_internal_ast = Expr.BuildInternalAST()
+Expr.print = Expr.Print()

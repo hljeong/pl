@@ -2,15 +2,37 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import DefaultDict, cast, Optional, Callable, Union, Any
 
-from common import Monad, Log, pprint
+from common import Monad, Log
 from lexical import Vocabulary, Lex
 
 from .ast import ASTNode, TerminalASTNode, NonterminalASTNode
-from .parser import ExpressionTerm, Parse, NodeParser
-from .visitor import NonterminalASTNodeVisitor, Visitor
+from .parser import ExpressionTerm, Parse, NodeParser, NExpressionTerm
+from .visitor import Visitor
 
-Rule = list[list[ExpressionTerm]]
+Expression = list[ExpressionTerm]
+
+
+class Production(list[Expression]): ...
+
+
+class Alias(ExpressionTerm): ...
+
+
+Rule = Production | Alias
 Rules = dict[str, Rule]
+
+NExpression = list[NExpressionTerm]
+
+
+class NProduction(list[NExpression]): ...
+
+
+class NAlias(NExpressionTerm): ...
+
+
+NRule = NProduction | NAlias
+
+NRules = dict[str, NRule]
 
 
 class Grammar:
@@ -20,13 +42,135 @@ class Grammar:
             Monad(xbnf).then(Lex.for_lang(XBNF)).then(Parse.for_lang(XBNF)).value
         )
 
-        # todo: add ignore to xbnf
-        vocabulary: Vocabulary = GenerateVocabulary(ignore)(ast)
-        node_parsers: dict[str, NodeParser] = GenerateNodeParsers()(ast)
-
         # todo: dirty
         rules: Rules = GenerateRules()(ast)
+        nrules: NRules = NGenerateRules()(ast)
+        # from common import pprint
+        #
+        # pprint(nrules)
 
+        return cls(name, rules, nrules, ignore=ignore)
+
+    def __init__(
+        self,
+        name: str,
+        rules: Rules,
+        nrules: NRules,
+        ignore: list[str] = [],
+    ):
+        # todo: validate input grammar
+        self._name: str = name
+        self._rules = rules
+        self._nrules = nrules
+
+        self._generate_vocabulary(ignore)
+        self._generate_node_parsers()
+        self._ncheck_ll1()
+
+    def __repr__(self) -> str:
+        return f"Grammar(name='{self._name}'))"
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def rules(self) -> Rules:
+        return self._rules
+
+    @property
+    def nrules(self) -> NRules:
+        return self._nrules
+
+    @property
+    def entry_point(self) -> str:
+        return f"<{self._name}>"
+
+    @property
+    def vocabulary(self) -> Vocabulary:
+        return self._vocabulary
+
+    @property
+    def node_parsers(self) -> dict[str, NodeParser]:
+        return self._node_parsers
+
+    @property
+    def is_ll1(self) -> bool:
+        return self._is_ll1
+
+    # todo: type annotation
+    @property
+    def ll1_parsing_table(self) -> Any:
+        if not self._is_ll1:
+            raise ValueError(f"{self._name} is not ll(1)")
+        return self._ll1_parsing_table
+
+    def _generate_vocabulary(self, ignore: list[str]) -> None:
+        ignore.extend(Vocabulary.DEFAULT_IGNORE)
+        dictionary: dict[str, Vocabulary.Definition] = {}
+
+        for lhs in self._rules:
+            rule: Rule = self._rules[lhs]
+            if type(rule) is Production:
+                for expression in rule:
+                    for term in expression:
+                        # todo: terrible
+                        if term.node_type.startswith('"'):
+                            if term.node_type not in dictionary:
+                                # todo: ew... what?
+                                dictionary[term.node_type] = (
+                                    Vocabulary.Definition.make_exact(
+                                        term.node_type[1:-1]
+                                    )
+                                )
+                        elif term.node_type.startswith('r"'):
+                            if term.node_type not in dictionary:
+                                dictionary[term.node_type] = (
+                                    Vocabulary.Definition.make_regex(
+                                        term.node_type[1:-1]
+                                    )
+                                )
+
+            elif type(rule) is Alias:
+                # todo: terrible
+                if rule.node_type.startswith('"'):
+                    if rule.node_type not in dictionary:
+                        # todo: ew... what?
+                        dictionary[rule.node_type] = Vocabulary.Definition.make_exact(
+                            rule.node_type[1:-1]
+                        )
+                elif rule.node_type.startswith('r"'):
+                    if rule.node_type not in dictionary:
+                        dictionary[rule.node_type] = Vocabulary.Definition.make_regex(
+                            rule.node_type[1:-1]
+                        )
+
+            else:  # pragma: no cover
+                assert False
+
+        self._vocabulary: Vocabulary = Vocabulary(dictionary, ignore)
+
+    def _generate_node_parsers(self) -> None:
+        self._node_parsers: dict[str, NodeParser] = {}
+
+        for lhs in self._rules:
+            rule: Rule = self._rules[lhs]
+            if type(rule) is Production:
+                self._node_parsers[lhs] = Parse.generate_nonterminal_parser(lhs, rule)
+
+            elif type(rule) is Alias:
+                self._node_parsers[lhs] = Parse.generate_alias_parser(
+                    lhs, rule.node_type
+                )
+
+            else:  # pragma: no cover
+                assert False
+
+        for terminal in self._vocabulary:
+            self._node_parsers[terminal] = Parse.generate_terminal_parser(terminal)
+
+    def _check_ll1(self) -> None:
+        # todo: filthy
         def eq(a, b):
             for k in a:
                 if k not in b:
@@ -67,140 +211,609 @@ class Grammar:
             return nxt
 
         first: DefaultDict[str, list[str]] = defaultdict(lambda: [])
-        for terminal in vocabulary:
+        for terminal in self._vocabulary:
             first[terminal].append(terminal)
+        for lhs in self._rules:
+            rule: Rule = self._rules[lhs]
+            if type(rule) is Alias:
+                first[lhs].append(rule.node_type)
 
         def iterate_first(cur):
             nxt = cp(cur)
-            for lhs in rules:
-                rule = rules[lhs]
-                for production in rule:
-                    empty = True
-                    for term in production:
-                        if term.node_type == "e":
-                            continue
-                        ueq(nxt[lhs], cur[term.node_type])
-                        if "e" not in cur[term.node_type]:
-                            empty = False
-                            break
+            for lhs in self._rules:
+                rule = self._rules[lhs]
+                if type(rule) is Production:
+                    for expression in rule:
+                        nullable = True
+                        for term in expression:
+                            if term.node_type == "e":
+                                continue
+                            ueq(nxt[lhs], cur[term.node_type])
+                            if "e" not in cur[term.node_type]:
+                                nullable = False
+                                break
 
-                    if empty:
-                        u(nxt[lhs], "e")
+                        if nullable:
+                            u(nxt[lhs], "e")
             return nxt
 
         first = fixed_point_iter(first, iterate_first, eq)  # type: ignore
 
         follow: DefaultDict[str, list[str]] = defaultdict(lambda: [])
-        follow[f"<{name}>"].append("$")
+        follow[f"<{self._name}>"].append("$")
 
         def iterate_follow(cur):
             nxt = cp(cur)
-            for lhs in rules:
-                rule = rules[lhs]
-                for production in rule:
-                    ueq(nxt[production[-1].node_type], cur[lhs])
+            for lhs in self._rules:
+                rule = self._rules[lhs]
+                if type(rule) is Production:
+                    for production in rule:
+                        ueq(nxt[production[-1].node_type], cur[lhs])
 
-                    empty = True
-                    for i in range(len(production) - 1, 0, -1):
-                        l = production[i - 1].node_type
-                        r = production[i].node_type
-                        ueq(nxt[l], first[r])
-                        if empty:
-                            if "e" in first[r]:
-                                ueq(nxt[l], cur[lhs])
-                            else:
-                                empty = False
+                        right_nullable = True
+                        for i in range(len(production) - 1, 0, -1):
+                            l = production[i - 1].node_type
+                            r = production[i].node_type
+                            ueq(nxt[l], first[r])
+                            if right_nullable:
+                                if "e" in first[r]:
+                                    ueq(nxt[l], cur[lhs])
+                                else:
+                                    right_nullable = False
             return nxt
 
         follow = fixed_point_iter(follow, iterate_follow, eq)
 
+        # from common import pprint
+        #
         # print("first:")
         # pprint(dict(first))
         #
         # print("follow:")
         # pprint(dict(follow))
 
-        ll1_parsing_table: DefaultDict[
+        self._ll1_parsing_table: DefaultDict[
             str,
             dict[str, Optional[int]],
             # str,
             # dict[str, Optional[list[ExpressionTerm]]],
         ] = defaultdict(lambda: {})
 
-        ll1 = True
-        for lhs in rules:
-            rule = rules[lhs]
-            for idx, production in enumerate(rule):
-                nullable = True
-                for term in production:
-                    for x in first[term.node_type]:
-                        if x != "e":
-                            if x in ll1_parsing_table[lhs]:
-                                ll1 = False
+        self._is_ll1 = True
+        for lhs in self._rules:
+            rule = self._rules[lhs]
+            if type(rule) is Production:
+                for idx, expression in enumerate(rule):
+                    nullable = True
+                    for term in expression:
+                        for x in first[term.node_type]:
+                            if x != "e":
+                                if x in self._ll1_parsing_table[lhs]:
+                                    self._is_ll1 = False
+                                    Log.w(
+                                        f"{self._name} is not ll(1): multiple productions for ({lhs}, {x})"
+                                    )
+                                    return
+                                self._ll1_parsing_table[lhs][x] = idx
+                        if "e" not in first[term.node_type]:
+                            nullable = False
+                            break
+                    if nullable:
+                        for x in follow[lhs]:
+                            if x in self._ll1_parsing_table[lhs]:
+                                self._is_ll1 = False
                                 Log.w(
-                                    f"{name} is not ll(1): multiple productions for ({lhs}, {x})"
+                                    f"{self._name} is not ll(1): multiple productions for ({lhs}, {x})"
                                 )
-                            # raise ValueError("not ll1")
-                            ll1_parsing_table[lhs][x] = idx
-                            # ll1_parsing_table[lhs][x] = production
-                    if "e" not in first[term.node_type]:
-                        nullable = False
-                        break
-                if nullable:
-                    for x in follow[lhs]:
-                        if x in ll1_parsing_table[lhs]:
-                            ll1 = False
-                            Log.w(
-                                f"{name} is not ll(1): multiple productions for ({lhs}, {x})"
-                            )
-                            # raise ValueError("not ll1")
-                        ll1_parsing_table[lhs][x] = idx
-                        # ll1_parsing_table[lhs][x] = production
+                                return
+                            self._ll1_parsing_table[lhs][x] = idx
 
-        if ll1:
-            # print("parsing table:")
-            # pprint(dict(ll1_parsing_table))
-            return cls(name, vocabulary, node_parsers, ll1_parsing_table, rules)
+    def _ncheck_ll1(self) -> None:
+        # todo: filthy
+        def eq(a, b):
+            for k in a:
+                if k not in b:
+                    return False
+                ak, bk = a[k], b[k]
+                if len(ak) != len(bk):
+                    return False
+                for aki in ak:
+                    if aki not in bk:
+                        return False
+            for k in b:
+                if k not in a:
+                    return False
+            return True
 
-        return cls(name, vocabulary, node_parsers)
+        def cp(r):
+            f = defaultdict(lambda: [])
+            for k in r:
+                f[k] = []
+                for t in r[k]:
+                    f[k].append(t)
+            return f
 
-    def __init__(
-        self,
-        name: str,
-        vocabulary: Vocabulary,
-        node_parsers: dict[str, NodeParser],
-        ll1_parsing_table=None,
-        rules=None,
-    ):
-        # todo: validate input grammar
-        self._name: str = name
-        self._vocabulary: Vocabulary = vocabulary
-        self._node_parsers: dict[str, NodeParser] = node_parsers
-        self.ll1_parsing_table = ll1_parsing_table
-        self.rules = rules
+        def u(a, x):
+            if x not in a:
+                a.append(x)
 
-    # todo: does this make sense
-    def __repr__(self) -> str:
-        return f"Grammar(name='{self._name}', vocabulary={self._vocabulary}, nonterminals={list(filter(lambda node: node.startswith('<'), self._node_parsers.keys()))})"
+        # filter epsilon by default
+        def ueq(a, b, f=["e"]):
+            a.extend(list(filter(lambda x: x not in a and x not in f, b)))
 
-    @property
-    def name(self) -> str:
-        return self._name
+        def fixed_point_iter(start, iterate, eq):
+            cur = start
+            nxt = iterate(cur)
+            while not eq(cur, nxt):
+                cur = nxt
+                nxt = iterate(cur)
+            return nxt
 
-    @property
-    def vocabulary(self) -> Vocabulary:
-        return self._vocabulary
+        first: DefaultDict[str, list[str]] = defaultdict(lambda: [])
+        for terminal in self._vocabulary:
+            first[terminal].append(terminal)
+        for lhs in self._nrules:
+            rule: NRule = self._nrules[lhs]
+            if type(rule) is NAlias:
+                first[lhs].append(rule.node_type)
 
-    @property
-    def node_parsers(self) -> dict[str, NodeParser]:
-        return self._node_parsers
+        def iterate_first(cur):
+            nxt = cp(cur)
+            for lhs in self._nrules:
+                rule = self._nrules[lhs]
+                if type(rule) is NProduction:
+                    for expression in rule:
+                        nullable = True
+                        for term in expression:
+                            if term.node_type == "e":
+                                continue
+                            ueq(nxt[lhs], cur[term.node_type])
+                            if "e" not in cur[term.node_type]:
+                                nullable = False
+                                break
 
-    @property
-    def entry_point(self) -> str:
-        return f"<{self._name}>"
+                        if nullable:
+                            u(nxt[lhs], "e")
+            return nxt
+
+        first = fixed_point_iter(first, iterate_first, eq)  # type: ignore
+
+        follow: DefaultDict[str, list[str]] = defaultdict(lambda: [])
+        follow[f"<{self._name}>"].append("$")
+
+        def iterate_follow(cur):
+            nxt = cp(cur)
+            for lhs in self._nrules:
+                rule = self._nrules[lhs]
+                if type(rule) is NProduction:
+                    for production in rule:
+                        ueq(nxt[production[-1].node_type], cur[lhs])
+
+                        right_nullable = True
+                        for i in range(len(production) - 1, 0, -1):
+                            l = production[i - 1].node_type
+                            r = production[i].node_type
+                            ueq(nxt[l], first[r])
+                            if right_nullable:
+                                if "e" in first[r]:
+                                    ueq(nxt[l], cur[lhs])
+                                else:
+                                    right_nullable = False
+            return nxt
+
+        follow = fixed_point_iter(follow, iterate_follow, eq)
+
+        # from common import pprint
+        #
+        # print("first:")
+        # pprint(dict(first))
+        #
+        # print("follow:")
+        # pprint(dict(follow))
+
+        self._ll1_parsing_table: DefaultDict[
+            str,
+            dict[str, Optional[int]],
+            # str,
+            # dict[str, Optional[list[ExpressionTerm]]],
+        ] = defaultdict(lambda: {})
+
+        self._is_ll1 = True
+        for lhs in self._nrules:
+            rule = self._nrules[lhs]
+            if type(rule) is NProduction:
+                for idx, expression in enumerate(rule):
+                    nullable = True
+                    for term in expression:
+                        for x in first[term.node_type]:
+                            if x != "e":
+                                if x in self._ll1_parsing_table[lhs]:
+                                    self._is_ll1 = False
+                                    Log.w(
+                                        f"{self._name} is not ll(1): multiple productions for ({lhs}, {x})"
+                                    )
+                                    return
+                                self._ll1_parsing_table[lhs][x] = idx
+                        if "e" not in first[term.node_type]:
+                            nullable = False
+                            break
+                    if nullable:
+                        for x in follow[lhs]:
+                            if x in self._ll1_parsing_table[lhs]:
+                                self._is_ll1 = False
+                                Log.w(
+                                    f"{self._name} is not ll(1): multiple productions for ({lhs}, {x})"
+                                )
+                                return
+                            self._ll1_parsing_table[lhs][x] = idx
 
 
 class XBNF:
+    nrules = NRules(
+        [
+            (
+                "<xbnf>",
+                NProduction(
+                    [[NExpressionTerm("<production>"), NExpressionTerm("<rule>*")]],
+                ),
+            ),
+            (
+                "<rule>+",
+                NProduction(
+                    [
+                        [NExpressionTerm("<rule>"), NExpressionTerm("<rule>+")],
+                        [NExpressionTerm("<rule>")],
+                    ],
+                ),
+            ),
+            (
+                "<rule>*",
+                NProduction(
+                    [[NExpressionTerm("<rule>+")], [NExpressionTerm("e")]],
+                ),
+            ),
+            (
+                "<rule>",
+                NProduction(
+                    [
+                        [NExpressionTerm("<production>")],
+                        [NExpressionTerm("<alias>")],
+                    ],
+                ),
+            ),
+            (
+                "<production>",
+                NProduction(
+                    [
+                        [
+                            NExpressionTerm("<nonterminal>"),
+                            NExpressionTerm('"::="'),
+                            NExpressionTerm("<body>"),
+                            NExpressionTerm('";"'),
+                        ],
+                    ],
+                ),
+            ),
+            (
+                "<alias>",
+                NProduction(
+                    [
+                        [
+                            NExpressionTerm('"alias"'),
+                            NExpressionTerm("<nonterminal>"),
+                            NExpressionTerm('"::="'),
+                            NExpressionTerm("<terminal>"),
+                            NExpressionTerm('";"'),
+                        ],
+                    ],
+                ),
+            ),
+            (
+                "<nonterminal>",
+                NProduction(
+                    [
+                        [
+                            NExpressionTerm('"<"'),
+                            NExpressionTerm("identifier"),
+                            NExpressionTerm('">"'),
+                        ],
+                    ],
+                ),
+            ),
+            (
+                "<body>",
+                NProduction(
+                    [
+                        [
+                            NExpressionTerm("<expression>"),
+                            NExpressionTerm("<body>:1*"),
+                        ],
+                    ],
+                ),
+            ),
+            (
+                "<body>:1+",
+                NProduction(
+                    [
+                        [NExpressionTerm("<body>:1"), NExpressionTerm("<body>:1+")],
+                        [NExpressionTerm("<body>:1")],
+                    ],
+                ),
+            ),
+            (
+                "<body>:1*",
+                NProduction(
+                    [
+                        [NExpressionTerm("<body>:1+")],
+                        [NExpressionTerm("e")],
+                    ],
+                ),
+            ),
+            (
+                "<body>:1",
+                NProduction(
+                    [
+                        [
+                            NExpressionTerm('"|"'),
+                            NExpressionTerm("<expression>"),
+                        ],
+                    ],
+                ),
+            ),
+            (
+                "<expression>",
+                NProduction(
+                    [
+                        [
+                            NExpressionTerm("<term>", "+"),
+                        ],
+                    ],
+                ),
+            ),
+            (
+                "<term>",
+                NProduction(
+                    [
+                        [
+                            NExpressionTerm("<term>:0?"),
+                            NExpressionTerm("<group>"),
+                            NExpressionTerm("<multiplicity>?"),
+                        ],
+                    ],
+                ),
+            ),
+            (
+                "<term>:0?",
+                NProduction(
+                    [
+                        [NExpressionTerm("<term>:0")],
+                        [NExpressionTerm("e")],
+                    ],
+                ),
+            ),
+            (
+                "<multiplicity>?",
+                NProduction(
+                    [
+                        [NExpressionTerm("<multiplicity>")],
+                        [NExpressionTerm("e")],
+                    ],
+                ),
+            ),
+            (
+                "<term>:0",
+                NProduction(
+                    [
+                        [
+                            NExpressionTerm("<label>"),
+                            NExpressionTerm('"="'),
+                        ],
+                    ],
+                ),
+            ),
+            (
+                "<group>",
+                NProduction(
+                    [
+                        [NExpressionTerm("<item>")],
+                        [
+                            NExpressionTerm('"("'),
+                            NExpressionTerm("<body>"),
+                            NExpressionTerm('")"'),
+                        ],
+                    ],
+                ),
+            ),
+            (
+                "<item>",
+                NProduction(
+                    [
+                        [NExpressionTerm("<nonterminal>")],
+                        [NExpressionTerm("<terminal>")],
+                    ],
+                ),
+            ),
+            (
+                "<terminal>",
+                NProduction(
+                    [
+                        [NExpressionTerm("escaped_string")],
+                        [NExpressionTerm("regex")],
+                        [NExpressionTerm("identifier")],
+                    ],
+                ),
+            ),
+            (
+                "<multiplicity>",
+                NProduction(
+                    [
+                        [NExpressionTerm('"?"')],
+                        [NExpressionTerm('"*"')],
+                        [NExpressionTerm('"+"')],
+                    ],
+                ),
+            ),
+            ("<label>", NAlias("identifier")),
+        ]
+    )
+
+    rules = Rules(
+        [
+            (
+                "<xbnf>",
+                Production(
+                    [[ExpressionTerm("<production>"), ExpressionTerm("<rule>", "*")]],
+                ),
+            ),
+            (
+                "<rule>",
+                Production(
+                    [
+                        [ExpressionTerm("<production>")],
+                        [ExpressionTerm("<alias>")],
+                    ],
+                ),
+            ),
+            (
+                "<production>",
+                Production(
+                    [
+                        [
+                            ExpressionTerm("<nonterminal>"),
+                            ExpressionTerm('"::="'),
+                            ExpressionTerm("<body>"),
+                            ExpressionTerm('";"'),
+                        ],
+                    ],
+                ),
+            ),
+            (
+                "<alias>",
+                Production(
+                    [
+                        [
+                            ExpressionTerm('"alias"'),
+                            ExpressionTerm("<nonterminal>"),
+                            ExpressionTerm('"::="'),
+                            ExpressionTerm("<terminal>"),
+                            ExpressionTerm('";"'),
+                        ],
+                    ],
+                ),
+            ),
+            (
+                "<nonterminal>",
+                Production(
+                    [
+                        [
+                            ExpressionTerm('"<"'),
+                            ExpressionTerm("identifier"),
+                            ExpressionTerm('">"'),
+                        ],
+                    ],
+                ),
+            ),
+            (
+                "<body>",
+                Production(
+                    [
+                        [
+                            ExpressionTerm("<expression>"),
+                            ExpressionTerm("<body>:1", "*"),
+                        ],
+                    ],
+                ),
+            ),
+            (
+                "<body>:1",
+                Production(
+                    [
+                        [
+                            ExpressionTerm('"|"'),
+                            ExpressionTerm("<expression>"),
+                        ],
+                    ],
+                ),
+            ),
+            (
+                "<expression>",
+                Production(
+                    [
+                        [
+                            ExpressionTerm("<term>", "+"),
+                        ],
+                    ],
+                ),
+            ),
+            (
+                "<term>",
+                Production(
+                    [
+                        [
+                            ExpressionTerm("<term>:0", "?"),
+                            ExpressionTerm("<group>"),
+                            ExpressionTerm("<multiplicity>", "?"),
+                        ],
+                    ],
+                ),
+            ),
+            (
+                "<term>:0",
+                Production(
+                    [
+                        [
+                            ExpressionTerm("<label>"),
+                            ExpressionTerm('"="'),
+                        ],
+                    ],
+                ),
+            ),
+            (
+                "<group>",
+                Production(
+                    [
+                        [ExpressionTerm("<item>")],
+                        [
+                            ExpressionTerm('"("'),
+                            ExpressionTerm("<body>"),
+                            ExpressionTerm('")"'),
+                        ],
+                    ],
+                ),
+            ),
+            (
+                "<item>",
+                Production(
+                    [
+                        [ExpressionTerm("<nonterminal>")],
+                        [ExpressionTerm("<terminal>")],
+                    ],
+                ),
+            ),
+            (
+                "<terminal>",
+                Production(
+                    [
+                        [ExpressionTerm("escaped_string")],
+                        [ExpressionTerm("regex")],
+                        [ExpressionTerm("identifier")],
+                    ],
+                ),
+            ),
+            (
+                "<multiplicity>",
+                Production(
+                    [
+                        [ExpressionTerm('"?"')],
+                        [ExpressionTerm('"*"')],
+                        [ExpressionTerm('"+"')],
+                    ],
+                ),
+            ),
+            ("<label>", Alias("identifier")),
+        ]
+    )
+
     vocabulary = Vocabulary(
         {
             '"alias"': Vocabulary.Definition.make_exact("alias"),
@@ -352,39 +965,9 @@ class XBNF:
 
     grammar: Grammar = Grammar(
         "xbnf",
-        vocabulary=vocabulary,
-        node_parsers=node_parsers,
+        rules=rules,
+        nrules=nrules,
     )
-
-
-class GenerateVocabulary(Visitor):
-    def __init__(self, ignore: list[str] = []):
-        super().__init__()
-        self._ignore: list[str] = Vocabulary.DEFAULT_IGNORE
-        self._ignore.extend(ignore)
-        self._dictionary: dict[str, Vocabulary.Definition] = {}
-
-    def _visit_xbnf(self, n: ASTNode) -> Vocabulary:
-        self._builtin_visit_all(n)
-        return Vocabulary(self._dictionary, ignore=self._ignore)
-
-    def _visit_regex(
-        self,
-        n: ASTNode,
-    ) -> None:
-        if n.lexeme not in self._dictionary:
-            self._dictionary[cast(TerminalASTNode, n).lexeme] = (
-                Vocabulary.Definition.make_regex(n.literal)
-            )
-
-    def _visit_escaped_string(
-        self,
-        n: ASTNode,
-    ) -> None:
-        if n.lexeme not in self._dictionary:
-            self._dictionary[cast(TerminalASTNode, n).lexeme] = (
-                Vocabulary.Definition.make_exact(n.literal)
-            )
 
 
 class GenerateNodeParsers(Visitor):
@@ -636,13 +1219,13 @@ class GenerateRules(Visitor):
         n: ASTNode,
     ) -> None:
         alias: str = f"<{n[1][1].lexeme}>"
-        self._rules[alias] = [[ExpressionTerm(self(n[3]))]]
+        self._rules[alias] = Alias(self(n[3]))
 
     def _visit_body(
         self,
         n: ASTNode,
-    ) -> Rule:
-        productions: Rule = []
+    ) -> Production:
+        productions: Production = Production()
 
         # only 1 production
         if len(n[1]) == 0:
@@ -682,8 +1265,8 @@ class GenerateRules(Visitor):
     def _visit_expression(
         self,
         n: ASTNode,
-    ) -> list[ExpressionTerm]:
-        ret = []
+    ) -> Expression:
+        ret: Expression = Expression()
 
         # node[0]: <term>+
         # <term>: (<label> "=")? <group> <multiplicity>?
@@ -709,6 +1292,206 @@ class GenerateRules(Visitor):
             group: str = self(term[1])
 
             ret.append(ExpressionTerm(group, multiplicity, label))
+
+        return ret
+
+    def _visit_group(
+        self,
+        n: ASTNode,
+    ) -> str:
+        match n.choice:
+            # node: <item>
+            case 0:
+                # term: <nonterminal> | <terminal>
+                term = n[0]
+                self._idx_stack[-1] += 1
+                return self(term)
+
+            # node: "\(" <body> "\)"
+            case 1:
+                auxiliary_nonterminal = f"{self._lhs_stack[-1]}:{self._idx_stack[-1]}"
+                self._lhs_stack.append(auxiliary_nonterminal)
+                self._idx_stack.append(0)
+
+                # node[1]: <body>
+                self._rules[auxiliary_nonterminal] = self(n[1])
+
+                self._idx_stack.pop()
+                self._lhs_stack.pop()
+                self._idx_stack[-1] += 1
+
+                return auxiliary_nonterminal
+
+    def _visit_nonterminal(
+        self,
+        n: ASTNode,
+    ) -> str:
+        nonterminal: str = f"<{n[1].lexeme}>"
+        return nonterminal
+
+    def _visit_terminal(
+        self,
+        n: ASTNode,
+    ) -> str:
+        terminal: str = n[0].lexeme
+        return terminal
+
+    def _visit_multiplicity(
+        self,
+        n: ASTNode,
+    ) -> str:
+        return n[0].lexeme
+
+
+class NGenerateRules(Visitor):
+    def __init__(self):
+        super().__init__()
+
+        # todo: this is ugly, move to call stack
+        self._lhs_stack: list[str] = []
+        self._idx_stack: list[int] = []
+        self._used: set[str] = set()
+
+        self._rules: NRules = NRules()
+
+    def _visit_xbnf(self, n: ASTNode) -> NRules:
+        self._builtin_visit_all(n)
+        return self._rules
+
+    def _visit_production(
+        self,
+        n: ASTNode,
+    ) -> None:
+        nonterminal: str = f"<{n[0][1].lexeme}>"
+
+        self._lhs_stack.append(nonterminal)
+        self._idx_stack.append(0)
+
+        self._rules[nonterminal] = self(n[2])
+
+        self._idx_stack.pop()
+        self._lhs_stack.pop()
+
+    def _visit_alias(
+        self,
+        n: ASTNode,
+    ) -> None:
+        alias: str = f"<{n[1][1].lexeme}>"
+        self._rules[alias] = NAlias(self(n[3]))
+
+    def _visit_body(
+        self,
+        n: ASTNode,
+    ) -> NProduction:
+        productions: NProduction = NProduction()
+
+        # only 1 production
+        if len(n[1]) == 0:
+            # node[0]: <expression>
+            productions.append(self(n[0]))
+
+        # multiple productions
+        else:
+
+            auxiliary_nonterminal = f"{self._lhs_stack[-1]}~{self._idx_stack[-1]}"
+            self._lhs_stack.append(auxiliary_nonterminal)
+            self._idx_stack.append(0)
+
+            # node[0]: <expression>
+            productions.append(self(n[0]))
+
+            self._idx_stack.pop()
+            self._lhs_stack.pop()
+            self._idx_stack[-1] += 1
+
+        # node[1]: ("\|" <expression>)*
+        # or_production: "\|" <expression>
+        for or_production in n[1]:
+            auxiliary_nonterminal = f"{self._lhs_stack[-1]}~{self._idx_stack[-1]}"
+            self._lhs_stack.append(auxiliary_nonterminal)
+            self._idx_stack.append(0)
+
+            # or_production[1]: <expression>
+            productions.append(self(or_production[1]))
+
+            self._idx_stack.pop()
+            self._lhs_stack.pop()
+            self._idx_stack[-1] += 1
+
+        return productions
+
+    def _visit_expression(
+        self,
+        n: ASTNode,
+    ) -> NExpression:
+        ret: NExpression = NExpression()
+
+        # node[0]: <term>+
+        # <term>: (<label> "=")? <group> <multiplicity>?
+        for term in n[0]:
+            label: Optional[str] = None
+            optional_label: NonterminalASTNode = term[0]
+
+            if optional_label:
+                label = optional_label[0][0].lexeme
+
+            # multiplicity: <multiplicity>?
+            optional_multiplicity: NonterminalASTNode = term[2]
+
+            multiplicity: str
+            # default multiplicity is 1
+            if not optional_multiplicity:
+                multiplicity = ""
+
+            else:
+                multiplicity = self(optional_multiplicity[0])
+
+            # expression_term[1]: <group>
+            group: str = self(term[1])
+
+            match multiplicity:
+                case "":
+                    ret.append(NExpressionTerm(group, label))
+
+                case "?":
+                    self._rules[f"{group}?"] = NProduction(
+                        [
+                            NExpression([NExpressionTerm(group)]),
+                            NExpression([NExpressionTerm("e")]),
+                        ]
+                    )
+                    ret.append(NExpressionTerm(f"{group}?", label))
+
+                case "+":
+                    self._rules[f"{group}+"] = NProduction(
+                        [
+                            NExpression(
+                                [NExpressionTerm(group), NExpressionTerm(f"{group}+")]
+                            ),
+                            NExpression([NExpressionTerm(group)]),
+                        ]
+                    )
+                    ret.append(NExpressionTerm(f"{group}+", label))
+
+                case "*":
+                    self._rules[f"{group}+"] = NProduction(
+                        [
+                            NExpression(
+                                [NExpressionTerm(group), NExpressionTerm(f"{group}+")]
+                            ),
+                            NExpression([NExpressionTerm(group)]),
+                        ]
+                    )
+                    self._rules[f"{group}*"] = NProduction(
+                        [
+                            NExpression([NExpressionTerm("e")]),
+                            NExpression([NExpressionTerm(f"{group}+")]),
+                        ]
+                    )
+                    ret.append(NExpressionTerm(f"{group}*", label))
+
+                case _:
+                    assert False
 
         return ret
 

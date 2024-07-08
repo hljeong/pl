@@ -134,7 +134,9 @@ class Lex:
             if token_match:
                 token_matches[token_type] = token_match.group()
 
-        if len(token_matches) == 0:
+        if len(token_matches) == 0 or all(
+            map(lambda token_match: token_match in ["e", "$"], token_matches)
+        ):
             # todo: do this more elegantly
             error: Lex.LexError = Lex.LexError(
                 f"invalid character '{self._peek}' encountered at {str(self._position.cursor)}"

@@ -49,6 +49,33 @@ class ExpressionTerm:
         return f"ExpressionTerm({self})"
 
 
+class NExpressionTerm:
+    def __init__(
+        self,
+        node_type: str,
+        label: Optional[str] = None,
+    ):
+        self._node_type: str = node_type
+        self._label: Optional[str] = label
+
+    @property
+    def node_type(self) -> str:
+        return self._node_type
+
+    @property
+    def label(self) -> Optional[str]:
+        return self._label
+
+    def __str__(self) -> str:
+        if self._label is None:
+            return f"{self._node_type}"
+        else:
+            return f"{self._label}={self._node_type}"
+
+    def __repr__(self) -> str:
+        return f"ExpressionTerm({self})"
+
+
 class Parse:
 
     class Result(NamedTuple):
@@ -61,11 +88,22 @@ class Parse:
 
     @classmethod
     def for_grammar(cls, grammar: "Grammar", entry_point: Optional[str] = None):  # type: ignore
-        return cls(
-            grammar.node_parsers,
-            grammar.entry_point if entry_point is None else entry_point,
-            grammar_name=grammar.name,
-        )
+        if grammar.is_ll1:
+            Log.d(f"generating ll(1) parser for {grammar.name}")
+            return ParseLL1(
+                grammar.ll1_parsing_table,
+                grammar.rules,
+                grammar.entry_point if entry_point is None else entry_point,
+                grammar.name,
+            )
+
+        else:
+            Log.d(f"generating backtracking parser for {grammar.name}")
+            return cls(
+                grammar.node_parsers,
+                grammar.entry_point if entry_point is None else entry_point,
+                grammar.name,
+            )
 
     @classmethod
     def for_lang(cls, lang: "Lang", entry_point: Optional[str] = None):  # type: ignore
@@ -401,9 +439,17 @@ class ParseLL1:
         # todo: terrible start...
         if node_type.startswith("<"):
             t: Token = self.__safe_peek2()
+            # alias
+            # todo: disgusting.
+            if node_type not in self._ll1_parsing_table:
+                token = self.expect(self._rules[node_type].node_type)
+                if not token:
+                    # todo: need way better error message
+                    raise Parse.ParseError(f"did not parse expected {node_type}")
+                return AliasASTNode(node_type, self._rules[node_type].node_type, token)
             if t.token_type not in self._ll1_parsing_table[node_type]:
                 raise Parse.ParseError(
-                    f"unexpected token '{t.lexeme}', expecting {{{', '.join(self._ll1_parsing_table[node_type].keys())}}}"
+                    f"unexpected token '{t.lexeme}' while parsing {node_type}, expecting {{{', '.join(self._ll1_parsing_table[node_type].keys())}}}"
                 )
             choice: int = self._ll1_parsing_table[node_type][t.token_type]
             n: NonterminalASTNode = ChoiceNonterminalASTNode(node_type, choice)

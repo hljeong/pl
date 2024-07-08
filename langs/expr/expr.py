@@ -25,13 +25,12 @@ class Expr(Lang):
     print: Callable[[ASTNode], str]
 
     class Parse:
-        def __call__(self, prog: str, entry_point: Optional[str] = None) -> ASTNode:
-            return (
-                Monad(prog)
-                .then(Lex.for_lang(Expr))
-                .then(Parse.for_lang(Expr, entry_point=entry_point))
-                .value
-            )
+        def __init__(self, entry_point: Optional[str] = None) -> None:
+            self._lex = Lex.for_lang(Expr)
+            self._parse = Parse.for_lang(Expr, entry_point=entry_point)
+
+        def __call__(self, prog: str) -> ASTNode:
+            return Monad(prog).then(self._lex).then(self._parse).value
 
     class BuildInternalAST(Visitor):
         def __init__(self):

@@ -68,10 +68,11 @@ class Ins(bytearray):
                 (self.nominal_value << other.bitwidth) | other.nominal_value,
                 self.bitwidth + other.bitwidth,
             )
-            Log.w(
-                f"fragment concatenation crosses byte boundary: {self} + {other} = {frag}",
-                frag.bitwidth % 8 != 0 and (frag.bitwidth // 8) > (self.bitwidth // 8),
-            )
+            # todo: this shouldnt be a warning, review
+            # Log.w(
+            #     f"fragment concatenation crosses byte boundary: {self} + {other} = {frag}",
+            #     frag.bitwidth % 8 != 0 and (frag.bitwidth // 8) > (self.bitwidth // 8),
+            # )
             return frag
 
     def __init__(self, frag: Ins.Frag) -> None:

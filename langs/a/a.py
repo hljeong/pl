@@ -24,6 +24,7 @@ class A(Lang):
     )
 
     parse: Callable[[str], ASTNode]
+    parse_instruction: Callable[[str], ASTNode]
     build_internal_ast: Callable[[ASTNode], ASTNode]
     print: Callable[[ASTNode], str]
     assemble: Callable[[ASTNode], Prog]
@@ -38,13 +39,12 @@ class A(Lang):
         return ins_count.value
 
     class Parse:
-        def __call__(self, prog: str, entry_point: Optional[str] = None) -> ASTNode:
-            return (
-                Monad(prog)
-                .then(Lex.for_lang(A))
-                .then(Parse.for_lang(A, entry_point=entry_point))
-                .value
-            )
+        def __init__(self, entry_point: Optional[str] = None) -> None:
+            self._lex = Lex.for_lang(A)
+            self._parse = Parse.for_lang(A, entry_point=entry_point)
+
+        def __call__(self, prog: str) -> ASTNode:
+            return Monad(prog).then(self._lex).then(self._parse).value
 
     class Print(Visitor):
         def __init__(self):
@@ -170,7 +170,7 @@ class A(Lang):
                 # todo: probably can't just copy extras if it contains more than labels
                 # todo: now extras contain grammatic term name info... does update work?
                 def ins(code: str, extras: dict[str, Any] = {}) -> ASTNode:
-                    n_: ASTNode = A.Parse()(code, entry_point="<instruction>")[0]
+                    n_: ASTNode = A.parse_instruction(code)[0]
                     n_.extras.update(dict(extras))
                     return n_
 
@@ -438,7 +438,7 @@ class A(Lang):
             self, n: ASTNode, label_map: dict[str, int], **ctx: Any
         ) -> Ins:
             def ins(code: str) -> ASTNode:
-                n_: ASTNode = A.Parse()(code, entry_point="<instruction>")
+                n_: ASTNode = A.parse_instruction(code)
                 return n_
 
             match n.choice:
@@ -499,6 +499,7 @@ class A(Lang):
 
 
 A.parse = A.Parse()
+A.parse_instruction = A.Parse("<instruction>")
 A.build_internal_ast = A.BuildInternalAST()
 A.print = A.Print()
 A.assemble = A.Assemble()

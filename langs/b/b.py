@@ -28,13 +28,12 @@ class B:
     )
 
     class Parse:
-        def __call__(self, prog, entry_point: Optional[str] = None) -> ASTNode:
-            return (
-                Monad(prog)
-                .then(Lex.for_lang(B))
-                .then(Parse.for_lang(B, entry_point=entry_point))
-                .value
-            )
+        def __init__(self, entry_point: Optional[str] = None) -> None:
+            self._lex = Lex.for_lang(B)
+            self._parse = Parse.for_lang(B, entry_point=entry_point)
+
+        def __call__(self, prog) -> ASTNode:
+            return Monad(prog).then(self._lex).then(self._parse).value
 
     parse: Callable[[str], ASTNode]
     build_internal_ast: Callable[[ASTNode], ASTNode]
@@ -141,15 +140,15 @@ class B:
             n: ChoiceNonterminalASTNode,
         ) -> str:
             match n.choice:
-                # <statement> ::= (<variable> | <array_access>) "=" (<operand> | <expression> | "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)" | "stoi" "\(" <operand> "\)" | <function> "\(" <flattened_parameter_list>? "\)") ";";
+                # <statement> ::= (<variable> | <array_access>) "=" (<operand> | <expression> | <function> "\(" <flattened_parameter_list>? "\)") ";";
                 case 0:
                     match n.rhs.choice:
                         # <operand> | <expression>
                         case 0 | 1:
                             return f"{self(n.lhs)} = {self(n.rhs)};"
 
-                        # "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)" | "stoi" "\(" <operand> "\)" | <function> "\(" <flattened_parameter_list>? "\)"
-                        case 2 | 3 | 4 | 5:
+                        # <function> "\(" <flattened_parameter_list>? "\)"
+                        case 2:
                             return (
                                 # todo: change n.rhs[2] to n.rhs.args when function calls are unified
                                 f"{self(n.lhs)} = {self(n.rhs.fn)}({self(n.rhs[2])});"
@@ -158,22 +157,22 @@ class B:
                         case _:  # pragma: no cover
                             assert False
 
-                # <statement> ::= ("print" | "printi" | "read") "\(" <operand> "\)" ";" | <function> "\(" <flattened_argument_list>? "\)" ";";
-                case 1 | 5:
-                    # todo: change n[2] to n.args when function calls are unified
-                    return f"{self(n.fn)}({self(n[2])});"
-
                 # <statement> ::= "while" "\(" <expression> "\)" <block>;
-                case 2:
+                case 1:
                     return f"while ({self(n.cond)}) {self(n.body)}"
 
                 # <statement> ::= "if" "\(" <expression> "\)" <block>;
-                case 3:
+                case 2:
                     return f"if ({self(n.cond)}) {self(n.body)}"
 
                 # <statement> ::= "return" <operand>? ";";
-                case 4:
+                case 3:
                     return f"return{opt_p(' ', self(n.ret))};"
+
+                # <statement> ::= <function> "\(" <flattened_argument_list>? "\)" ";";
+                case 4:
+                    # todo: change n[2] to n.args when function calls are unified
+                    return f"{self(n.fn)}({self(n[2])});"
 
                 case _:  # pragma: no cover
                     assert False
@@ -396,7 +395,7 @@ class B:
             n: Node,
         ) -> Any:
             match n.choice:
-                # <statement> ::= (<variable> | <array_access>) "=" (<operand> | <expression> | "alloc" "\(" <variable> "\)" | "free" "\(" <variable> "\)" | "stoi" "\(" <variable> "\)" | <function> "\(" <flattened_argument_list>? "\)") ";";
+                # <statement> ::= (<variable> | <array_access>) "=" (<operand> | <expression> | <function> "\(" <flattened_argument_list>? "\)") ";";
                 case 0:
                     main_course: str = ""
                     dessert: str = (
@@ -414,34 +413,8 @@ class B:
                         case 1:
                             main_course = self(n.rhs[0])
 
-                        # todo: wait free() does not belong here lol
-                        # "alloc" "\(" <operand> "\)" | "free" "\(" <operand> "\)"
-                        case 2 | 3:
-                            load_operand: str = self._fetch_operand(n.rhs.arg, "a1")
-
-                            # somehow n.rhs.choice works here...
-                            # ^ no longer true but only shifted by 1
-                            # ^ yup this came back to bite me now its shifted by 2
-                            main_course = join(
-                                f"setv a0 {n.rhs.choice + 2} # a0 = {n.rhs.choice + 2}; ({n.rhs.fn.lexeme})",
-                                load_operand,
-                                f"e # a0 = {n.rhs.fn.lexeme}(a1);",
-                                f"set t0 a0 # t0 = a0;",
-                            )
-
-                        # "stoi" "\(" <operand> "\)"
-                        case 4:
-                            load_operand: str = self._fetch_operand(n.rhs.arg, "a1")
-
-                            main_course = join(
-                                "setv a0 2 # a0 = 2; (stoi)",
-                                load_operand,
-                                f"e # a0 = {n.rhs.fn.lexeme}(a1);",
-                                f"set t0 a0 # t0 = a0;",
-                            )
-
                         # <function> "\(" <flattened_argument_list> "\)"
-                        case 5:
+                        case 2:
                             # todo: the second instruction is completely avoidable... just commit a0 directly
                             main_course = join(
                                 self._call_function(n.rhs),
@@ -453,41 +426,8 @@ class B:
 
                     return join(main_course, dessert)
 
-                # <statement> ::= ("print" | "printi" | "read") "\(" <operand> "\)" ";";
-                case 1:
-                    appetizer: str = self._fetch_operand(n.arg, "a1")
-
-                    main_course: str = ""
-                    # "print" | "printi" | "read"
-                    match n.fn.choice:
-                        # "print"
-                        case 0:
-                            main_course = join(
-                                "setv a0 0 # a0 = 0; (print)",
-                                "e # print(a1);",
-                            )
-
-                        # "printi"
-                        case 1:
-                            main_course = join(
-                                "setv a0 3 # a0 = 3; (printi)",
-                                "e # printi(a1);",
-                            )
-
-                        # "read"
-                        case 2:
-                            main_course = join(
-                                "setv a0 1 # a0 = 1; (read)",
-                                "e # read(a1);",
-                            )
-
-                        case _:  # pragma: no cover
-                            assert False
-
-                    return join(appetizer, main_course)
-
                 # <statement> ::= "while" "\(" <expression> "\)" <block>;
-                case 2:
+                case 1:
                     start_label: str = self._label()
                     end_label: str = self._label()
                     main_course: str = tabbed(self(n.body))
@@ -505,7 +445,7 @@ class B:
                     return join(appetizer, main_course, dessert)
 
                 # <statement> ::= "if" "\(" <expression> "\)" <block>;
-                case 3:
+                case 2:
                     label: str = self._label()
                     main_course: str = tabbed(self(n.body))
                     appetizer: str = join(
@@ -518,7 +458,7 @@ class B:
                     return join(appetizer, main_course, dessert)
 
                 # <statement> ::= "return" <operand>? ";";
-                case 4:
+                case 3:
                     return_operand: str = ""
 
                     # todo: operand loading rework
@@ -537,7 +477,7 @@ class B:
                     )
 
                 # <statement> ::= <function> "\(" <flattened_argument_list>? "\)" ";";
-                case 5:
+                case 4:
                     return self._call_function(n)
 
                 case _:  # pragma: no cover
@@ -545,36 +485,79 @@ class B:
 
         def _call_function(self, n: ASTNode) -> str:
             fn_name: str = n.fn.lexeme
-            fn_label: str = self._s[fn_name]["label"]
-
             fetch_args: str = ""
-            if n.args:
-                # todo: support argument overflow
-                fetch_args = joini(
-                    self._fetch_operand(c, f"a{i}")
-                    for i, c in enumerate(n.args[0])
-                    if i < 6
-                )
 
-                if len(n.args[0]) > 6:
+            # todo: allocating this on the stack every time is kinda bad...
+            ecalls: dict[str, int] = {
+                "print": 0,
+                "read": 1,
+                "stoi": 2,
+                "printi": 3,
+                "alloc": 4,
+                "free": 5,
+            }
+
+            if fn_name in ecalls:
+                fetch_args = (
+                    f"setv a0 {ecalls[fn_name]} # a0 = {ecalls[fn_name]} ({fn_name});"
+                )
+                if n.args:
+                    # todo: prayging user does not spam arguments in ecall rn
+                    #         -- would need extra processing in symbol table generation
                     fetch_args = join(
                         fetch_args,
                         joini(
-                            join(
-                                self._fetch_operand(n.args[0][i], "t0"),
-                                self._commit_var(f"#a{i}", "t0"),
-                            )
-                            for i in range(6, len(n.args[0]))
+                            self._fetch_operand(c, f"a{i + 1}")
+                            for i, c in enumerate(n.args[0])
+                            if i < 5
                         ),
                     )
 
-            # todo: args
-            # todo: reg saving
-            return join(
-                fetch_args,
-                "addv ra pc 8 # t0 = pc + 8;",
-                f"j {fn_label} # goto {fn_label};",
-            )
+                    if len(n.args[0]) > 5:
+                        fetch_args = join(
+                            fetch_args,
+                            joini(
+                                join(
+                                    self._fetch_operand(n.args[0][i], "t0"),
+                                    self._commit_var(f"#a{i + 1}", "t0"),
+                                )
+                                for i in range(5, len(n.args[0]))
+                            ),
+                        )
+
+                # todo: reg saving
+                return join(
+                    fetch_args,
+                    f"e # a0 = {fn_name}({B.print(n.args)});",
+                )
+
+            else:
+                fn_label: str = self._s[fn_name]["label"]
+                if n.args:
+                    fetch_args = joini(
+                        self._fetch_operand(c, f"a{i}")
+                        for i, c in enumerate(n.args[0])
+                        if i < 6
+                    )
+
+                    if len(n.args[0]) > 6:
+                        fetch_args = join(
+                            fetch_args,
+                            joini(
+                                join(
+                                    self._fetch_operand(n.args[0][i], "t0"),
+                                    self._commit_var(f"#a{i}", "t0"),
+                                )
+                                for i in range(6, len(n.args[0]))
+                            ),
+                        )
+
+                # todo: reg saving
+                return join(
+                    fetch_args,
+                    "addv ra pc 8 # t0 = pc + 8;",
+                    f"j {fn_label} # goto {fn_label};",
+                )
 
         def _commit_var(self, var_name: str, reg: str) -> str:
             return (

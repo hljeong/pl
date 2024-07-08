@@ -18,13 +18,8 @@
   ) "=" rhs=(
     <operand> |
     <expression> |
-    fn="alloc" "(" arg=<operand> ")" |
-    fn="free" "(" arg=<operand> ")" |
-    fn="stoi" "(" arg=<operand> ")" |
     fn=<function> "(" args=<argument_list>? ")"
   ) ";" |
-
-  fn=("print" | "printi" | "read") "(" arg=<operand> ")" ";" |
 
   "while" "(" cond=<expression> ")" body=<block> |
 

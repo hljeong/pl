@@ -1,12 +1,13 @@
 from __future__ import annotations
 from collections import defaultdict
+from dataclasses import KW_ONLY
 from typing import DefaultDict, cast, Optional, Callable, Union, Any
 
-from common import Monad, Log
+from common import Monad, Log, ListSet, fixed_point
 from lexical import Vocabulary, Lex
 
 from .ast import ASTNode, TerminalASTNode, NonterminalASTNode
-from .parser import ExpressionTerm, Parse, NodeParser, NExpressionTerm
+from .parser import ExpressionTerm, Parse, NExpressionTerm
 from .visitor import Visitor
 
 Expression = list[ExpressionTerm]
@@ -45,10 +46,6 @@ class Grammar:
         # todo: dirty
         rules: Rules = GenerateRules()(ast)
         nrules: NRules = NGenerateRules()(ast)
-        # from common import pprint
-        #
-        # pprint(nrules)
-
         return cls(name, rules, nrules, ignore=ignore)
 
     def __init__(
@@ -56,6 +53,7 @@ class Grammar:
         name: str,
         rules: Rules,
         nrules: NRules,
+        # todo: move this to xbnf
         ignore: list[str] = [],
     ):
         # todo: validate input grammar
@@ -65,7 +63,7 @@ class Grammar:
 
         self._generate_vocabulary(ignore)
         self._generate_node_parsers()
-        self._ncheck_ll1()
+        self._check_ll1()
 
     def __repr__(self) -> str:
         return f"Grammar(name='{self._name}')"
@@ -90,8 +88,9 @@ class Grammar:
     def vocabulary(self) -> Vocabulary:
         return self._vocabulary
 
+    # todo: stinky coupling
     @property
-    def node_parsers(self) -> dict[str, NodeParser]:
+    def node_parsers(self) -> dict[str, Parse.Backtracking.NodeParser]:
         return self._node_parsers
 
     @property
@@ -109,8 +108,9 @@ class Grammar:
         ignore.extend(Vocabulary.DEFAULT_IGNORE)
         dictionary: dict[str, Vocabulary.Definition] = {}
 
-        for lhs in self._rules:
-            rule: Rule = self._rules[lhs]
+        # todo: what is this nesting :skull:
+        for nonterminal in self._rules:
+            rule: Rule = self._rules[nonterminal]
             if type(rule) is Production:
                 for expression in rule:
                     for term in expression:
@@ -133,6 +133,7 @@ class Grammar:
 
             elif type(rule) is Alias:
                 # todo: terrible
+                # todo: also duplicated logic
                 if rule.node_type.startswith('"'):
                     if rule.node_type not in dictionary:
                         # todo: ew... what?
@@ -151,301 +152,128 @@ class Grammar:
         self._vocabulary: Vocabulary = Vocabulary(dictionary, ignore)
 
     def _generate_node_parsers(self) -> None:
-        self._node_parsers: dict[str, NodeParser] = {}
+        self._node_parsers: dict[str, Parse.Backtracking.NodeParser] = {}
 
-        for lhs in self._rules:
-            rule: Rule = self._rules[lhs]
+        for nonterminal in self._rules:
+            rule: Rule = self._rules[nonterminal]
             if type(rule) is Production:
-                self._node_parsers[lhs] = Parse.generate_nonterminal_parser(lhs, rule)
+                self._node_parsers[nonterminal] = (
+                    Parse.Backtracking.generate_nonterminal_parser(nonterminal, rule)
+                )
 
             elif type(rule) is Alias:
-                self._node_parsers[lhs] = Parse.generate_alias_parser(
-                    lhs, rule.node_type
+                self._node_parsers[nonterminal] = (
+                    Parse.Backtracking.generate_alias_parser(
+                        nonterminal, rule.node_type
+                    )
                 )
 
             else:  # pragma: no cover
                 assert False
 
-        for terminal in self._vocabulary:
-            self._node_parsers[terminal] = Parse.generate_terminal_parser(terminal)
+        self._node_parsers.update(
+            Parse.Backtracking.generate_parsers_from_vocabulary(self._vocabulary)
+        )
 
+    # todo: clean up
     def _check_ll1(self) -> None:
-        # todo: filthy
-        def eq(a, b):
-            for k in a:
-                if k not in b:
-                    return False
-                ak, bk = a[k], b[k]
-                if len(ak) != len(bk):
-                    return False
-                for aki in ak:
-                    if aki not in bk:
-                        return False
-            for k in b:
-                if k not in a:
-                    return False
-            return True
+        eq = lambda a, b: all(k in b for k in a) and all(a[k] == b[k] for k in a)
 
         def cp(r):
-            f = defaultdict(lambda: [])
+            f = defaultdict(lambda: ListSet())
             for k in r:
-                f[k] = []
-                for t in r[k]:
-                    f[k].append(t)
+                f[k] = ListSet(r[k])
             return f
 
-        def u(a, x):
-            if x not in a:
-                a.append(x)
-
-        # filter epsilon by default
-        def ueq(a, b, f=["e"]):
-            a.extend(list(filter(lambda x: x not in a and x not in f, b)))
-
-        def fixed_point_iter(start, iterate, eq):
-            cur = start
-            nxt = iterate(cur)
-            while not eq(cur, nxt):
-                cur = nxt
-                nxt = iterate(cur)
-            return nxt
-
-        first: DefaultDict[str, list[str]] = defaultdict(lambda: [])
+        first: DefaultDict[str, ListSet[str]] = defaultdict(lambda: ListSet())
         for terminal in self._vocabulary:
-            first[terminal].append(terminal)
-        for lhs in self._rules:
-            rule: Rule = self._rules[lhs]
-            if type(rule) is Alias:
-                first[lhs].append(rule.node_type)
-
-        def iterate_first(cur):
-            nxt = cp(cur)
-            for lhs in self._rules:
-                rule = self._rules[lhs]
-                if type(rule) is Production:
-                    for expression in rule:
-                        nullable = True
-                        for term in expression:
-                            if term.node_type == "e":
-                                continue
-                            ueq(nxt[lhs], cur[term.node_type])
-                            if "e" not in cur[term.node_type]:
-                                nullable = False
-                                break
-
-                        if nullable:
-                            u(nxt[lhs], "e")
-            return nxt
-
-        first = fixed_point_iter(first, iterate_first, eq)  # type: ignore
-
-        follow: DefaultDict[str, list[str]] = defaultdict(lambda: [])
-        follow[f"<{self._name}>"].append("$")
-
-        def iterate_follow(cur):
-            nxt = cp(cur)
-            for lhs in self._rules:
-                rule = self._rules[lhs]
-                if type(rule) is Production:
-                    for production in rule:
-                        ueq(nxt[production[-1].node_type], cur[lhs])
-
-                        right_nullable = True
-                        for i in range(len(production) - 1, 0, -1):
-                            l = production[i - 1].node_type
-                            r = production[i].node_type
-                            ueq(nxt[l], first[r])
-                            if right_nullable:
-                                if "e" in first[r]:
-                                    ueq(nxt[l], cur[lhs])
-                                else:
-                                    right_nullable = False
-            return nxt
-
-        follow = fixed_point_iter(follow, iterate_follow, eq)
-
-        # from common import pprint
-        #
-        # print("first:")
-        # pprint(dict(first))
-        #
-        # print("follow:")
-        # pprint(dict(follow))
-
-        self._ll1_parsing_table: DefaultDict[
-            str,
-            dict[str, Optional[int]],
-            # str,
-            # dict[str, Optional[list[ExpressionTerm]]],
-        ] = defaultdict(lambda: {})
-
-        self._is_ll1 = True
-        for lhs in self._rules:
-            rule = self._rules[lhs]
-            if type(rule) is Production:
-                for idx, expression in enumerate(rule):
-                    nullable = True
-                    for term in expression:
-                        for x in first[term.node_type]:
-                            if x != "e":
-                                if x in self._ll1_parsing_table[lhs]:
-                                    self._is_ll1 = False
-                                    Log.w(
-                                        f"{self._name} is not ll(1): multiple productions for ({lhs}, {x})"
-                                    )
-                                    return
-                                self._ll1_parsing_table[lhs][x] = idx
-                        if "e" not in first[term.node_type]:
-                            nullable = False
-                            break
-                    if nullable:
-                        for x in follow[lhs]:
-                            if x in self._ll1_parsing_table[lhs]:
-                                self._is_ll1 = False
-                                Log.w(
-                                    f"{self._name} is not ll(1): multiple productions for ({lhs}, {x})"
-                                )
-                                return
-                            self._ll1_parsing_table[lhs][x] = idx
-
-    def _ncheck_ll1(self) -> None:
-        # todo: filthy
-        def eq(a, b):
-            for k in a:
-                if k not in b:
-                    return False
-                ak, bk = a[k], b[k]
-                if len(ak) != len(bk):
-                    return False
-                for aki in ak:
-                    if aki not in bk:
-                        return False
-            for k in b:
-                if k not in a:
-                    return False
-            return True
-
-        def cp(r):
-            f = defaultdict(lambda: [])
-            for k in r:
-                f[k] = []
-                for t in r[k]:
-                    f[k].append(t)
-            return f
-
-        def u(a, x):
-            if x not in a:
-                a.append(x)
-
-        # filter epsilon by default
-        def ueq(a, b, f=["e"]):
-            a.extend(list(filter(lambda x: x not in a and x not in f, b)))
-
-        def fixed_point_iter(start, iterate, eq):
-            cur = start
-            nxt = iterate(cur)
-            while not eq(cur, nxt):
-                cur = nxt
-                nxt = iterate(cur)
-            return nxt
-
-        first: DefaultDict[str, list[str]] = defaultdict(lambda: [])
-        for terminal in self._vocabulary:
-            first[terminal].append(terminal)
-        for lhs in self._nrules:
-            rule: NRule = self._nrules[lhs]
+            first[terminal].add(terminal)
+        for nonterminal in self._nrules:
+            rule: NRule = self._nrules[nonterminal]
             if type(rule) is NAlias:
-                first[lhs].append(rule.node_type)
+                first[nonterminal].add(rule.node_type)
 
         def iterate_first(cur):
             nxt = cp(cur)
-            for lhs in self._nrules:
-                rule = self._nrules[lhs]
+            for nonterminal in self._nrules:
+                rule = self._nrules[nonterminal]
                 if type(rule) is NProduction:
                     for expression in rule:
                         nullable = True
                         for term in expression:
                             if term.node_type == "e":
                                 continue
-                            ueq(nxt[lhs], cur[term.node_type])
+                            nxt[nonterminal].add_all(cur[term.node_type].diff(["e"]))
                             if "e" not in cur[term.node_type]:
                                 nullable = False
                                 break
 
                         if nullable:
-                            u(nxt[lhs], "e")
+                            nxt[nonterminal].add("e")
             return nxt
 
-        first = fixed_point_iter(first, iterate_first, eq)  # type: ignore
+        first = fixed_point(first, iterate_first, eq)  # type: ignore
 
-        follow: DefaultDict[str, list[str]] = defaultdict(lambda: [])
+        follow: DefaultDict[str, ListSet[str]] = defaultdict(lambda: ListSet())
         follow[f"<{self._name}>"].append("$")
 
         def iterate_follow(cur):
             nxt = cp(cur)
-            for lhs in self._nrules:
-                rule = self._nrules[lhs]
+            for nonterminal in self._nrules:
+                rule = self._nrules[nonterminal]
                 if type(rule) is NProduction:
                     for production in rule:
-                        ueq(nxt[production[-1].node_type], cur[lhs])
+                        nxt[production[-1].node_type].add_all(
+                            cur[nonterminal].diff(["e"])
+                        )
 
                         right_nullable = True
                         for i in range(len(production) - 1, 0, -1):
                             l = production[i - 1].node_type
                             r = production[i].node_type
-                            ueq(nxt[l], first[r])
+                            nxt[l].add_all(first[r].diff(["e"]))
                             if right_nullable:
                                 if "e" in first[r]:
-                                    ueq(nxt[l], cur[lhs])
+                                    nxt[l].add_all(cur[nonterminal].diff("e"))
                                 else:
                                     right_nullable = False
             return nxt
 
-        follow = fixed_point_iter(follow, iterate_follow, eq)
-
-        # from common import pprint
-        #
-        # print("first:")
-        # pprint(dict(first))
-        #
-        # print("follow:")
-        # pprint(dict(follow))
+        follow = fixed_point(follow, iterate_follow, eq)
 
         self._ll1_parsing_table: DefaultDict[
             str,
             dict[str, Optional[int]],
-            # str,
-            # dict[str, Optional[list[ExpressionTerm]]],
         ] = defaultdict(lambda: {})
 
         self._is_ll1 = True
-        for lhs in self._nrules:
-            rule = self._nrules[lhs]
+        for nonterminal in self._nrules:
+            rule = self._nrules[nonterminal]
             if type(rule) is NProduction:
                 for idx, expression in enumerate(rule):
                     nullable = True
                     for term in expression:
                         for x in first[term.node_type]:
                             if x != "e":
-                                if x in self._ll1_parsing_table[lhs]:
+                                if x in self._ll1_parsing_table[nonterminal]:
                                     self._is_ll1 = False
                                     Log.w(
-                                        f"{self._name} is not ll(1): multiple productions for ({lhs}, {x})"
+                                        f"{self._name} is not ll(1): multiple productions for ({nonterminal}, {x})"
                                     )
                                     return
-                                self._ll1_parsing_table[lhs][x] = idx
+                                self._ll1_parsing_table[nonterminal][x] = idx
                         if "e" not in first[term.node_type]:
                             nullable = False
                             break
                     if nullable:
-                        for x in follow[lhs]:
-                            if x in self._ll1_parsing_table[lhs]:
+                        for x in follow[nonterminal]:
+                            if x in self._ll1_parsing_table[nonterminal]:
                                 self._is_ll1 = False
                                 Log.w(
-                                    f"{self._name} is not ll(1): multiple productions for ({lhs}, {x})"
+                                    f"{self._name} is not ll(1): multiple productions for ({nonterminal}, {x})"
                                 )
                                 return
-                            self._ll1_parsing_table[lhs][x] = idx
+                            self._ll1_parsing_table[nonterminal][x] = idx
 
 
 class XBNF:
@@ -834,17 +662,17 @@ class XBNF:
     )
 
     node_parsers = {
-        "<xbnf>": Parse.generate_nonterminal_parser(
+        "<xbnf>": Parse.Backtracking.generate_nonterminal_parser(
             "<xbnf>",
             [
                 [ExpressionTerm("<production>"), ExpressionTerm("<rule>", "*")],
             ],
         ),
-        "<rule>": Parse.generate_nonterminal_parser(
+        "<rule>": Parse.Backtracking.generate_nonterminal_parser(
             "<rule>",
             [[ExpressionTerm("<production>")], [ExpressionTerm("<alias>")]],
         ),
-        "<production>": Parse.generate_nonterminal_parser(
+        "<production>": Parse.Backtracking.generate_nonterminal_parser(
             "<production>",
             [
                 [
@@ -855,7 +683,7 @@ class XBNF:
                 ],
             ],
         ),
-        "<alias>": Parse.generate_nonterminal_parser(
+        "<alias>": Parse.Backtracking.generate_nonterminal_parser(
             "<alias>",
             [
                 [
@@ -867,7 +695,7 @@ class XBNF:
                 ],
             ],
         ),
-        "<nonterminal>": Parse.generate_nonterminal_parser(
+        "<nonterminal>": Parse.Backtracking.generate_nonterminal_parser(
             "<nonterminal>",
             [
                 [
@@ -877,7 +705,7 @@ class XBNF:
                 ],
             ],
         ),
-        "<body>": Parse.generate_nonterminal_parser(
+        "<body>": Parse.Backtracking.generate_nonterminal_parser(
             "<body>",
             [
                 [
@@ -886,7 +714,7 @@ class XBNF:
                 ],
             ],
         ),
-        "<body>:1": Parse.generate_nonterminal_parser(
+        "<body>:1": Parse.Backtracking.generate_nonterminal_parser(
             "<body>:1",
             [
                 [
@@ -895,7 +723,7 @@ class XBNF:
                 ],
             ],
         ),
-        "<expression>": Parse.generate_nonterminal_parser(
+        "<expression>": Parse.Backtracking.generate_nonterminal_parser(
             "<expression>",
             [
                 [
@@ -903,7 +731,7 @@ class XBNF:
                 ],
             ],
         ),
-        "<term>": Parse.generate_nonterminal_parser(
+        "<term>": Parse.Backtracking.generate_nonterminal_parser(
             "<term>",
             [
                 [
@@ -913,7 +741,7 @@ class XBNF:
                 ],
             ],
         ),
-        "<term>:0": Parse.generate_nonterminal_parser(
+        "<term>:0": Parse.Backtracking.generate_nonterminal_parser(
             "<term>:0",
             [
                 [
@@ -922,7 +750,7 @@ class XBNF:
                 ],
             ],
         ),
-        "<group>": Parse.generate_nonterminal_parser(
+        "<group>": Parse.Backtracking.generate_nonterminal_parser(
             "<group>",
             [
                 [ExpressionTerm("<item>")],
@@ -933,14 +761,14 @@ class XBNF:
                 ],
             ],
         ),
-        "<item>": Parse.generate_nonterminal_parser(
+        "<item>": Parse.Backtracking.generate_nonterminal_parser(
             "<item>",
             [
                 [ExpressionTerm("<nonterminal>")],
                 [ExpressionTerm("<terminal>")],
             ],
         ),
-        "<terminal>": Parse.generate_nonterminal_parser(
+        "<terminal>": Parse.Backtracking.generate_nonterminal_parser(
             "<terminal>",
             [
                 [ExpressionTerm("escaped_string")],
@@ -948,7 +776,7 @@ class XBNF:
                 [ExpressionTerm("identifier")],
             ],
         ),
-        "<multiplicity>": Parse.generate_nonterminal_parser(
+        "<multiplicity>": Parse.Backtracking.generate_nonterminal_parser(
             "<multiplicity>",
             [
                 [ExpressionTerm('"?"')],
@@ -956,11 +784,11 @@ class XBNF:
                 [ExpressionTerm('"+"')],
             ],
         ),
-        "<label>": Parse.generate_alias_parser(
+        "<label>": Parse.Backtracking.generate_alias_parser(
             "<label>",
             "identifier",
         ),
-        **Parse.generate_parsers_from_vocabulary(vocabulary),
+        **Parse.Backtracking.generate_parsers_from_vocabulary(vocabulary),
     }
 
     grammar: Grammar = Grammar(

@@ -1,11 +1,24 @@
 from __future__ import annotations
-from typing import TypeVar, Callable, Any, Union
+from typing import TypeVar, Callable, Any, Union, Optional
 from functools import total_ordering
 from time import sleep
 from dataclasses import dataclass
 
 T = TypeVar("T")
 R = TypeVar("R")
+
+
+def fixed_point(
+    seed: T, iterate: Callable[[T], T], eq: Optional[Callable[[T, T], bool]] = None
+) -> T:
+    if eq is None:
+        eq = lambda a, b: a == b
+    cur: T = seed
+    nxt = iterate(cur)
+    while not eq(cur, nxt):
+        cur = nxt
+        nxt = iterate(cur)
+    return cur
 
 
 def load(filename: str) -> str:

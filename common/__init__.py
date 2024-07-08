@@ -14,6 +14,7 @@ from .pretty import (
     pprint,
 )
 from .logger import Log
-from .lib import Bit, Bits, Arglist, slowdown, Placeholder, unescape, load
+from .lib import Bit, Bits, Arglist, slowdown, Placeholder, unescape, load, fixed_point
 from .monad import Monad
 from .mutable import Mutable
+from .listset import ListSet

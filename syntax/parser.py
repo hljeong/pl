@@ -86,7 +86,7 @@ class Parse:
             Log.d(f"using ll(1) parser for {grammar.name}")
             return cls.LL1(
                 grammar.ll1_parsing_table,
-                grammar.rules,
+                grammar.nrules,
                 grammar.entry_point if entry_point is None else entry_point,
                 grammar.name,
             )
@@ -139,7 +139,9 @@ class Parse:
 
             return parse_result.node
 
-        def parse_node(self, node_type: str) -> Optional[Parse.Backtracking.Result]:
+        def parse_node(
+            self, node_type: str, **ctx: Any
+        ) -> Optional[Parse.Backtracking.Result]:
             Log.t(
                 f"parsing {node_type}, next token (index {self._current}) is {self._safe_peek()}",
                 tag="Parser",
@@ -147,7 +149,7 @@ class Parse:
 
             # todo: type annotation
             parse: Parse.Backtracking.NodeParser = self._node_parsers[node_type]
-            parse_result: Optional[Parse.Backtracking.Result] = parse(self)
+            parse_result: Optional[Parse.Backtracking.Result] = parse(self, **ctx)
 
             Log.begin_t()
             if parse_result is None:
@@ -444,45 +446,83 @@ class Parse:
             return f"Parser(grammar={self._grammar_name})"
 
         def _parse(self) -> ASTNode:
-            return self.parse_node(self._entry_point)
+            return self._parse_node(NExpressionTerm(self._entry_point))
 
-        def parse_node(self, node_type: str) -> ASTNode:
+        def _parse_node(self, term: NExpressionTerm) -> ASTNode:
             Log.t(
-                f"parsing {node_type}, next token (index {self._current}) is {self._safe_peek()}",
+                f"parsing {term.node_type}, next token (index {self._current}) is {self._safe_peek()}",
                 tag="Parser",
             )
+            n: ASTNode
 
             # todo: terrible start...
-            if node_type.startswith("<"):
+            if term.node_type.startswith("<"):
                 t: Token = self._safe_peek()
                 # alias
                 # todo: disgusting.
-                if node_type not in self._ll1_parsing_table:
-                    token = self._expect(self._rules[node_type].node_type)
+                if term.node_type not in self._ll1_parsing_table:
+                    token = self._expect(self._rules[term.node_type].node_type)
                     if not token:
                         # todo: need way better error message
-                        raise Parse.ParseError(f"did not parse expected {node_type}")
-                    return AliasASTNode(
-                        node_type, self._rules[node_type].node_type, token
+                        raise Parse.ParseError(
+                            f"did not parse expected {term.node_type}"
+                        )
+                    n = AliasASTNode(
+                        term.node_type,
+                        self._rules[term.node_type].node_type,
+                        token,
                     )
-                if t.token_type not in self._ll1_parsing_table[node_type]:
+                    if term.label:
+                        n.extras["name"] = term.label
+                    return n
+
+                if t.token_type not in self._ll1_parsing_table[term.node_type]:
                     raise Parse.ParseError(
-                        f"unexpected token '{t.lexeme}' while parsing {node_type}, expecting {{{', '.join(self._ll1_parsing_table[node_type].keys())}}}"
+                        f"unexpected token '{t.lexeme}' while parsing {term.node_type}, expecting {{{', '.join(self._ll1_parsing_table[term.node_type].keys())}}}"
                     )
-                choice: int = self._ll1_parsing_table[node_type][t.token_type]
-                n: NonterminalASTNode = ChoiceNonterminalASTNode(node_type, choice)
-                production = self._rules[node_type][choice]
-                for term in production:
-                    n.add(self.parse_node(term.node_type))
+                choice: int = self._ll1_parsing_table[term.node_type][t.token_type]
+                n = ChoiceNonterminalASTNode(term.node_type, choice)
+                if term.label:
+                    n.extras["name"] = term.label
+                production = self._rules[term.node_type][choice]
+                match term.node_type[-1]:
+                    case "?":
+                        if choice == 0:
+                            n.add(self._parse_node(production[0]))
+
+                    case "+":
+                        n.add(self._parse_node(production[0]))
+                        for c in self._parse_node(production[1]):
+                            n.add(c)
+
+                    # todo: kinda ugly...
+                    case "*":
+                        while choice == 0:
+                            n.add(self._parse_node(production[0]))
+                            t = self._safe_peek()
+                            if (
+                                t.token_type
+                                not in self._ll1_parsing_table[term.node_type]
+                            ):
+                                raise Parse.ParseError(
+                                    f"unexpected token '{t.lexeme}' while parsing {term.node_type}, expecting {{{', '.join(self._ll1_parsing_table[term.node_type].keys())}}}"
+                                )
+                            choice = self._ll1_parsing_table[term.node_type][
+                                t.token_type
+                            ]
+
+                    case _:
+                        for term in production:
+                            n.add(self._parse_node(term))
                 return n
-            elif node_type == "e":
+            elif term.node_type == "e":
                 return TerminalASTNode("e", Token("e", ""))
             else:
-                token = self._expect(node_type)
+                token = self._expect(term.node_type)
                 if not token:
                     # todo: need way better error message
-                    raise Parse.ParseError(f"did not parse expected {node_type}")
-                return TerminalASTNode(node_type, token)
+                    raise Parse.ParseError(f"did not parse expected {term.node_type}")
+                return TerminalASTNode(term.node_type, token)
 
         def at_end(self) -> bool:
             return self._current >= len(self._tokens)

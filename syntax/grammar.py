@@ -3,7 +3,7 @@ from collections import defaultdict
 from dataclasses import KW_ONLY
 from typing import DefaultDict, cast, Optional, Callable, Union, Any
 
-from common import Monad, Log, ListSet, fixed_point
+from common import Monad, Log, ListSet, fixed_point, pprint
 from lexical import Vocabulary, Lex
 
 from .ast import ASTNode, TerminalASTNode, NonterminalASTNode
@@ -1075,33 +1075,34 @@ class NGenerateRules(Visitor):
                     )
                     ret.append(NExpressionTerm(f"{group}?", label))
 
-                case "+":
-                    self._rules[f"{group}+"] = NProduction(
-                        [
-                            NExpression(
-                                [NExpressionTerm(group), NExpressionTerm(f"{group}+")]
-                            ),
-                            NExpression([NExpressionTerm(group)]),
-                        ]
-                    )
-                    ret.append(NExpressionTerm(f"{group}+", label))
-
                 case "*":
-                    self._rules[f"{group}+"] = NProduction(
-                        [
-                            NExpression(
-                                [NExpressionTerm(group), NExpressionTerm(f"{group}+")]
-                            ),
-                            NExpression([NExpressionTerm(group)]),
-                        ]
-                    )
                     self._rules[f"{group}*"] = NProduction(
                         [
+                            NExpression(
+                                [NExpressionTerm(group), NExpressionTerm(f"{group}*")]
+                            ),
                             NExpression([NExpressionTerm("e")]),
-                            NExpression([NExpressionTerm(f"{group}+")]),
                         ]
                     )
                     ret.append(NExpressionTerm(f"{group}*", label))
+
+                case "+":
+                    self._rules[f"{group}*"] = NProduction(
+                        [
+                            NExpression(
+                                [NExpressionTerm(group), NExpressionTerm(f"{group}*")]
+                            ),
+                            NExpression([NExpressionTerm("e")]),
+                        ]
+                    )
+                    self._rules[f"{group}+"] = NProduction(
+                        [
+                            NExpression(
+                                [NExpressionTerm(group), NExpressionTerm(f"{group}*")]
+                            ),
+                        ]
+                    )
+                    ret.append(NExpressionTerm(f"{group}+", label))
 
                 case _:
                     assert False

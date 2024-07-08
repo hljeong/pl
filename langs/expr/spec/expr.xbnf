@@ -1,9 +1,5 @@
-<expr> ::= <t> <ep>;
+<expr> ::= first=<term> rest=("+" <term>)*;
 
-<ep> ::= "+" <t> <ep> | e;
+<term> ::= first=<factor> rest=("*" <factor>)*;
 
-<t> ::= <f> <tp>;
-
-<tp> ::= "*" <f> <tp> | e;
-
-<f> ::= "(" <expr> ")" | identifier;
+<factor> ::= "(" <expr> ")" | identifier;

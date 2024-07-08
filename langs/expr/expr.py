@@ -9,6 +9,8 @@ from syntax import (
     ASTNode,
     Visitor,
 )
+from syntax.ast import NonterminalASTNode
+from syntax.visitor import NonterminalASTNodeVisitor
 
 from ..lang import Lang
 
@@ -38,21 +40,23 @@ class Expr(Lang):
                 default_terminal_node_visitor=lambda _, n: n,
             )
 
-        def _visit_ep(self, n: ASTNode) -> Optional[ASTNode]:
-            match n.choice:
-                case 0:
-                    return Visitor.rebuild(self, n)
+        def _visit_expr(self, n: ASTNode) -> Optional[ASTNode]:
+            n_: NonterminalASTNode = NonterminalASTNode("<expr>")
+            n_.add(self(n.first))
+            for c in n.rest:
+                c_ = self(c)
+                n_.add(c_[0])
+                n_.add(c_[1])
+            return n_
 
-                case 1:
-                    return None
-
-        def _visit_tp(self, n: ASTNode) -> Optional[ASTNode]:
-            match n.choice:
-                case 0:
-                    return Visitor.rebuild(self, n)
-
-                case 1:
-                    return None
+        def _visit_term(self, n: ASTNode) -> Optional[ASTNode]:
+            n_: NonterminalASTNode = NonterminalASTNode("<term>")
+            n_.add(self(n.first))
+            for c in n.rest:
+                c_ = self(c)
+                n_.add(c_[0])
+                n_.add(c_[1])
+            return n_
 
     class Print(Visitor):
         def __init__(self):
@@ -61,7 +65,7 @@ class Expr(Lang):
                 default_terminal_node_visitor=lambda _, n: n.lexeme,
             )
 
-        def _visit_f(self, n: ASTNode) -> str:
+        def _visit_factor(self, n: ASTNode) -> str:
             match n.choice:
                 case 0:
                     return f"({self(n[1])})"

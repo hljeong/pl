@@ -6,6 +6,7 @@ from .lib import Placeholder
 T = TypeVar("T")
 R = TypeVar("R")
 U = TypeVar("U")
+V = TypeVar("V")
 
 
 class Monad(Generic[T]):
@@ -17,6 +18,17 @@ class Monad(Generic[T]):
     @staticmethod
     def create(c: type) -> Callable[[Any], Any]:
         return lambda *args: c(*args)
+
+    class F(Generic[R, U]):
+        def __init__(self, f: Callable[[R], U]) -> None:
+            self._f: Callable[[R], U] = f
+
+        def then(self, g: Callable[[U], V]) -> Monad.F[R, V]:
+            return Monad.F(lambda x: g(self._f(x)))
+
+        @property
+        def f(self) -> Callable[[R], U]:
+            return self._f
 
     def __init__(self, value: T, history: list[Monad] = [], kept: dict[str, Any] = {}):
         self._history: list[Monad] = history

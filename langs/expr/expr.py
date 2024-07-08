@@ -5,7 +5,7 @@ from common import Monad, load
 from lexical import Lex
 from syntax import (
     Grammar,
-    ParseLL1,
+    Parse,
     ASTNode,
     Visitor,
 )
@@ -23,13 +23,7 @@ class Expr(Lang):
             return (
                 Monad(prog)
                 .then(Lex.for_lang(Expr))
-                .then(
-                    ParseLL1(
-                        Expr.grammar.ll1_parsing_table,
-                        Expr.grammar.rules,
-                        entry_point,
-                    )
-                )
+                .then(Parse.for_lang(Expr, entry_point=entry_point))
                 .value
             )
 

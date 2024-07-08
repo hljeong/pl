@@ -89,7 +89,7 @@ class Parse:
     @classmethod
     def for_grammar(cls, grammar: "Grammar", entry_point: Optional[str] = None):  # type: ignore
         if grammar.is_ll1:
-            Log.d(f"generating ll(1) parser for {grammar.name}")
+            Log.d(f"using ll(1) parser for {grammar.name}")
             return ParseLL1(
                 grammar.ll1_parsing_table,
                 grammar.rules,
@@ -98,7 +98,7 @@ class Parse:
             )
 
         else:
-            Log.d(f"generating backtracking parser for {grammar.name}")
+            Log.d(f"using backtracking parser for {grammar.name}")
             return cls(
                 grammar.node_parsers,
                 grammar.entry_point if entry_point is None else entry_point,

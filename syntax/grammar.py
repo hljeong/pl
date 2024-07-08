@@ -68,7 +68,7 @@ class Grammar:
         self._ncheck_ll1()
 
     def __repr__(self) -> str:
-        return f"Grammar(name='{self._name}'))"
+        return f"Grammar(name='{self._name}')"
 
     @property
     def name(self) -> str:

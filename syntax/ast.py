@@ -1,6 +1,6 @@
 from __future__ import annotations
 from abc import ABC
-from typing import Any, Iterator, Union
+from typing import Any, Iterator, Union, Iterable
 
 from common import dict_to_kwargs_str
 from lexical import Token
@@ -19,6 +19,14 @@ class ASTNode(ABC):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({str(self)})"
 
+    @property
+    def summary(self) -> str:
+        if self.extras:
+            return f"{self.node_type}[{dict_to_kwargs_str(self.extras)}]"
+
+        else:
+            return f"{self.node_type}"
+
 
 class NonterminalASTNode(ASTNode):
     def __init__(
@@ -28,7 +36,8 @@ class NonterminalASTNode(ASTNode):
         extras: dict[str, Any] = ASTNode.no_extras,
     ):
         super().__init__(node_type, extras)
-        self._children: list[ASTNode] = list(children)
+        self._children: list[ASTNode] = []
+        self.add_all(children)
 
     def __getitem__(self, key: int) -> ASTNode:
         return self._children[key]
@@ -44,16 +53,12 @@ class NonterminalASTNode(ASTNode):
         if "name" in child.extras:
             self.__setattr__(child.extras["name"], child)
 
+    def add_all(self, children: Iterable[ASTNode]) -> None:
+        for c in children:
+            self.add(c)
+
     def __str__(self) -> str:
         return f'{self.summary}{{{", ".join(map(str, self._children))}}}'
-
-    @property
-    def summary(self) -> str:
-        if self.extras:
-            return f"{self.node_type}[{dict_to_kwargs_str(self.extras)}]"
-
-        else:
-            return f"{self.node_type}"
 
     @property
     def children(self) -> tuple[ASTNode, ...]:
@@ -89,7 +94,7 @@ class AliasASTNode(ASTNode):
         self.token: Token = token
 
     def __str__(self) -> str:
-        return str(self.token)
+        return f"{self.summary}({str(self.token)})"
 
     def __getitem__(self, *_: Any) -> None:
         # todo: error
@@ -113,12 +118,17 @@ class TerminalASTNode(ASTNode):
         self,
         node_type: str,
         token: Token,
+        extras: dict[str, Any] = ASTNode.no_extras,
     ):
-        super().__init__(node_type)
+        super().__init__(node_type, extras)
         self.token = token
 
     def __str__(self) -> str:
-        return str(self.token)
+        if self.extras:
+            return f"{str(self.token)}[{dict_to_kwargs_str(self.extras)}]"
+
+        else:
+            return str(self.token)
 
     def __getitem__(self, *_: Any) -> None:
         # todo: error

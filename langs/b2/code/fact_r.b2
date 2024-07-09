@@ -1,0 +1,13 @@
+fn fact(n) {
+  if (n == 0) return 1;
+  return n * fact(n - 1);
+}
+
+fn main() {
+  print("n = ");
+  read(n_str = alloc(32));
+
+  print("n! = ");
+  printi(fact(stoi(n_str)));
+  print("\n");
+}

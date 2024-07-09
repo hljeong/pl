@@ -1,6 +1,7 @@
 from __future__ import annotations
 from collections import defaultdict
 from dataclasses import KW_ONLY
+from os import kill
 from typing import DefaultDict, cast, Optional, Callable, Union, Any
 
 from common import Monad, Log, ListSet, fixed_point, pprint
@@ -218,6 +219,7 @@ class Grammar:
         follow[f"<{self._name}>"].append("$")
 
         def iterate_follow(cur):
+            cur = cp(cur)  # prevent side effects to the original cur
             nxt = cp(cur)
             for nonterminal in self._nrules:
                 rule = self._nrules[nonterminal]

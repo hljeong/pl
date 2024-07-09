@@ -127,6 +127,8 @@ class Parse:
 
             if parse_result is None:
                 error: Parse.ParseError = Parse.ParseError("failed to parse")
+                # todo: delete this
+                raise error
                 if not Log.ef("[red]ParseError:[/red] failed to parse"):
                     raise error
 

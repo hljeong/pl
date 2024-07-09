@@ -76,7 +76,6 @@ def benchmark(filename, input=None):
             num_ins_executed = (
                 Monad(compile_b(prog, False))
                 .then(A.parse)
-                .then(A.build_internal_ast)
                 .then(A.assemble)
                 .then(MP0.count_instructions_executed)
                 .value
@@ -86,7 +85,6 @@ def benchmark(filename, input=None):
         num_ins_executed = (
             Monad(compile_b(prog, False))
             .then(A.parse)
-            .then(A.build_internal_ast)
             .then(A.assemble)
             .then(MP0.count_instructions_executed)
             .value
@@ -214,7 +212,9 @@ def test_recursion(capsys):
 
 
 def test_print(capsys):
-    assert_same(print_b(load_b("clueless.b"), False), load_b("clueless.b")[:-1])
+    f = "clueless.b"
+    prog = load_b(f)
+    assert_same(print_b(prog, False), prog[:-1])
 
-    run_b(load_b("clueless.b"))
+    run_b(prog)
     check_output(capsys, "13\n0\n1\n2\n3\ni > 3\nhello\n")

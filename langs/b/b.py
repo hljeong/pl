@@ -36,7 +36,6 @@ class B:
             return Monad(prog).then(self._lex).then(self._parse).value
 
     parse: Callable[[str], ASTNode]
-    build_internal_ast: Callable[[ASTNode], ASTNode]
     print: Callable[[ASTNode], str]
     compile: Callable[[ASTNode], None]
 
@@ -103,16 +102,16 @@ class B:
             )
 
         def _visit_b(self, n: ASTNode) -> str:
-            return sjoini(self(c) for c in n)
+            return self._builtin_visit_all(n, sjoini)
 
         def _visit_declaration(self, n: ASTNode) -> str:
             return f"fn {self(n.name)}({self(n.params)}) {self(n.body)}"
 
         def _visit_flattened_argument_list(self, n: ASTNode) -> str:
-            return ", ".join(self(c) for c in n)
+            return self._builtin_visit_all(n, ", ".join)
 
         def _visit_flattened_parameter_list(self, n: ASTNode) -> str:
-            return ", ".join(self(c) for c in n)
+            return self._builtin_visit_all(n, ", ".join)
 
         def _visit_block(
             self,
@@ -302,7 +301,7 @@ class B:
             self._label_num: int = 0
             return sjoin(
                 self._generate_data_section(),
-                join("[code]", tabbed(sjoini(self(c) for c in n))),
+                join("[code]", sjoini(self(c) for c in n)),
             )
 
         def _visit_block(
@@ -721,7 +720,6 @@ class B:
                     assert False
 
 
-B.parse = B.Parse()
-B.build_internal_ast = B.BuildInternalAST()
+B.parse = Monad.F(B.Parse()).then(B.BuildInternalAST()).f
 B.print = B.Print()
 B.compile = B.Compile()

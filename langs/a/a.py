@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Any, Optional, cast, Callable
 
-from common import Monad, joini, sjoini, Mutable, unescape, load
+from common import Monad, joini, Mutable, unescape, load, sjoin, join
 from lexical import Lex
 from runtime import MP0
 from syntax import (
@@ -11,7 +11,7 @@ from syntax import (
     Visitor,
     NonterminalASTNode,
     ChoiceNonterminalASTNode,
-    AliasASTNode,
+    TerminalASTNode,
 )
 from runtime import Ins, Prog
 
@@ -25,17 +25,13 @@ class A(Lang):
 
     parse: Callable[[str], ASTNode]
     parse_instruction: Callable[[str], ASTNode]
-    build_internal_ast: Callable[[ASTNode], ASTNode]
     print: Callable[[ASTNode], str]
     assemble: Callable[[ASTNode], Prog]
 
     @staticmethod
     def count_instructions_generated(prog: str) -> int:
         ins_count: Mutable[int] = Mutable(0)
-        internal_ast: ASTNode = (
-            Monad(prog).then(A.parse).then(A.build_internal_ast).value
-        )
-        A.Assemble()(internal_ast, ins_count=ins_count)
+        A.assemble(Monad(prog).then(A.parse).value, ins_count=ins_count)
         return ins_count.value
 
     class Parse:
@@ -45,25 +41,6 @@ class A(Lang):
 
         def __call__(self, prog: str) -> ASTNode:
             return Monad(prog).then(self._lex).then(self._parse).value
-
-    class Print(Visitor):
-        def __init__(self):
-            super().__init__(
-                default_nonterminal_node_visitor=Visitor.visit_all(joini),
-                default_terminal_node_visitor=lambda _, n: n.lexeme,
-            )
-
-        def _visit_a(self, n: ASTNode) -> str:
-            return sjoini(self(c) for c in n[0])
-
-        def _visit_instruction(self, n: ASTNode) -> str:
-            return " ".join(self(c) for c in n)
-
-        def _visit_pseudoinstruction(self, n: ASTNode) -> str:
-            return " ".join(self(c) for c in n)
-
-        def _visit_constant_definition(self, n: ASTNode) -> str:
-            return " ".join(f"{self(n.label)}: {self(n.string)}")
 
     class BuildInternalAST(Visitor):
         def __init__(self):
@@ -105,8 +82,12 @@ class A(Lang):
             return n_
 
         def _visit_constant_definition(self, n: ASTNode) -> ASTNode:
-            n_: AliasASTNode = AliasASTNode(
-                "<constant_definition>", "escaped_string", n.string.token
+            n_: NonterminalASTNode = NonterminalASTNode(
+                "<constant_definition>",
+                TerminalASTNode("identifier", n.label.token, extras={"name": "label"}),
+                TerminalASTNode(
+                    "escaped_string", n.string.token, extras={"name": "string"}
+                ),
             )
             # should technically be able to support multiple labels...
             # but there is no reason for that
@@ -138,6 +119,40 @@ class A(Lang):
 
         def _visit_label(self, n: ASTNode) -> str:
             return n.lexeme
+
+    class Print(Visitor):
+        def __init__(self):
+            super().__init__(
+                default_nonterminal_node_visitor=Visitor.visit_all(" ".join),
+                default_terminal_node_visitor=lambda _, n: n.lexeme,
+            )
+
+        def _visit_a(self, n: ASTNode) -> str:
+            return sjoin(
+                join("[data]", self(n[1])),
+                join("[code]", self(n[0])),
+            )
+
+        def _visit_data_section(self, n: ASTNode) -> str:
+            return self._builtin_visit_all(n, joini)
+
+        def _visit_code_section(self, n: ASTNode) -> str:
+            return self._builtin_visit_all(n, joini)
+
+        def _visit_legal_instruction(self, n: ASTNode) -> str:
+            return join(
+                joini(f"{label}:" for label in n.extras["labels"]),
+                " ".join(self(c) for c in n),
+            )
+
+        def _visit_pseudoinstruction(self, n: ASTNode) -> str:
+            return join(
+                joini(f"{label}:" for label in n.extras["labels"]),
+                " ".join(self(c) for c in n),
+            )
+
+        def _visit_constant_definition(self, n: ASTNode) -> str:
+            return f"{self(n.label)}: {self(n.string)}"
 
     class Assemble(Visitor):
 
@@ -336,7 +351,7 @@ class A(Lang):
                 self, n: ASTNode, loc: Mutable[int], **ctx: Any
             ) -> None:
                 self._locate_and_map(n, loc=loc, **ctx)
-                loc += len(unescape(n.lexeme[1:-1])) + 1
+                loc += len(unescape(n.string.lexeme[1:-1])) + 1
 
         @staticmethod
         def _combine(v: Visitor, n: ASTNode, **ctx) -> Prog:
@@ -491,15 +506,14 @@ class A(Lang):
         def _visit_constant_definition(self, n: ASTNode, **_) -> Prog:
             # do not forget '\0'!!!
             return cast(
-                Prog, bytes(list(ord(c) for c in unescape(n.lexeme[1:-1])) + [0])
+                Prog, bytes(list(ord(c) for c in unescape(n.string.lexeme[1:-1])) + [0])
             )
 
         def _visit_reg(self, n: ASTNode, **_) -> Ins.Frag:
             return MP0.reg(n.lexeme)
 
 
-A.parse = A.Parse()
-A.parse_instruction = A.Parse("<instruction>")
-A.build_internal_ast = A.BuildInternalAST()
+A.parse = Monad.F(A.Parse()).then(A.BuildInternalAST()).f
+A.parse_instruction = Monad.F(A.Parse("<instruction>")).then(A.BuildInternalAST()).f
 A.print = A.Print()
 A.assemble = A.Assemble()

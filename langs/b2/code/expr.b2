@@ -1,0 +1,20 @@
+fn fib(n) {
+  if (n <= 1) return n;
+  return fib(n - 2) + fib(n - 1);
+}
+
+fn main() {
+  x = 1;
+  a = alloc(3);
+  a[x] = x;
+  printi((x * x + (x << 1)) & x);
+  print("\n");
+  printi(((a[(x * x + (x << 1)) & x] + x + 2) << 3));
+  print("\n");
+  printi(fib(6) ^ (32 + (9 & 10)));
+  print("\n");
+  printi(y = ((a[(x * x + (x << 1)) & x] + x + 2) << 3) == fib(6) ^ (32 + (9 & 10)));
+  print("\n");
+  printi(y);
+  print("\n");
+}

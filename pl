@@ -30,7 +30,18 @@ def main():
         case "t" | "trace":
             Log.level = Log.Level.TRACE
 
-    from pl import print_a, run_a, print_b, compile_b, run_b, print_expr
+    from pl import (
+        print_a,
+        run_a,
+        print_b,
+        compile_b,
+        run_b,
+        print_b2,
+        translate_b2,
+        compile_b2,
+        run_b2,
+        print_expr,
+    )
 
     prog: str = load(args.prog)
 
@@ -44,6 +55,12 @@ def main():
             "print": print_b,
             "compile": compile_b,
             "run": run_b,
+        },
+        "b2": {
+            "print": print_b2,
+            "translate": translate_b2,
+            "compile": compile_b2,
+            "run": run_b2,
         },
         "expr": {
             "print": print_expr,

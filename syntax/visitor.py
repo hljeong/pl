@@ -51,9 +51,14 @@ class Visitor:
             assert False
 
         for c in n:
-            c_: Optional[ASTNode] = v(c, **ctx)
+            c_: Optional[Union[ASTNode, Iterable[ASTNode]]] = v(c, **ctx)
             if c_ is not None:
-                n_.add(c_)
+                if isinstance(c_, ASTNode):
+                    n_.add(c_)
+
+                # assuming c_ is of type Iterable[ASTNode]
+                else:
+                    n_.add_all(c_)  # type: ignore
 
         return n_
 

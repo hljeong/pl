@@ -21,7 +21,6 @@ class Expr(Lang):
     )
 
     parse: Callable[[str], ASTNode]
-    build_internal_ast: Callable[[ASTNode], ASTNode]
     print: Callable[[ASTNode], str]
 
     class Parse:
@@ -74,6 +73,5 @@ class Expr(Lang):
                     assert False
 
 
-Expr.parse = Expr.Parse()
-Expr.build_internal_ast = Expr.BuildInternalAST()
+Expr.parse = Monad.F(Expr.Parse()).then(Expr.BuildInternalAST()).f
 Expr.print = Expr.Print()

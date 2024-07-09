@@ -51,3 +51,6 @@ try these examples:
     ```sh
     ./pl b run ./langs/b/code/fib_memo.b
     ```
+
+## references
+* [java bnf](https://cs.au.dk/~amoeller/RegAut/JavaBNF.html)

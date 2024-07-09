@@ -2,7 +2,7 @@
 
 <data_section> ::= definitions=<constant_definition>*;
 
-alias <constant_definition> ::= string=escaped_string;
+<constant_definition> ::= label=identifier string=escaped_string;
 
 <code_section> ::= instructions=<instruction>*;
 

@@ -9,6 +9,21 @@ def dict_to_kwargs_str(d: dict) -> str:
     return ", ".join(f"{k}={v}" for k, v in d.items())
 
 
+def arglist_str(args: tuple, kwargs: dict[str, Any]) -> str:
+    args_str: str = ", ".join(map(repr, args))
+    kwargs_str: str = dict_to_kwargs_str(kwargs)
+    ret: str = ""
+
+    if len(args_str) == 0:
+        ret = kwargs_str
+    elif len(kwargs_str) == 0:
+        ret = args_str
+    else:
+        ret = f"{args_str}, {kwargs_str}"
+
+    return "..." if len(ret) > 20 else ret
+
+
 # an internal node by duck typing must have node_type, __iter__, and __len__
 def is_internal_node(x: Any):
     # todo: can this be done w hasattr?

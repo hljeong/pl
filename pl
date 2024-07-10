@@ -13,22 +13,7 @@ def main():
     parser.add_argument("-l", "--log-level", type=str, default="e")
     args = parser.parse_args()
 
-    # todo: move this logic to Log
-    match args.log_level.lower():
-        case "n" | "none":
-            Log.level = Log.Level.NONE
-
-        case "e" | "error":
-            Log.level = Log.Level.ERROR
-
-        case "d" | "debug":
-            Log.level = Log.Level.DEBUG
-
-        case "w" | "warn":
-            Log.level = Log.Level.WARN
-
-        case "t" | "trace":
-            Log.level = Log.Level.TRACE
+    Log.at(args.log_level)
 
     from pl import (
         print_a,

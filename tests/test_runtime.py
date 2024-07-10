@@ -1,6 +1,5 @@
 from pytest import raises
 
-from common import Log
 from runtime import Ins
 
 
@@ -13,5 +12,3 @@ def test_fragment_validation():
 
     with raises(ValueError):
         (Ins.Frag(0b10101, 5) + Ins.Frag(0b011, 3) + Ins.Frag(0b1100101, 7))(n_bytes=2)
-
-    assert Log.level == Log.Level.ERROR

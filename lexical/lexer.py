@@ -142,10 +142,9 @@ class Lex:
                 f"invalid character '{self._peek}' encountered at {str(self._position.cursor)}"
             )
 
-            if Log.begin_e():
-                Log.ef(
-                    f"[red]LexError:[/red] invalid character '{self._peek}' encountered at {str(self._position.cursor)}:"
-                )
+            if Log.ef(
+                f"[red]LexError:[/red] invalid character '{self._peek}' encountered at {str(self._position.cursor)}:"
+            ):
                 lines: list[str] = self._source.split("\n")
                 line: str = lines[self._position.cursor.line - 1]
                 column: int = self._position.cursor.column - 1
@@ -163,7 +162,6 @@ class Lex:
                         f"[yellow]{self._position.cursor.line + 1}[/yellow] {lines[self._position.cursor.line]}",
                         highlight=False,
                     )
-                Log.end_e()
 
             else:
                 raise error

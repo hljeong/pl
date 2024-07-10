@@ -1,7 +1,7 @@
 from enum import Enum
 from sys import _getframe
 from types import TracebackType
-from typing import Callable, Any, Optional, DefaultDict, Dict
+from typing import Callable, Any, DefaultDict, Protocol
 from collections import defaultdict
 from time import time
 from rich.console import Console, ConsoleOptions
@@ -10,14 +10,17 @@ from rich.traceback import install, Trace, Traceback
 
 install(show_locals=False)
 
-from .lib import R, Arglist, total_ordering_by
-
-get_value: Callable[[Enum], int] = lambda level: level.value
+from .lib import R
+from .pretty import arglist_str
 
 
 class Log:
 
-    @total_ordering_by(get_value)
+    class Logger(Protocol):
+        def __call__(
+            self, content: str = "", condition: bool = True, tag: str | None = None
+        ) -> bool: ...
+
     class Level(Enum):
         NONE = 0
         ERROR = 1
@@ -25,95 +28,103 @@ class Log:
         DEBUG = 3
         TRACE = 4
 
-    level: Level = Level.ERROR
-    spaced: bool = False
-    traceback: bool = False
-    _section: bool = False
+    _level: Level = Level.ERROR
+    _traceback: bool = False
     _colors: DefaultDict[Level, str] = defaultdict(lambda: "white")
     _console: Console = Console()
+    _levels: dict[str, Level] = {
+        "n": Level.NONE,
+        "none": Level.NONE,
+        "e": Level.ERROR,
+        "error": Level.ERROR,
+        "w": Level.WARN,
+        "warn": Level.WARN,
+        "d": Level.DEBUG,
+        "debug": Level.DEBUG,
+        "t": Level.TRACE,
+        "trace": Level.TRACE,
+    }
 
-    @staticmethod
-    def begin_section(
-        level: Level,
-        before: Callable[..., None] = lambda: None,
-        before_arglist: Arglist = Arglist(),
-    ) -> bool:
-        if Log.level < level:
-            return False
+    t: Logger
+    tf: Logger
+    d: Logger
+    df: Logger
+    w: Logger
+    wf: Logger
+    e: Logger
+    ef: Logger
 
-        Log.w("already in section", Log._section)
-        Log._section = True
-        before(*before_arglist.args, **before_arglist.kwargs)
-        return True
+    @classmethod
+    def at(cls, level: str | Level) -> None:
+        if type(level) is str:
+            if level.lower() not in cls._levels:
+                raise ValueError(f"invalid log level: '{level}'")
+            cls._level = cls._levels[level.lower()]
+        elif type(level) is Log.Level:
+            cls._level = level
+        else:  # pragma: no cover
+            assert False
 
-    @staticmethod
-    def end_section(
-        level: Level,
-        after: Callable[..., None] = lambda: None,
-        after_arglist: Arglist = Arglist(),
-    ) -> bool:
-        if Log.level < level:
-            return False
-
-        Log.w("not in section", not Log._section)
-        after(*after_arglist.args, **after_arglist.kwargs)
-        Log._section = False
-        if Log.spaced:
-            Log._console.print()
-        return True
-
-    @staticmethod
+    @classmethod
     def log(
+        cls,
         level: Level,
         content: Any,
-        tag: Optional[str] = None,
+        tag: str | None = None,
         formatted: bool = False,
-        before: Callable[..., None] = lambda: None,
-        before_arglist: Arglist = Arglist(),
-        after: Callable[..., None] = lambda: None,
-        after_arglist: Arglist = Arglist(),
-        **kwargs: Any,
     ) -> bool:
         # todo: temporary
         if tag == "Parser":
             return True
 
-        if Log.level < level:
+        if cls._level.value < level.value:
             return False
-
-        if not Log._section:
-            before(*before_arglist.args, **before_arglist.kwargs)
 
         for line in str(content).split("\n"):
             if not formatted:
                 line = escape(line)
 
-            if tag is None:
-                Log._console.print(
-                    f"[{Log._colors[level]}][{level.name}][/{Log._colors[level]}] {line}",
-                    **kwargs,
+            if tag:
+                cls._console.print(
+                    f"[{cls._colors[level]}][{level.name}][/{cls._colors[level]}] <{tag}> {line}",
                 )
             else:
-                Log._console.print(
-                    f"[{Log._colors[level]}][{level.name}][/{Log._colors[level]}] <{tag}> {line}",
-                    **kwargs,
+                cls._console.print(
+                    f"[{cls._colors[level]}][{level.name}][/{cls._colors[level]}] {line}",
                 )
 
-        if not Log._section:
-            after(*after_arglist.args, **after_arglist.kwargs)
-
-        if Log.spaced and not Log._section:
-            Log._console.print(**kwargs)
-
         return True
+
+    @staticmethod
+    def define(
+        level: Level,
+        color: str = "white",
+    ) -> tuple[Logger, Logger]:
+
+        def log(
+            content: Any = "",
+            condition: bool = True,
+            tag: str | None = None,
+        ) -> bool:
+            return not condition or Log.log(level, content, tag, True)
+
+        def logf(
+            content: Any = "",
+            condition: bool = True,
+            tag: str | None = None,
+        ) -> bool:
+            return not condition or Log.log(level, content, tag, True)
+
+        Log._colors[level] = color
+        return log, logf
 
     # weird hack from https://github.com/Textualize/rich/discussions/1531#discussioncomment-6409446
     @staticmethod
     def before_error() -> None:
-        if not Log.traceback:
+        if not Log._traceback:
             return
 
-        traceback_type: Optional[TracebackType] = None
+        traceback_type: TracebackType | None = None
         # start at depth 3 to skip logger internal calls
         depth = 3
         while True:
@@ -150,76 +161,6 @@ class Log:
                 Log._console.print("[red][ERROR][/red] ", end="")
 
     @staticmethod
-    def after_error() -> None:
-        exit(1)
-
-    # goofy reflection hack
-    @staticmethod
-    def define(
-        name: str,
-        level: Level,
-        color: str = "white",
-        before: Callable[..., None] = lambda: None,
-        after: Callable[..., None] = lambda: None,
-    ) -> None:
-
-        def logger(
-            content: Any = "",
-            condition: bool = True,
-            tag: Optional[str] = None,
-            before_arglist: Arglist = Arglist(),
-            after_arglist: Arglist = Arglist(),
-            **kwargs: Any,
-        ) -> bool:
-            if condition:
-                return Log.log(
-                    level,
-                    content,
-                    tag,
-                    False,
-                    before,
-                    before_arglist,
-                    after,
-                    after_arglist,
-                    **kwargs,
-                )
-            return True
-
-        def loggerf(
-            content: Any = "",
-            condition: bool = True,
-            tag: Optional[str] = None,
-            before_arglist: Arglist = Arglist(),
-            after_arglist: Arglist = Arglist(),
-            **kwargs: Any,
-        ) -> bool:
-            if condition:
-                return Log.log(
-                    level,
-                    content,
-                    tag,
-                    True,
-                    before,
-                    before_arglist,
-                    after,
-                    after_arglist,
-                    **kwargs,
-                )
-            return True
-
-        def begin_section(before_arglist: Arglist = Arglist()) -> bool:
-            return Log.begin_section(level, before, before_arglist)
-
-        def end_section(after_arglist: Arglist = Arglist()) -> bool:
-            return Log.end_section(level, after, after_arglist)
-
-        Log._colors[level] = color
-        setattr(Log, name, staticmethod(logger))
-        setattr(Log, f"{name}f", staticmethod(loggerf))
-        setattr(Log, f"begin_{name}", staticmethod(begin_section))
-        setattr(Log, f"end_{name}", staticmethod(end_section))
-
-    @staticmethod
     def usage(f: Callable[..., Any]) -> Callable[..., Any]:
 
         def f_and_log_usage(*args: Any, **kwargs: Any) -> Any:
@@ -238,8 +179,7 @@ class Log:
     # todo: type annotation
     @staticmethod
     def runtime(
-        description: Optional[str] = None,
-        n: int = 1,
+        description: str | None = None,
     ) -> Callable[[Callable[..., R]], Callable[..., R]]:
 
         def decorator(f: Callable[..., R]) -> Callable[..., R]:
@@ -248,24 +188,14 @@ class Log:
                 global arglist_str
 
                 start_time: float = time() * 1000
-
-                for _ in range(n):
-                    ret = f(*args, **kwargs)
-
+                ret: R = f(*args, **kwargs)
                 end_time: float = time() * 1000
-                delta_time: float = end_time - start_time
-                average_time: float = delta_time / n
-
-                msg: str = f"took {average_time:.2f} ms"
+                msg: str = f"took {(end_time - start_time):.2f} ms"
 
                 if description:
                     msg = f"{description} {msg}"
-
                 else:
                     msg = f"{f.__qualname__}({arglist_str(args, kwargs)}) {msg}"
-
-                if n > 1:
-                    msg = f"{msg} on average over {n} runs"
 
                 Log.d(msg, tag="runtime")
 
@@ -276,30 +206,7 @@ class Log:
         return decorator
 
 
-Log.define("trace", Log.Level.TRACE)
-Log.define("t", Log.Level.TRACE)
-
-Log.define("debug", Log.Level.DEBUG, "blue")
-Log.define("d", Log.Level.DEBUG, "blue")
-
-Log.define("warn", Log.Level.WARN, "yellow")
-Log.define("w", Log.Level.WARN, "yellow")
-
-Log.define("error", Log.Level.ERROR, "red", Log.before_error, Log.after_error)
-Log.define("e", Log.Level.ERROR, "red", Log.before_error, Log.after_error)
-
-
-def arglist_str(args: tuple, kwargs: Dict[str, Any]) -> str:
-    # args_str: str = ', '.join(map(repr, args))
-    # kwargs_str: str = ', '.join(map(lambda item: f'{item[0]}={repr(item[1])}', kwargs.items()))
-    args_str: str = ""
-    kwargs_str: str = ""
-
-    if len(args_str) == 0:
-        return kwargs_str
-
-    elif len(kwargs_str) == 0:
-        return args_str
-
-    else:
-        return f"{args_str}, {kwargs_str}"
+Log.t, Log.tf = Log.define(Log.Level.TRACE)
+Log.d, Log.df = Log.define(Log.Level.DEBUG, "blue")
+Log.w, Log.wf = Log.define(Log.Level.WARN, "yellow")
+Log.e, Log.ef = Log.define(Log.Level.ERROR, "red")

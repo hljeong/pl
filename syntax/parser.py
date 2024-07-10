@@ -153,7 +153,6 @@ class Parse:
             parse: Parse.Backtracking.NodeParser = self._node_parsers[node_type]
             parse_result: Optional[Parse.Backtracking.Result] = parse(self, **ctx)
 
-            Log.begin_t()
             if parse_result is None:
                 Log.t(f"unable to parse {node_type}", tag="Parser")
             else:
@@ -163,7 +162,6 @@ class Parse:
                 f"next token (index {self._current}) is {self._safe_peek()}",
                 tag="Parser",
             )
-            Log.end_t()
 
             return parse_result
 

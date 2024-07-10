@@ -1,6 +1,5 @@
 from __future__ import annotations
 from typing import TypeVar, Callable, Any, Union, Optional
-from functools import total_ordering
 from time import sleep
 from dataclasses import dataclass
 
@@ -71,7 +70,7 @@ class Placeholder:
 
 
 class Arglist:
-    def __init__(self, *args: Any, **kwargs: Any):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         self._args: tuple = args
         self._kwargs: dict[str, Any] = kwargs
 
@@ -82,40 +81,6 @@ class Arglist:
     @property
     def kwargs(self) -> dict[str, Any]:
         return self._kwargs
-
-
-def Comparable(Protocol):
-    def __eq__(self, other: "Comparable") -> bool: ...
-
-    def __ne__(self, other: "Comparable") -> bool: ...
-
-    def __lt__(self, other: "Comparable") -> bool: ...
-
-    def __le__(self, other: "Comparable") -> bool: ...
-
-    def __gt__(self, other: "Comparable") -> bool: ...
-
-    def __ge__(self, other: "Comparable") -> bool: ...
-
-
-def total_ordering_by(key: Callable[[T], Comparable]):
-
-    # cls should be the type T...
-    def decorator(cls):
-        # todo: messy type annotations
-        def eq_by_key(self, other: Any) -> bool:
-            return isinstance(other, type(self)) and key(self) == key(other)
-
-        # todo: messy type annotations
-        def lt_by_key(self, other: Any) -> bool:
-            return isinstance(other, type(self)) and key(self) < key(other)
-
-        setattr(cls, "__eq__", eq_by_key)
-        setattr(cls, "__lt__", lt_by_key)
-
-        return total_ordering(cls)
-
-    return decorator
 
 
 def slowdown(delay_ms: int) -> Callable[[Callable[..., R]], Callable[..., R]]:

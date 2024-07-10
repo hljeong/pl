@@ -78,7 +78,7 @@ def benchmark(filename, input=None):
                 .then(A.parse)
                 .then(A.assemble)
                 .then(MP0.count_instructions_executed)
-                .value
+                .v
             )
 
     else:
@@ -87,7 +87,7 @@ def benchmark(filename, input=None):
             .then(A.parse)
             .then(A.assemble)
             .then(MP0.count_instructions_executed)
-            .value
+            .v
         )
 
     execute = lambda: run_b2(prog)

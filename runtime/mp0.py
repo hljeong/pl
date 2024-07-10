@@ -286,13 +286,8 @@ class MP0:
         pc: int = self._r[MP0._unalias("pc")]
         dispatch: Dispatch
         operands: dict[str, Union[Reg, int]]
-        dispatch, operands = cast(
-            tuple[Dispatch, dict[str, Union[Reg, int]]],
-            Monad(Bits(self[pc], 32))
-            .then_and_keep(self._decode_type, returns=("decode", "value"))
-            .then(Placeholder("decode"))
-            .value,
-        )
+        decode, rest = self._decode_type(Bits(self[pc], 32))
+        dispatch, operands = decode(rest)
         dispatch(**operands)  # type: ignore
 
         self._r[MP0._unalias("pc")] = self._next_pc

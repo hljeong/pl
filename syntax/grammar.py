@@ -40,9 +40,7 @@ NRules = dict[str, NRule]
 class Grammar:
     @classmethod
     def from_xbnf(cls, name: str, xbnf: str, ignore: list[str] = []) -> Grammar:
-        ast: ASTNode = (
-            Monad(xbnf).then(Lex.for_lang(XBNF)).then(Parse.for_lang(XBNF)).value
-        )
+        ast: ASTNode = Monad(xbnf).then(Lex.for_lang(XBNF)).then(Parse.for_lang(XBNF)).v
 
         # todo: dirty
         rules: Rules = GenerateRules()(ast)

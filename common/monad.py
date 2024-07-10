@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TypeVar, Callable, Any, Generic, Union, cast, Iterable
+from typing import TypeVar, Callable, Any, Generic, Iterable
 
 from .lib import Placeholder
 
@@ -30,139 +30,38 @@ class Monad(Generic[T]):
         def f(self) -> Callable[[R], U]:
             return self._f
 
-    def __init__(self, value: T, history: list[Monad] = [], kept: dict[str, Any] = {}):
+    def __init__(self, value: T, history: list[Monad] = []):
+        self._value: T = value
         self._history: list[Monad] = history
-        self._kept: dict[str, Any] = kept
-        self._kept["value"] = value
-
-    # todo: monadify this
-    def _dispatch(self, arg: Any) -> Any:
-        if type(arg) is Placeholder:
-            if type(arg.key) is str:
-                if arg.key not in self._kept:
-                    raise ValueError(f"invalid kept key: '{arg.key}'")
-
-                return self._kept[arg.key]
-
-            else:
-                return self._history[cast(int, arg.key)].value
-
-        return arg
 
     def then(
         self,
-        f: Union[Callable[[Any], R], Placeholder],
-        args: tuple[Any, ...] = (Placeholder(),),
+        f: Callable[[Any], R],
     ) -> Monad[R]:
-        f_: Callable[[T], R] = cast(Callable[[T], R], self._dispatch(f))
-        args_: Iterable[Any] = (self._dispatch(arg) for arg in args)
-
-        return self._next(
-            history=self._history + [self],
-            kept=dict(self._kept, value=f_(*args_)),
-        )
-
-    def then_and_keep(
-        self,
-        f: Union[Callable[[Any], tuple[R, Any]], Placeholder],
-        returns: Union[str, Iterable[str]],
-        args: tuple[Any, ...] = (Placeholder(),),
-    ) -> Monad[R]:
-        f_: Callable[[Any], tuple[R, Any]] = cast(
-            Callable[[Any], tuple[R, Any]], self._dispatch(f)
-        )
-        args_ = (self._dispatch(arg) for arg in args)
-
-        to_keep: dict[str, Any] = {}
-        if type(returns) is str:
-            to_keep["value"], to_keep[cast(str, returns)] = f_(*args_)
-
-        else:
-            # todo: validate len(returns)
-            to_keep = {k: v for (k, v) in zip(cast(list[str], returns), f_(*args_))}
-
-        return self._next(
-            history=self._history + [self],
-            kept=dict(self._kept, **to_keep),
-        )
-
-    def keep(
-        self,
-        f: Union[Callable[[Any], R], Placeholder],
-        returns: Union[str, Iterable[str]],
-        args: tuple[Any, ...] = (Placeholder(),),
-    ) -> Monad[T]:
-        f_: Callable[[T], R] = cast(Callable[[T], R], self._dispatch(f))
-        args_ = (self._dispatch(arg) for arg in args)
-
-        to_keep: dict[str, Any] = {}
-        if type(returns) is str:
-            to_keep[cast(str, returns)] = f_(*args_)
-
-        else:
-            # todo: validate len(returns)
-            to_keep = {
-                k: v
-                for (k, v) in zip(cast(list[str], returns), cast(Iterable, f_(*args_)))
-            }
-
-        return self._next(kept=dict(self._kept, **to_keep))
+        return Monad(f(self._value), self._history + [self])
 
     def first(
         self,
-        f: Union[Callable[[Any], R], Placeholder],
-        args: tuple[Any, ...] = (Placeholder(),),
+        f: Callable[[Any], R],
     ) -> Monad[T]:
-        f_: Callable[[T], R] = cast(Callable[[T], R], self._dispatch(f))
-        args_: Iterable[Any] = (self._dispatch(arg) for arg in args)
+        f(self._value)
+        return Monad(self._value, self._history)
 
-        f_(*args_)
-
-        return self._next(
-            history=self._history,
-            kept=dict(self._kept),
-        )
+    def backtrack(self, steps: int = 1) -> Monad[Any]:
+        if steps > len(self._history):
+            # todo: error type
+            raise ValueError(
+                f"cannot backtrack {steps} steps when history has length {len(self._history)}"
+            )
+        return Monad(self._history[-steps], self._history[:-steps])
 
     def also(
         self,
-        f: Union[Callable[[Any], R], Placeholder],
-        args: tuple[Any, ...] = (Placeholder(),),
-    ) -> Monad[T]:
-        if not self._history:
-            # todo: error type
-            raise ValueError("cannot 'also' when no functions have been applied")
-
-        # todo: decrement all other int placeholders and edge case on 0?
-        args = tuple(
-            (
-                Placeholder(-1)
-                if type(arg) is Placeholder and arg.key == "value"
-                else arg
-            )
-            for arg in args
-        )
-        f_: Callable[[T], Any] = cast(Callable[[T], Any], self._dispatch(f))
-        args_ = (self._dispatch(arg) for arg in args)
-
-        return self._next(kept=dict(self._kept, value=f_(*args_)))
-
-    def _next(
-        self,
-        history: Union[list[Any], Placeholder] = Placeholder(),
-        kept: Union[dict[str, Any], Placeholder] = Placeholder(),
-    ) -> Monad[Any]:
-        history_: list[Any] = cast(
-            list[Any],
-            self._history[:] if type(history) is Placeholder else history,
-        )
-
-        kept_: dict[str, Any] = cast(
-            dict[str, Any],
-            dict(self._kept) if type(kept) is Placeholder else kept,
-        )
-
-        return Monad(kept_["value"], history_, kept_)
+        f: Callable[[Any], R],
+        backtrack_steps: int = 1,
+    ) -> Monad[R]:
+        return self.backtrack(backtrack_steps).then(f)
 
     @property
-    def value(self) -> T:
-        return self._kept["value"]
+    def v(self) -> T:
+        return self._value

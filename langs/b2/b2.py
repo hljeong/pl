@@ -32,7 +32,7 @@ class B2:
             self._parse = Parse.for_lang(B2, entry_point=entry_point)
 
         def __call__(self, prog) -> ASTNode:
-            return Monad(prog).then(self._lex).then(self._parse).value
+            return Monad(prog).then(self._lex).then(self._parse).v
 
     parse: Callable[[str], ASTNode]
     print: Callable[[ASTNode], str]

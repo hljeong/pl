@@ -29,7 +29,7 @@ class Expr(Lang):
             self._parse = Parse.for_lang(Expr, entry_point=entry_point)
 
         def __call__(self, prog: str) -> ASTNode:
-            return Monad(prog).then(self._lex).then(self._parse).value
+            return Monad(prog).then(self._lex).then(self._parse).v
 
     class BuildInternalAST(Visitor):
         def __init__(self):

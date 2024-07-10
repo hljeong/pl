@@ -31,7 +31,7 @@ class A(Lang):
     @staticmethod
     def count_instructions_generated(prog: str) -> int:
         ins_count: Mutable[int] = Mutable(0)
-        A.assemble(Monad(prog).then(A.parse).value, ins_count=ins_count)
+        A.assemble(Monad(prog).then(A.parse).v, ins_count=ins_count)
         return ins_count.value
 
     class Parse:
@@ -40,7 +40,7 @@ class A(Lang):
             self._parse = Parse.for_lang(A, entry_point=entry_point)
 
         def __call__(self, prog: str) -> ASTNode:
-            return Monad(prog).then(self._lex).then(self._parse).value
+            return Monad(prog).then(self._lex).then(self._parse).v
 
     class BuildInternalAST(Visitor):
         def __init__(self):

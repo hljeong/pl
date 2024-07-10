@@ -1,8 +1,40 @@
 from __future__ import annotations
+from os import X_OK
 from typing import Any, Iterable
 from rich import print
 
 pprint = print
+
+
+def hexdump(data: bytearray, columns=4) -> str:
+    if not data:
+        return ""
+
+    # round up
+    lines: int = (len(data) + columns - 1) // columns
+    max_addr_width: int = len(f"{(len(data) - 1) // columns * columns:x}")
+    return joini(
+        "".join(
+            [
+                f"0x{i * columns:0{max_addr_width}x}: ",
+                " ".join(
+                    map(
+                        lambda b: f"{b:02x}",
+                        data[i * columns : (i + 1) * columns][::-1],
+                    )
+                ),
+            ]
+        )
+        for i in range(lines)
+    )
+
+
+def limit(s: str, lim: int = 20, rjust: bool = False) -> str:
+    assert lim > 3
+    if rjust:
+        return f"...{s[-(lim - 3):]}" if len(s) > lim else s
+    else:
+        return f"{s[:lim - 3]}..." if len(s) > lim else s
 
 
 def dict_to_kwargs_str(d: dict) -> str:
@@ -12,17 +44,13 @@ def dict_to_kwargs_str(d: dict) -> str:
 def arglist_str(args: tuple, kwargs: dict[str, Any]) -> str:
     args_str: str = ", ".join(map(repr, args))
     kwargs_str: str = dict_to_kwargs_str(kwargs)
-    ret: str = ""
 
     if len(args_str) == 0:
-        ret = kwargs_str
+        return limit(kwargs_str)
     elif len(kwargs_str) == 0:
-        ret = args_str
+        return limit(args_str)
     else:
-        ret = f"{args_str}, {kwargs_str}"
-
-    max_len = 20
-    return f"{ret[:max_len - 3]}..." if len(ret) > max_len else ret
+        return limit(f"{args_str}, {kwargs_str}")
 
 
 # an internal node by duck typing must have node_type, __iter__, and __len__

@@ -17,39 +17,62 @@ make test
 
 ## run code
 ```sh
+# make sure to run this first
 source .venv/bin/activate
-./pl <lang> <cmd> <prog>
+
+
+python pl <source>
 
 # alternatively,
-source .venv/bin/activate
-python pl <lang> <cmd> <prog>
+./pl <source>
+
+# see -h for help:
+./pl -h
+```
+
+## synthesize code
+```sh
+./syn <source> <target>
+
+# see -h for help:
+./syn -h
 ```
 
 try these examples:
 
 - [echo.a](./langs/a/code/echo.a):
     ```sh
-    ./pl a run ./langs/a/code/echo.a
+    ./pl ./langs/a/code/echo.a
     ```
 
 - [fact.a](./langs/a/code/fact.a)
     ```sh
-    ./pl a run ./langs/a/code/fact.a
+    ./pl ./langs/a/code/fact.a
     ```
 
 - [fizz.b](./langs/b/code/fizz.b)
     ```sh
-    ./pl b run ./langs/b/code/fizz.b
+    ./pl ./langs/b/code/fizz.b
     ```
 
 - [pfact.b](./langs/b/code/pfact.b)
     ```sh
-    ./pl b run ./langs/b/code/pfact.b
+    ./pl ./langs/b/code/pfact.b
     ```
 
 - [fib_memo.b](./langs/b/code/fib_memo.b)
     ```sh
-    ./pl b run ./langs/b/code/fib_memo.b
+    ./pl ./langs/b/code/fib_memo.b
+    ```
+
+- [list.b2](./langs/b2/code/list.b2)
+    ```sh
+    ./pl ./langs/b2/code/list.b2
+    ```
+
+- synthesize [list.b2](./langs/b2/code/list.b2) to `a`
+    ```sh
+    ./syn ./langs/b2/code/list.b2 a
     ```
 
 ## references

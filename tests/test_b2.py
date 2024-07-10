@@ -5,10 +5,10 @@ from git import Repo
 from contextlib import contextmanager
 from time import time
 
-from common import load, Monad
+from common import Monad
 from langs import A
 from runtime import MP0
-from pl import run_b2, print_b2, compile_b2
+from synthesis import synthesize, Source
 
 
 @contextmanager
@@ -26,7 +26,7 @@ def from_git_root(path):
 
 
 def load_b2(file):
-    return load(from_git_root(f"./langs/b2/code/{file}"))
+    return Source.load(from_git_root(f"./langs/b2/code/{file}"))
 
 
 def assert_same(x, y):
@@ -69,33 +69,27 @@ def runtime(f, n=1):
 
 def benchmark(filename, input=None):
     prog = load_b2(filename)
-    num_ins_generated = A.count_instructions_generated(compile_b2(prog, False))
-    compile = lambda: compile_b2(prog, False)
+    num_ins_generated = A.count_instructions_generated(synthesize("a", prog, "b2"))
+    compile = lambda: synthesize("a", prog, "b2")
     if input:
         with pipe(input):
             num_ins_executed = (
-                Monad(compile_b2(prog, False))
-                .then(A.parse)
-                .then(A.assemble)
+                Monad(synthesize("mp0", prog, "b2"))
                 .then(MP0.count_instructions_executed)
                 .v
             )
 
     else:
         num_ins_executed = (
-            Monad(compile_b2(prog, False))
-            .then(A.parse)
-            .then(A.assemble)
-            .then(MP0.count_instructions_executed)
-            .v
+            Monad(synthesize("mp0", prog, "b2")).then(MP0.count_instructions_executed).v
         )
 
-    execute = lambda: run_b2(prog)
+    execute = lambda: MP0()(synthesize("mp0", prog, "b2"))
     if input:
 
         def execute_with_input():
             with pipe(input):
-                run_b2(prog)
+                MP0()(synthesize("mp0", prog, "b2"))
 
         execute = execute_with_input
 
@@ -110,15 +104,17 @@ def benchmark(filename, input=None):
 
 def test_print(capsys):
     f = "clueless.b2"
-    prog = load_b2(f)
-    assert_same(print_b2(prog, False), prog[:-1])
+    assert_same(
+        synthesize("b2", load_b2(f), "b2", waypoints=["b2-ast"]),
+        Source.content_of(load_b2(f))[:-1],
+    )
 
-    run_b2(prog)
+    MP0()(synthesize("mp0", load_b2(f), "b2"))
     check_output(capsys, "13\n0\n1\n3\n7\n15\n31\n63\ni > 3\nhello\n")
 
 
 def test_expr(capsys):
     f = "expr.b2"
-    run_b2(load_b2(f))
+    MP0()(synthesize("mp0", load_b2(f), "b2"))
     check_output(capsys, "1\n32\n32\n1\n1\n")
     benchmark(f)

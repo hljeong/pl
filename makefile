@@ -1,6 +1,6 @@
 .PHONY: install test requirements clean
 
-modules = lexical syntax langs runtime
+modules = lexical syntax langs synthesis runtime
 
 install:
 	python -m pip install -r requirements.txt

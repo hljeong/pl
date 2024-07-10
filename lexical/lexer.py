@@ -132,6 +132,9 @@ class Lex:
         if len(token_matches) == 0 or all(
             map(lambda token_match: token_match in ["e", "$"], token_matches)
         ):
+            raise Lex.LexError(
+                f"invalid character '{self._c}' encountered at {str(self._position.cursor)}"
+            )
             # todo: errors...
             Log.ef(
                 f"[red]LexError:[/red] invalid character '{self._c}' encountered at {str(self._position.cursor)}:"

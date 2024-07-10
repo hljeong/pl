@@ -26,7 +26,7 @@ class Monad(Generic[T]):
 
     def __init__(self, value: T, history: list[Monad] = []):
         self._v: T = value
-        self._history: list[Monad] = history[:]
+        self._history: list[Monad] = list(history)
 
     def then(
         self,

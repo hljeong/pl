@@ -29,7 +29,7 @@ python pl <source>
 # alternatively,
 ./pl <source>
 
-# see -h for help:
+# see -h for help
 ./pl -h
 ```
 
@@ -37,7 +37,7 @@ python pl <source>
 ```sh
 ./syn <source> <target>
 
-# see -h for help:
+# see -h for help
 ./syn -h
 ```
 

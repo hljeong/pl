@@ -10,6 +10,13 @@ source .venv/bin/activate   # activate virtual environment
 make install                # install dependencies
 ```
 
+> [!IMPORTANT]
+> make sure to activate virtual environment before proceeding
+> ```sh
+> source .venv/bin/activate
+> ```
+
+
 ## test
 ```sh
 make test
@@ -17,9 +24,6 @@ make test
 
 ## run code
 ```sh
-# make sure to run this first
-source .venv/bin/activate
-
 python pl <source>
 
 # alternatively,

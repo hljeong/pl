@@ -30,6 +30,6 @@ class Source:
 
         handle: str = abspath(file)
         if handle not in cls._pool:
-            Log.t(f"Loading '{file}'", tag="Source")
+            Log.t(f"Loading '{file}'", tag="source")
             cls._pool[handle] = Source(load(file))
         return handle

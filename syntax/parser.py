@@ -140,7 +140,7 @@ class Parse:
         ) -> Parse.Backtracking.Result | None:
             Log.t(
                 f"parsing {node_type}, next token (index {self._current}) is {self._safe_peek()}",
-                tag="Parser",
+                tag="parser",
             )
 
             # todo: type annotation
@@ -148,13 +148,13 @@ class Parse:
             parse_result: Parse.Backtracking.Result | None = parse(self, **ctx)
 
             if parse_result is None:
-                Log.t(f"unable to parse {node_type}", tag="Parser")
+                Log.t(f"unable to parse {node_type}", tag="parser")
             else:
-                Log.t(f"parsed {node_type}", tag="Parser")
+                Log.t(f"parsed {node_type}", tag="parser")
 
             Log.t(
                 f"next token (index {self._current}) is {self._safe_peek()}",
-                tag="Parser",
+                tag="parser",
             )
 
             return parse_result
@@ -172,14 +172,14 @@ class Parse:
                 return self._peek()
 
         def _expect(self, token_type: str) -> Token | None:
-            Log.t(f"expecting {token_type}", tag="Parser")
+            Log.t(f"expecting {token_type}", tag="parser")
 
             if self.at_end():
-                Log.t(f"got EOF", tag="Parser")
+                Log.t(f"got EOF", tag="parser")
                 return None
 
             token: Token = self._peek()
-            Log.t(f"got {token.token_type}", tag="Parser")
+            Log.t(f"got {token.token_type}", tag="parser")
             if token.token_type != token_type:
                 return None
 
@@ -445,7 +445,7 @@ class Parse:
         def _parse_node(self, term: NExpressionTerm) -> ASTNode:
             Log.t(
                 f"parsing {term.node_type}, next token (index {self._current}) is {self._safe_peek()}",
-                tag="Parser",
+                tag="parser",
             )
             n: ASTNode
 
@@ -531,14 +531,14 @@ class Parse:
                 return self._peek()
 
         def _expect(self, token_type: str) -> Token | None:
-            Log.t(f"expecting {token_type}", tag="Parser")
+            Log.t(f"expecting {token_type}", tag="parser")
 
             if self.at_end():
-                Log.t(f"got EOF", tag="Parser")
+                Log.t(f"got EOF", tag="parser")
                 return None
 
             token: Token = self._peek()
-            Log.t(f"got {token.token_type}", tag="Parser")
+            Log.t(f"got {token.token_type}", tag="parser")
             if token.token_type != token_type:
                 return None
 

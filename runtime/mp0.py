@@ -269,7 +269,7 @@ class MP0:
         # exit condition is pc == nullptr
         while self._r[MP0._unalias("pc")] != 0:
             self._clk()
-            Log.t("", tag="Runtime")
+            Log.t("", tag="runtime")
             # input()
 
         return self._r[MP0._unalias("a0")]
@@ -333,7 +333,7 @@ class MP0:
         else:  # pragma: no cover
             assert False
 
-        Log.tf(f"{self._fmt(reg_or_addr)} = {self._fmtv(val)}", tag="Runtime")
+        Log.tf(f"{self._fmt(reg_or_addr)} = {self._fmtv(val)}", tag="runtime")
         return val
 
     def __setitem__(self, reg_or_addr: Reg | Addr, val: int) -> None:
@@ -362,7 +362,7 @@ class MP0:
 
         Log.tf(
             f"{self._fmt(reg_or_addr)} = [red]{old_val}[/red] -> {self._fmtv(val, 'green')}",
-            tag="Runtime",
+            tag="runtime",
         )
 
     def _beq(self, src1: Reg, src2: Reg, off: Addr) -> None:

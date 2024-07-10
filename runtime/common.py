@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 
-from common import Log, Bits
+from common import Bits
 
 Reg = str
 

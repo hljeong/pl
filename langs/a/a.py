@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Optional, cast, Callable
+from typing import Any, Callable
 
 from common import Monad, joini, Mutable, unescape, load, sjoin, join
 from lexical import Lex
@@ -32,10 +32,10 @@ class A(Lang):
     def count_instructions_generated(prog: str) -> int:
         ins_count: Mutable[int] = Mutable(0)
         A.assemble(Monad(prog).then(A.parse).v, ins_count=ins_count)
-        return ins_count.value
+        return ins_count.v
 
     class Parse:
-        def __init__(self, entry_point: Optional[str] = None) -> None:
+        def __init__(self, entry_point: str | None = None) -> None:
             self._lex = Lex.for_lang(A)
             self._parse = Parse.for_lang(A, entry_point=entry_point)
 
@@ -328,7 +328,7 @@ class A(Lang):
             def _locate_and_map(
                 self, n: ASTNode, loc: Mutable[int], label_map: dict[str, int]
             ) -> None:
-                n.extras["loc"] = loc.value
+                n.extras["loc"] = loc.v
                 for label in n.extras["labels"]:
                     label_map[label] = n.extras["loc"]
 
@@ -505,9 +505,7 @@ class A(Lang):
         # todo: terrible typing
         def _visit_constant_definition(self, n: ASTNode, **_) -> Prog:
             # do not forget '\0'!!!
-            return cast(
-                Prog, bytes(list(ord(c) for c in unescape(n.string.lexeme[1:-1])) + [0])
-            )
+            return Prog(list(ord(c) for c in unescape(n.string.lexeme[1:-1])) + [0])
 
         def _visit_reg(self, n: ASTNode, **_) -> Ins.Frag:
             return MP0.reg(n.lexeme)

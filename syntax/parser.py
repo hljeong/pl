@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import NamedTuple, Optional, Callable, Union
+from typing import NamedTuple, Callable, Any
 
 from common import Log
 from lexical import Token, Vocabulary
@@ -19,11 +19,11 @@ class ExpressionTerm:
         self,
         node_type: str,
         multiplicity: str = "",
-        label: Optional[str] = None,
+        label: str | None = None,
     ):
         self._node_type: str = node_type
         self._multiplicity: str = multiplicity
-        self._label: Optional[str] = label
+        self._label: str | None = label
 
     @property
     def node_type(self) -> str:
@@ -34,7 +34,7 @@ class ExpressionTerm:
         return self._multiplicity
 
     @property
-    def label(self) -> Optional[str]:
+    def label(self) -> str | None:
         return self._label
 
     def __str__(self) -> str:
@@ -51,17 +51,17 @@ class NExpressionTerm:
     def __init__(
         self,
         node_type: str,
-        label: Optional[str] = None,
+        label: str | None = None,
     ):
         self._node_type: str = node_type
-        self._label: Optional[str] = label
+        self._label: str | None = label
 
     @property
     def node_type(self) -> str:
         return self._node_type
 
     @property
-    def label(self) -> Optional[str]:
+    def label(self) -> str | None:
         return self._label
 
     def __str__(self) -> str:
@@ -81,7 +81,7 @@ class Parse:
             super().__init__(msg)
 
     @classmethod
-    def for_grammar(cls, grammar: "Grammar", entry_point: Optional[str] = None):  # type: ignore
+    def for_grammar(cls, grammar: "Grammar", entry_point: str | None = None):  # type: ignore
         if grammar.is_ll1:
             Log.d(f"using ll(1) parser for {grammar.name}")
             return cls.LL1(
@@ -100,7 +100,7 @@ class Parse:
             )
 
     @classmethod
-    def for_lang(cls, lang: "Lang", entry_point: Optional[str] = None):  # type: ignore
+    def for_lang(cls, lang: "Lang", entry_point: str | None = None):  # type: ignore
         return cls.for_grammar(lang.grammar, entry_point)
 
     class Backtracking:
@@ -108,7 +108,7 @@ class Parse:
             node: ASTNode
             n_tokens_consumed: int
 
-        NodeParser = Callable[["Parse.Backtracking"], Optional[Result]]
+        NodeParser = Callable[["Parse.Backtracking"], Result | None]
 
         def __init__(
             self,
@@ -121,29 +121,23 @@ class Parse:
             self._entry_point: str = entry_point
 
         def _parse(self) -> ASTNode:
-            parse_result: Optional[Parse.Backtracking.Result] = self._node_parsers[
+            parse_result: Parse.Backtracking.Result | None = self._node_parsers[
                 self._entry_point
             ](self)
 
             if parse_result is None:
-                error: Parse.ParseError = Parse.ParseError("failed to parse")
-                # todo: delete this
-                raise error
-                if not Log.ef("[red]ParseError:[/red] failed to parse"):
-                    raise error
+                # todo: log this instead
+                raise Parse.ParseError("failed to parse")
 
             elif not self.at_end():
-                error: Parse.ParseError = Parse.ParseError(
-                    "did not parse until end of file"
-                )
-                if not Log.ef("[red]ParseError:[/red] did not parse until end of file"):
-                    raise error
+                # todo: log this instead
+                raise Parse.ParseError("did not parse until end of file")
 
             return parse_result.node
 
         def parse_node(
             self, node_type: str, **ctx: Any
-        ) -> Optional[Parse.Backtracking.Result]:
+        ) -> Parse.Backtracking.Result | None:
             Log.t(
                 f"parsing {node_type}, next token (index {self._current}) is {self._safe_peek()}",
                 tag="Parser",
@@ -151,7 +145,7 @@ class Parse:
 
             # todo: type annotation
             parse: Parse.Backtracking.NodeParser = self._node_parsers[node_type]
-            parse_result: Optional[Parse.Backtracking.Result] = parse(self, **ctx)
+            parse_result: Parse.Backtracking.Result | None = parse(self, **ctx)
 
             if parse_result is None:
                 Log.t(f"unable to parse {node_type}", tag="Parser")
@@ -177,7 +171,7 @@ class Parse:
             else:
                 return self._peek()
 
-        def _expect(self, token_type: str) -> Optional[Token]:
+        def _expect(self, token_type: str) -> Token | None:
             Log.t(f"expecting {token_type}", tag="Parser")
 
             if self.at_end():
@@ -213,7 +207,7 @@ class Parse:
 
             def nonterminal_parser(
                 parser: Parse.Backtracking,
-            ) -> Optional[Parse.Backtracking.Result]:
+            ) -> Parse.Backtracking.Result | None:
                 choices: dict[int, Parse.Backtracking.Result] = {}
 
                 for idx, expression_terms in enumerate(body):
@@ -231,9 +225,9 @@ class Parse:
                         match expression_term.multiplicity:
                             # exactly 1 (default)
                             case "":
-                                child_parse_result: Optional[
-                                    Parse.Backtracking.Result
-                                ] = parser.parse_node(expression_term.node_type)
+                                child_parse_result: Parse.Backtracking.Result | None = (
+                                    parser.parse_node(expression_term.node_type)
+                                )
 
                                 if child_parse_result is not None:
                                     child_node: ASTNode
@@ -258,9 +252,9 @@ class Parse:
                                 child: NonterminalASTNode = NonterminalASTNode(
                                     f"{nonterminal}:{expression_term_idx}{expression_term.multiplicity}"
                                 )
-                                grandchild_parse_result: Optional[
-                                    Parse.Backtracking.Result
-                                ] = parser.parse_node(expression_term.node_type)
+                                grandchild_parse_result: (
+                                    Parse.Backtracking.Result | None
+                                ) = parser.parse_node(expression_term.node_type)
 
                                 if grandchild_parse_result is not None:
                                     grandchild_node: ASTNode
@@ -283,9 +277,9 @@ class Parse:
                                 )
 
                                 while True:
-                                    grandchild_parse_result: Optional[
-                                        Parse.Backtracking.Result
-                                    ] = parser.parse_node(expression_term.node_type)
+                                    grandchild_parse_result: (
+                                        Parse.Backtracking.Result | None
+                                    ) = parser.parse_node(expression_term.node_type)
 
                                     if grandchild_parse_result is not None:
                                         grandchild_node: ASTNode
@@ -313,9 +307,9 @@ class Parse:
                                     f"{nonterminal}:{expression_term_idx}{expression_term.multiplicity}"
                                 )
 
-                                grandchild_parse_result: Optional[
-                                    Parse.Backtracking.Result
-                                ] = parser.parse_node(expression_term.node_type)
+                                grandchild_parse_result: (
+                                    Parse.Backtracking.Result | None
+                                ) = parser.parse_node(expression_term.node_type)
                                 if grandchild_parse_result is not None:
                                     grandchild_node: ASTNode
                                     grandchild_n_tokens_consumed: int
@@ -331,9 +325,9 @@ class Parse:
                                     break
 
                                 while True:
-                                    grandchild_parse_result: Optional[
-                                        Parse.Backtracking.Result
-                                    ] = parser.parse_node(expression_term.node_type)
+                                    grandchild_parse_result: (
+                                        Parse.Backtracking.Result | None
+                                    ) = parser.parse_node(expression_term.node_type)
 
                                     if grandchild_parse_result is not None:
                                         grandchild_node: ASTNode
@@ -388,8 +382,8 @@ class Parse:
 
             def alias_parser(
                 parser: Parse.Backtracking,
-            ) -> Optional[Parse.Backtracking.Result]:
-                token: Optional[Token] = parser._expect(terminal)
+            ) -> Parse.Backtracking.Result | None:
+                token: Token | None = parser._expect(terminal)
                 if token is None:
                     return None
                 return Parse.Backtracking.Result(
@@ -411,8 +405,8 @@ class Parse:
 
             def terminal_parser(
                 parser: Parse.Backtracking,
-            ) -> Optional[Parse.Backtracking.Result]:
-                token: Optional[Token] = parser._expect(terminal)
+            ) -> Parse.Backtracking.Result | None:
+                token: Token | None = parser._expect(terminal)
                 if token is None:
                     return None
                 return Parse.Backtracking.Result(TerminalASTNode(terminal, token), 1)
@@ -536,7 +530,7 @@ class Parse:
             else:
                 return self._peek()
 
-        def _expect(self, token_type: str) -> Optional[Token]:
+        def _expect(self, token_type: str) -> Token | None:
             Log.t(f"expecting {token_type}", tag="Parser")
 
             if self.at_end():

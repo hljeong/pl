@@ -5,5 +5,4 @@ import common
 import lexical
 import grammar
 import syntax
-import langs.a
-import langs.b
+import langs

@@ -18,7 +18,11 @@ class Log:
 
     class Logger(Protocol):
         def __call__(
-            self, content: str = "", condition: bool = True, tag: str | None = None
+            self,
+            content: str = "",
+            condition: bool = True,
+            tag: str | None = None,
+            **kwargs: Any,
         ) -> bool: ...
 
     class Level(Enum):
@@ -72,6 +76,7 @@ class Log:
         content: Any,
         tag: str | None = None,
         formatted: bool = False,
+        **kwargs: Any,
     ) -> bool:
         # todo: temporary
         if tag == "Parser":
@@ -87,10 +92,12 @@ class Log:
             if tag:
                 cls._console.print(
                     f"[{cls._colors[level]}][{level.name}][/{cls._colors[level]}] <{tag}> {line}",
+                    **kwargs,
                 )
             else:
                 cls._console.print(
                     f"[{cls._colors[level]}][{level.name}][/{cls._colors[level]}] {line}",
+                    **kwargs,
                 )
 
         return True
@@ -105,15 +112,17 @@ class Log:
             content: Any = "",
             condition: bool = True,
             tag: str | None = None,
+            **kwargs: Any,
         ) -> bool:
-            return not condition or Log.log(level, content, tag, True)
+            return not condition or Log.log(level, content, tag, True, **kwargs)
 
         def logf(
             content: Any = "",
             condition: bool = True,
             tag: str | None = None,
+            **kwargs: Any,
         ) -> bool:
-            return not condition or Log.log(level, content, tag, True)
+            return not condition or Log.log(level, content, tag, True, **kwargs)
 
         Log._colors[level] = color
         return log, logf

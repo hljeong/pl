@@ -21,7 +21,8 @@ def arglist_str(args: tuple, kwargs: dict[str, Any]) -> str:
     else:
         ret = f"{args_str}, {kwargs_str}"
 
-    return "..." if len(ret) > 20 else ret
+    max_len = 20
+    return f"{ret[:max_len - 3]}..." if len(ret) > max_len else ret
 
 
 # an internal node by duck typing must have node_type, __iter__, and __len__
@@ -66,122 +67,6 @@ def ast_to_tree_string(
 
     else:
         return f"{use_prefix}{str(node)}"
-
-
-class Text:
-    class Token:
-        def __init__(self, *components: Any):
-            self._content: str = "".join(map(str, components))
-
-        def __repr__(self) -> str:
-            return self.render()
-
-        @property
-        def width(self) -> int:
-            return len(self._content)
-
-        def render(self) -> str:
-            return self._content
-
-        @staticmethod
-        def gap(size: int) -> Text.Token:
-            return Text.Token(" " * size)
-
-    class Line:
-        def __init__(self, *tokens: Text.Token, tabstop: int = 0):
-            self._tokens: list[Text.Token] = list(tokens)
-            self._tabstop: int = tabstop
-
-        def __repr__(self) -> str:
-            return self.render()
-
-        @property
-        def tokens(self) -> list[Text.Token]:
-            return self._tokens
-
-        @property
-        def tabstop(self) -> int:
-            return self._tabstop
-
-        @property
-        def width(self) -> int:
-            return (
-                self._tabstop * 2
-                # todo: fix type annotation
-                + sum(map(Text.Token.width.fget, self._tokens))
-                + len(self._tokens)
-                - 1
-            )
-
-        def render(self) -> str:
-            return " ".join(map(Text.Token.render, self._tokens))
-
-    def __init__(self, *lines: Line):
-        self._lines: list[Text.Line] = list(lines)
-
-    def __repr__(self) -> str:
-        return self.render()
-
-    @property
-    def width(self) -> int:
-        # todo: fix type annotation
-        return max(map(Text.Line.width.fget, self._lines))
-
-    def render(self) -> str:
-        return join(map(Text.Line.render, self._lines))
-
-    # todo: bad api
-    def join_vertical(self, text: Text) -> Text:
-        l_lines: list[Text.Line] = self._lines[:]
-        r_lines: list[Text.Line] = text._lines[:]
-
-        # todo: terrible code
-        while len(l_lines) < len(r_lines):
-            l_lines.append(Text.Line())
-
-        while len(r_lines) < len(l_lines):
-            r_lines.append(Text.Line())
-
-        # *2-tabstop gap*
-        l_adjust = (self._width + 3) // 2
-
-        # todo: maybe this could be a bit confusing
-        # zip is kinda goated here
-        return Text(
-            *map(
-                lambda why_cant_i_destructure_this: Text.Line(
-                    *why_cant_i_destructure_this[0].tokens,
-                    Text.Token.gap(l_adjust - why_cant_i_destructure_this[0].width),
-                    *why_cant_i_destructure_this[1].tokens,
-                ),
-                zip(l_lines, r_lines),
-            )
-        )
-
-    # todo: bad code
-    def tabbed(self) -> Text:
-        return Text(
-            Text.Line(*line._tokens, tabstop=line.tabstop + 1) for line in self._lines
-        )
-
-    @staticmethod
-    def join(*texts: Text) -> Text:
-        ret: Text = Text()
-
-        for text in texts:
-            ret._lines.extend(text._lines)
-            if text._width > ret._width:
-                ret._width = text._width
-
-        return ret
-
-
-# prefixed optional
-def opt_p(prepend: str, optional: str):
-    if len(optional) == 0:
-        return ""
-
-    return f"{prepend}{optional}"
 
 
 SPACE: str = (

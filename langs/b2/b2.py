@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Callable, Optional
+from typing import Callable
 
 from common import (
     Monad,
@@ -7,7 +7,6 @@ from common import (
     join,
     joini,
     sjoini,
-    opt_p,
     load,
 )
 from lexical import Lex
@@ -27,7 +26,7 @@ class B2:
     )
 
     class Parse:
-        def __init__(self, entry_point: Optional[str] = None) -> None:
+        def __init__(self, entry_point: str | None = None) -> None:
             self._lex = Lex.for_lang(B2)
             self._parse = Parse.for_lang(B2, entry_point=entry_point)
 
@@ -157,7 +156,10 @@ class B2:
 
                 # <statement> ::= "return" <expression>? ";";
                 case 3:
-                    return f"return{opt_p(' ', self(n.ret))};"
+                    if n.ret:
+                        return f"return {self(n.ret)};"
+                    else:
+                        return "return;"
 
                 case _:  # pragma: no cover
                     assert False

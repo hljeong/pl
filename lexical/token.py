@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Union
+from typing import Any
 
 from .vocabulary import Vocabulary
 
@@ -9,22 +9,22 @@ class Token:
         self,
         token_type: str,
         lexeme: str,
-        literal: Optional[Union[str, int]] = None,
+        literal: Any = None,
         extra: dict[str, Any] = {},
     ):
-        self._token_type = token_type
-        self._lexeme = lexeme
-        self._literal = literal
-        self._extra = extra
+        self._token_type: str = token_type
+        self._lexeme: str = lexeme
+        self._literal: Any = literal
+        self._extra: dict[str, Any] = extra
 
-    def __eq__(self, other: Token) -> bool:
-        return (
+    def __eq__(self, other: object) -> bool:
+        return type(other) is Token and (
             self._token_type == other._token_type
             and self._lexeme == other._lexeme
             and self._literal == other._literal
         )
 
-    def __ne__(self, other: Token) -> bool:
+    def __ne__(self, other: object) -> bool:
         return not self == other
 
     @property
@@ -36,7 +36,7 @@ class Token:
         return self._lexeme
 
     @property
-    def literal(self) -> Optional[Union[str, int]]:
+    def literal(self) -> Any:
         return self._literal
 
     # todo: access control

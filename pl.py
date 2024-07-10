@@ -1,5 +1,4 @@
-from collections.abc import Callable
-from common import Monad, Log, ast_to_tree_string
+from common import Monad
 from langs import A, B, B2, Expr
 from runtime import MP0
 

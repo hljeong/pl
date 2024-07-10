@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Callable
+from typing import Callable
 
 from common import Monad, load
 from lexical import Lex
@@ -8,9 +8,8 @@ from syntax import (
     Parse,
     ASTNode,
     Visitor,
+    NonterminalASTNode,
 )
-from syntax.ast import NonterminalASTNode
-from syntax.visitor import NonterminalASTNodeVisitor
 
 from ..lang import Lang
 
@@ -24,7 +23,7 @@ class Expr(Lang):
     print: Callable[[ASTNode], str]
 
     class Parse:
-        def __init__(self, entry_point: Optional[str] = None) -> None:
+        def __init__(self, entry_point: str | None = None) -> None:
             self._lex = Lex.for_lang(Expr)
             self._parse = Parse.for_lang(Expr, entry_point=entry_point)
 
@@ -38,7 +37,7 @@ class Expr(Lang):
                 default_terminal_node_visitor=lambda _, n: n,
             )
 
-        def _visit_expr(self, n: ASTNode) -> Optional[ASTNode]:
+        def _visit_expr(self, n: ASTNode) -> ASTNode:
             n_: NonterminalASTNode = NonterminalASTNode("<expr>")
             n_.add(self(n.first))
             for c in n.rest:
@@ -47,7 +46,7 @@ class Expr(Lang):
                 n_.add(c_[1])
             return n_
 
-        def _visit_term(self, n: ASTNode) -> Optional[ASTNode]:
+        def _visit_term(self, n: ASTNode) -> ASTNode:
             n_: NonterminalASTNode = NonterminalASTNode("<term>")
             n_.add(self(n.first))
             for c in n.rest:

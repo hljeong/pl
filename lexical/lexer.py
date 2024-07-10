@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Any
 from copy import copy
 import re
 
@@ -68,38 +69,32 @@ class Lex:
     ):
         self._grammar_name: str = grammar_name
         self._vocabulary: Vocabulary = vocabulary
+        self._c: str = ""
 
     def __repr__(self) -> str:
         return f"Lexer({self._grammar_name})"
 
-    def __at_end(self):
+    def _at_end(self):
         return self._position.current >= len(self._source)
 
-    def __peek(self) -> None:
-        if self.__at_end():
-            self._peek = "\0"
+    def _peek(self) -> None:
+        if self._at_end():
+            self._c = "\0"
         else:
-            self._peek = self._source[self._position.current]
+            self._c = self._source[self._position.current]
 
-    def __advance(self, scanned: str) -> None:
+    def _advance(self, scanned: str) -> None:
         self._position.advance(scanned)
-        self.__peek()
+        self._peek()
 
-    def __advance_start(self) -> None:
+    def _advance_start(self) -> None:
         self._position.advance_start()
 
     # todo: efficiency
-    def __match(self, matcher: re.Pattern) -> re.Match:
+    def _match(self, matcher: re.Pattern) -> re.Match | None:
         return matcher.match(self._source[self._position.current :])
 
-    def __consume_match(self, matcher_name: str) -> bool:
-        match = self.__match(matchers[matcher_name])
-        if match:
-            self.__advance(match.group())
-            return True
-        return False
-
-    def __make_token(
+    def _make_token(
         self,
         token_type: str,
     ) -> Token:
@@ -114,64 +109,59 @@ class Lex:
             {"range": self._position.range},
         )
 
-    def __consume_ignored(self) -> None:
-        while not self.__at_end():
+    def _consume_ignored(self) -> None:
+        while not self._at_end():
             for matcher in self._vocabulary.ignore:
-                match = self.__match(matcher)
+                match = self._match(matcher)
                 if match:
-                    self.__advance(match.group())
+                    self._advance(match.group())
                     break
 
             else:
                 # no ignored matches found
-                self.__advance_start()
+                self._advance_start()
                 return
 
-    def __scan_token(self) -> Token:
+    def _scan_token(self) -> Token:
         token_matches = {}
         for token_type in self._vocabulary:
-            token_match = self.__match(self._vocabulary[token_type].matcher)
+            token_match = self._match(self._vocabulary[token_type].matcher)
             if token_match:
                 token_matches[token_type] = token_match.group()
 
         if len(token_matches) == 0 or all(
             map(lambda token_match: token_match in ["e", "$"], token_matches)
         ):
-            # todo: do this more elegantly
-            error: Lex.LexError = Lex.LexError(
-                f"invalid character '{self._peek}' encountered at {str(self._position.cursor)}"
+            # todo: errors...
+            Log.ef(
+                f"[red]LexError:[/red] invalid character '{self._c}' encountered at {str(self._position.cursor)}:"
             )
-
-            if Log.ef(
-                f"[red]LexError:[/red] invalid character '{self._peek}' encountered at {str(self._position.cursor)}:"
-            ):
-                lines: list[str] = self._source.split("\n")
-                line: str = lines[self._position.cursor.line - 1]
-                column: int = self._position.cursor.column - 1
-                if self._position.cursor.line > 1:
-                    Log.ef(
-                        f"[yellow]{self._position.cursor.line - 1}[/yellow] {lines[self._position.cursor.line - 2]}",
-                        highlight=False,
-                    )
+            lines: list[str] = self._source.split("\n")
+            line: str = lines[self._position.cursor.line - 1]
+            column: int = self._position.cursor.column - 1
+            if self._position.cursor.line > 1:
                 Log.ef(
-                    f"[yellow]{self._position.cursor.line}[/yellow] {line[:column]}[red]{line[column]}[/red]{line[column + 1:]}",
+                    f"[yellow]{self._position.cursor.line - 1}[/yellow] {lines[self._position.cursor.line - 2]}",
                     highlight=False,
                 )
-                if self._position.cursor.line <= len(lines):
-                    Log.ef(
-                        f"[yellow]{self._position.cursor.line + 1}[/yellow] {lines[self._position.cursor.line]}",
-                        highlight=False,
-                    )
+            Log.ef(
+                f"[yellow]{self._position.cursor.line}[/yellow] {line[:column]}[red]{line[column]}[/red]{line[column + 1:]}",
+                highlight=False,
+            )
+            if self._position.cursor.line <= len(lines):
+                Log.ef(
+                    f"[yellow]{self._position.cursor.line + 1}[/yellow] {lines[self._position.cursor.line]}",
+                    highlight=False,
+                )
 
-            else:
-                raise error
+            exit(1)
 
         else:
             longest_match_token_type = max(
                 token_matches, key=lambda token_type: len(token_matches[token_type])
             )
             # todo: hopefully make this more elegant when no longer lexing with library regex engine
-            self.__advance(token_matches[longest_match_token_type])
+            self._advance(token_matches[longest_match_token_type])
             # todo: fix this hack
             if (
                 f'"{self._source[self._position.start : self._position.current]}"'
@@ -181,22 +171,22 @@ class Lex:
                     f'"{self._source[self._position.start : self._position.current]}"'
                 )
 
-            token = self.__make_token(longest_match_token_type)
-            self.__advance_start()
+            token = self._make_token(longest_match_token_type)
+            self._advance_start()
             return token
 
-    def __lex(self):
-        self.__peek()
-        self.__consume_ignored()
-        while not self.__at_end():
-            self._tokens.append(self.__scan_token())
-            self.__consume_ignored()
+    def _lex(self):
+        self._peek()
+        self._consume_ignored()
+        while not self._at_end():
+            self._tokens.append(self._scan_token())
+            self._consume_ignored()
 
     def __call__(self, source: str) -> list[Token]:
         self._source: str = source
         self._position = Lex.Position()
         self._tokens: list[Token] = []
 
-        self.__lex()
+        self._lex()
 
         return self._tokens

@@ -1,10 +1,16 @@
 from __future__ import annotations
-from typing import TypeVar, Callable, Any, Union, Optional
+from typing import TypeVar, Callable, Any, Union, Optional, TYPE_CHECKING
 from time import sleep
 from dataclasses import dataclass
 
 T = TypeVar("T")
 R = TypeVar("R")
+
+NoTyping: type
+if TYPE_CHECKING:
+    NoTyping = Any  # type: ignore
+else:
+    NoTyping = object
 
 
 def fixed_point(

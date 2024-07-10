@@ -1,7 +1,7 @@
 from __future__ import annotations
-from typing import Union, cast, Callable
+from typing import Callable
 
-from common import Log, Bits, Monad, Placeholder
+from common import Log, Bits
 
 from .common import Reg, Addr, RegFile, Mem, Ins, Prog
 
@@ -17,15 +17,15 @@ MTypeDispatch = Callable[[Reg, Reg, Addr], None]
 OTypeDispatch = Callable[[Reg, Reg, Reg], None]
 JTypeDispatch = Callable[[Addr], None]
 ETypeDispatch = Callable[[], None]
-Dispatch = Union[
-    BTypeDispatch,
-    OITypeDispatch,
-    MTypeDispatch,
-    OTypeDispatch,
-    JTypeDispatch,
-    ETypeDispatch,
-]
-Decode = Callable[[Bits], tuple[Dispatch, dict[str, Union[Reg, int]]]]
+Dispatch = (
+    BTypeDispatch
+    | OITypeDispatch
+    | MTypeDispatch
+    | OTypeDispatch
+    | JTypeDispatch
+    | ETypeDispatch
+)
+Decode = Callable[[Bits], tuple[Dispatch, dict[str, Reg | int]]]
 
 
 class MP0:
@@ -139,7 +139,7 @@ class MP0:
             # todo
             raise ValueError(f"cannot decode type of instruction: {frag}")
 
-    def _decode_b_type(self, frag: Bits) -> tuple[Dispatch, dict[str, Union[Reg, int]]]:
+    def _decode_b_type(self, frag: Bits) -> tuple[Dispatch, dict[str, Reg | int]]:
         opcode, src1, src2, off = frag.split(1, 5, 5, 20)
         dispatch: BTypeDispatch = [
             self._beq,
@@ -156,7 +156,7 @@ class MP0:
 
     def _decode_oi_type(
         self, frag: Bits
-    ) -> tuple[OITypeDispatch, dict[str, Union[Reg, int]]]:
+    ) -> tuple[OITypeDispatch, dict[str, Reg | int]]:
         opcode, dst, src, imm = frag.split(4, 5, 5, 16)
         dispatch: OITypeDispatch = [
             self._addi,
@@ -184,9 +184,7 @@ class MP0:
             },
         )
 
-    def _decode_m_type(
-        self, frag: Bits
-    ) -> tuple[MTypeDispatch, dict[str, Union[Reg, int]]]:
+    def _decode_m_type(self, frag: Bits) -> tuple[MTypeDispatch, dict[str, Reg | int]]:
         opcode, reg, base, off = frag.split(1, 5, 5, 18)
         match opcode.value:
             case 0:
@@ -213,9 +211,7 @@ class MP0:
                 # todo
                 raise ValueError(f"invalid m type opcode: {opcode.value}")
 
-    def _decode_o_type(
-        self, frag: Bits
-    ) -> tuple[OTypeDispatch, dict[str, Union[Reg, int]]]:
+    def _decode_o_type(self, frag: Bits) -> tuple[OTypeDispatch, dict[str, Reg | int]]:
         opcode, dst, src1, src2, _ = frag.split(4, 5, 5, 5, 9)
         dispatch: OTypeDispatch = [
             self._add,
@@ -243,9 +239,7 @@ class MP0:
             },
         )
 
-    def _decode_j_type(
-        self, frag: Bits
-    ) -> tuple[JTypeDispatch, dict[str, Union[Reg, int]]]:
+    def _decode_j_type(self, frag: Bits) -> tuple[JTypeDispatch, dict[str, Reg | int]]:
         return (
             self._j,
             {
@@ -253,9 +247,7 @@ class MP0:
             },
         )
 
-    def _decode_e_type(
-        self, frag: Bits
-    ) -> tuple[ETypeDispatch, dict[str, Union[Reg, int]]]:
+    def _decode_e_type(self, frag: Bits) -> tuple[ETypeDispatch, dict[str, Reg | int]]:
         opcode, _ = frag.split(1, 25)
         dispatch: ETypeDispatch = [self._e, self._eb][opcode.value]
         return (dispatch, {})
@@ -285,7 +277,7 @@ class MP0:
     def _clk(self) -> None:
         pc: int = self._r[MP0._unalias("pc")]
         dispatch: Dispatch
-        operands: dict[str, Union[Reg, int]]
+        operands: dict[str, Reg | int]
         decode, rest = self._decode_type(Bits(self[pc], 32))
         dispatch, operands = decode(rest)
         dispatch(**operands)  # type: ignore
@@ -294,7 +286,7 @@ class MP0:
         self._next_pc = self._r[MP0._unalias("pc")] + 4
         self._ins_count += 1
 
-    def _fmt(self, reg_or_addr: Union[Reg, Addr]) -> str:
+    def _fmt(self, reg_or_addr: Reg | Addr) -> str:
         if type(reg_or_addr) is Reg:
             reg: Reg = MP0._unalias(reg_or_addr)
 
@@ -321,7 +313,7 @@ class MP0:
         return f"[bold][{color}]{val}[/{color}] ([white]{' '.join(map(lambda byte: f'{byte:02x}', val_bytes))}[/white])[/bold]"
 
     # todo: cleaner tracking
-    def __getitem__(self, reg_or_addr: Union[Reg, Addr]) -> int:
+    def __getitem__(self, reg_or_addr: Reg | Addr) -> int:
         if type(reg_or_addr) is Reg:
             reg: Reg = self._unalias(reg_or_addr)
             # hard wired 0
@@ -344,7 +336,7 @@ class MP0:
         Log.tf(f"{self._fmt(reg_or_addr)} = {self._fmtv(val)}", tag="Runtime")
         return val
 
-    def __setitem__(self, reg_or_addr: Union[Reg, Addr], val: int) -> None:
+    def __setitem__(self, reg_or_addr: Reg | Addr, val: int) -> None:
         if type(reg_or_addr) is Reg:
             reg: Reg = self._unalias(reg_or_addr)
             old_val: int = self._r[reg]

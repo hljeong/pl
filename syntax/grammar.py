@@ -1,13 +1,11 @@
 from __future__ import annotations
 from collections import defaultdict
-from dataclasses import KW_ONLY
-from os import kill
-from typing import DefaultDict, cast, Optional, Callable, Union, Any
+from typing import DefaultDict, Any
 
-from common import Monad, Log, ListSet, fixed_point, pprint
+from common import Monad, Log, ListSet, fixed_point
 from lexical import Vocabulary, Lex
 
-from .ast import ASTNode, TerminalASTNode, NonterminalASTNode
+from .ast import ASTNode, NonterminalASTNode
 from .parser import ExpressionTerm, Parse, NExpressionTerm
 from .visitor import Visitor
 
@@ -243,7 +241,7 @@ class Grammar:
 
         self._ll1_parsing_table: DefaultDict[
             str,
-            dict[str, Optional[int]],
+            dict[str, int | None],
         ] = defaultdict(lambda: {})
 
         self._is_ll1 = True
@@ -884,7 +882,7 @@ class GenerateRules(Visitor):
         # node[0]: <term>+
         # <term>: (<label> "=")? <group> <multiplicity>?
         for term in n[0]:
-            label: Optional[str] = None
+            label: str | None = None
             optional_label: NonterminalASTNode = term[0]
 
             if optional_label:

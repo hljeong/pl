@@ -1,7 +1,5 @@
 from __future__ import annotations
-from typing import TypeVar, Callable, Any, Generic, Iterable
-
-from .lib import Placeholder
+from typing import TypeVar, Callable, Any, Generic
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -10,10 +8,6 @@ V = TypeVar("V")
 
 
 class Monad(Generic[T]):
-    @staticmethod
-    def use(key: str = "value") -> Placeholder:
-        return Placeholder(key)
-
     # todo: type annotation
     @staticmethod
     def create(c: type) -> Callable[[Any], Any]:
@@ -31,21 +25,21 @@ class Monad(Generic[T]):
             return self._f
 
     def __init__(self, value: T, history: list[Monad] = []):
-        self._value: T = value
-        self._history: list[Monad] = history
+        self._v: T = value
+        self._history: list[Monad] = history[:]
 
     def then(
         self,
         f: Callable[[Any], R],
     ) -> Monad[R]:
-        return Monad(f(self._value), self._history + [self])
+        return Monad(f(self._v), self._history + [self])
 
     def first(
         self,
         f: Callable[[Any], R],
     ) -> Monad[T]:
-        f(self._value)
-        return Monad(self._value, self._history)
+        f(self._v)
+        return Monad(self._v, self._history)
 
     def backtrack(self, steps: int = 1) -> Monad[Any]:
         if steps > len(self._history):
@@ -64,4 +58,4 @@ class Monad(Generic[T]):
 
     @property
     def v(self) -> T:
-        return self._value
+        return self._v

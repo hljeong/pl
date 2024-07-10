@@ -1,12 +1,12 @@
 from __future__ import annotations
 from abc import ABC
-from typing import Any, Iterator, Union, Iterable
+from typing import Any, Iterator, Iterable
 
-from common import dict_to_kwargs_str
+from common import dict_to_kwargs_str, NoTyping
 from lexical import Token
 
 
-class ASTNode(ABC):
+class ASTNode(ABC, NoTyping):
     no_extras: dict[str, Any] = {}
 
     # janky way to circumvent tricky bug with static default parameter...
@@ -109,7 +109,7 @@ class AliasASTNode(ASTNode):
 
     # todo: how to decouple...
     @property
-    def literal(self) -> Union[str, int]:
+    def literal(self) -> Any:
         return self.token.literal
 
 
@@ -141,5 +141,5 @@ class TerminalASTNode(ASTNode):
 
     # todo: how to decouple...
     @property
-    def literal(self) -> Union[str, int]:
+    def literal(self) -> Any:
         return self.token.literal

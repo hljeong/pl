@@ -1,15 +1,5 @@
 from __future__ import annotations
-from typing import (
-    TypeVar,
-    Callable,
-    Any,
-    Generic,
-    Union,
-    cast,
-    Iterable,
-)
-
-from .lib import Placeholder
+from typing import TypeVar, Generic
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -18,14 +8,14 @@ U = TypeVar("U")
 
 class Mutable(Generic[T]):
     def __init__(self, value: T) -> None:
-        self._value: T = value
+        self._v: T = value
 
     def __iadd__(self, other: T) -> Mutable[T]:
-        self._value += other  # type: ignore
+        self._v += other  # type: ignore
         return self
 
     # todo: add implementations as needed
 
     @property
-    def value(self) -> T:
-        return self._value
+    def v(self) -> T:
+        return self._v

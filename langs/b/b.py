@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from common import (
     Monad,
@@ -8,7 +8,6 @@ from common import (
     joini,
     sjoin,
     sjoini,
-    opt_p,
     load,
 )
 from lexical import Lex
@@ -28,7 +27,7 @@ class B:
     )
 
     class Parse:
-        def __init__(self, entry_point: Optional[str] = None) -> None:
+        def __init__(self, entry_point: str | None = None) -> None:
             self._lex = Lex.for_lang(B)
             self._parse = Parse.for_lang(B, entry_point=entry_point)
 
@@ -166,7 +165,10 @@ class B:
 
                 # <statement> ::= "return" <operand>? ";";
                 case 3:
-                    return f"return{opt_p(' ', self(n.ret))};"
+                    if n.ret:
+                        return f"return {self(n.ret)};"
+                    else:
+                        return "return;"
 
                 # <statement> ::= <function> "\(" <flattened_argument_list>? "\)" ";";
                 case 4:

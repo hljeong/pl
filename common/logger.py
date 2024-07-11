@@ -1,7 +1,7 @@
 from enum import Enum
 from sys import _getframe
 from types import TracebackType
-from typing import Callable, Any, DefaultDict, Protocol
+from typing import Callable, Any, DefaultDict, Protocol, TypeVar
 from collections import defaultdict
 from time import time
 from rich.console import Console, ConsoleOptions
@@ -10,8 +10,9 @@ from rich.traceback import install, Trace, Traceback
 
 install(show_locals=False)
 
-from .lib import R
 from .pretty import arglist_str
+
+R = TypeVar("R")
 
 
 class Log:

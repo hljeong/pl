@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Any, Callable
 
-from common import Monad, joini, Mutable, unescape, load, sjoin, join
+from common import Monad, join, Mutable, unescape, load, sjoinv, joinv
 from lexical import Lex
 from runtime import MP0
 from syntax import (
@@ -19,19 +19,16 @@ from ..lang import Lang
 
 
 class A(Lang):
-    grammar: Grammar = Grammar.from_xbnf(
-        "a", load("langs/a/spec/a.xbnf"), ignore=["#[^\n]*"]
-    )
+    name = "a"
+    grammar = Grammar.from_xbnf("a", load("langs/a/spec/a.xbnf"), ignore=["#[^\n]*"])
 
-    parse: Callable[[str], ASTNode]
-    parse_instruction: Callable[[str], ASTNode]
-    print: Callable[[ASTNode], str]
     assemble: Callable[[ASTNode], Prog]
+    parse_instruction: Callable[[str], ASTNode]
 
     @staticmethod
     def count_instructions_generated(prog: str) -> int:
         ins_count: Mutable[int] = Mutable(0)
-        A.assemble(Monad(prog).then(A.parse).v, ins_count=ins_count)
+        A.assemble(Monad(prog).then(A.parse).then(A.shake).v, ins_count=ins_count)
         return ins_count.v
 
     class Parse:
@@ -42,7 +39,7 @@ class A(Lang):
         def __call__(self, prog: str) -> ASTNode:
             return Monad(prog).then(self._lex).then(self._parse).v
 
-    class BuildInternalAST(Visitor):
+    class Shake(Visitor):
         def __init__(self):
             super().__init__(
                 default_nonterminal_node_visitor=Visitor.rebuild,
@@ -128,26 +125,26 @@ class A(Lang):
             )
 
         def _visit_a(self, n: ASTNode) -> str:
-            return sjoin(
-                join("[data]", self(n[1])),
-                join("[code]", self(n[0])),
+            return sjoinv(
+                joinv("[data]", self(n[1])),
+                joinv("[code]", self(n[0])),
             )
 
         def _visit_data_section(self, n: ASTNode) -> str:
-            return self._builtin_visit_all(n, joini)
+            return self._builtin_visit_all(n, join)
 
         def _visit_code_section(self, n: ASTNode) -> str:
-            return self._builtin_visit_all(n, joini)
+            return self._builtin_visit_all(n, join)
 
         def _visit_legal_instruction(self, n: ASTNode) -> str:
-            return join(
-                joini(f"{label}:" for label in n.extras["labels"]),
+            return joinv(
+                join(f"{label}:" for label in n.extras["labels"]),
                 " ".join(self(c) for c in n),
             )
 
         def _visit_pseudoinstruction(self, n: ASTNode) -> str:
-            return join(
-                joini(f"{label}:" for label in n.extras["labels"]),
+            return joinv(
+                join(f"{label}:" for label in n.extras["labels"]),
                 " ".join(self(c) for c in n),
             )
 
@@ -511,7 +508,9 @@ class A(Lang):
             return MP0.reg(n.lexeme)
 
 
-A.parse = Monad.F(A.Parse()).then(A.BuildInternalAST()).f
-A.parse_instruction = Monad.F(A.Parse("<instruction>")).then(A.BuildInternalAST()).f
+A.parse = A.Parse()
+A.shake = A.Shake()
 A.print = A.Print()
+
 A.assemble = A.Assemble()
+A.parse_instruction = Monad.F(A.Parse("<instruction>")).then(A.Shake()).f

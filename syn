@@ -4,7 +4,7 @@ from typing import DefaultDict, Any, Callable
 from argparse import ArgumentParser
 from collections import defaultdict
 
-from common import Log, ast_to_tree_string, hexdump
+from common import Log, KeyDefaultDict, ast_to_tree_string, hexdump
 
 
 def main():
@@ -42,15 +42,9 @@ def main():
 
     from synthesis import Source, synthesize
 
-    str_artifact: DefaultDict[str, Callable[[Any], str]] = defaultdict(
-        lambda: str,
-        {
-            "mp0": hexdump,
-            "a-ast": ast_to_tree_string,
-            "b-ast": ast_to_tree_string,
-            "b2-ast": ast_to_tree_string,
-            "expr-ast": ast_to_tree_string,
-        },
+    str_artifact: KeyDefaultDict[str, Callable[[Any], str]] = KeyDefaultDict(
+        lambda key: ast_to_tree_string if key.endswith("ast") else str,
+        {"mp0": hexdump},
     )
 
     artifact: Any = synthesize(

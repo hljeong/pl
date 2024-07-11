@@ -15,12 +15,10 @@ from ..lang import Lang
 
 
 class Expr(Lang):
-    grammar: Grammar = Grammar.from_xbnf(
-        "expr", load("langs/expr/spec/expr.xbnf"), ignore=["#[^\n]*"]
+    name = "expr"
+    grammar = Grammar.from_xbnf(
+        name, load("langs/expr/spec/expr.xbnf"), ignore=["#[^\n]*"]
     )
-
-    parse: Callable[[str], ASTNode]
-    print: Callable[[ASTNode], str]
 
     class Parse:
         def __init__(self, entry_point: str | None = None) -> None:
@@ -30,7 +28,7 @@ class Expr(Lang):
         def __call__(self, prog: str) -> ASTNode:
             return Monad(prog).then(self._lex).then(self._parse).v
 
-    class BuildInternalAST(Visitor):
+    class Shake(Visitor):
         def __init__(self):
             super().__init__(
                 default_nonterminal_node_visitor=Visitor.rebuild,
@@ -72,5 +70,6 @@ class Expr(Lang):
                     assert False
 
 
-Expr.parse = Monad.F(Expr.Parse()).then(Expr.BuildInternalAST()).f
+Expr.parse = Expr.Parse()
+Expr.shake = Expr.Shake()
 Expr.print = Expr.Print()

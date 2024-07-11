@@ -2,10 +2,10 @@ from .cursor import Cursor, CursorRange
 from .pretty import (
     ast_to_tree_string,
     tabbed,
+    joinv,
+    sjoinv,
     join,
     sjoin,
-    joini,
-    sjoini,
     count_lines,
     SPACE,
     dict_to_kwargs_str,
@@ -14,7 +14,7 @@ from .pretty import (
     hexdump,
 )
 from .logger import Log
-from .lib import (
+from .util import (
     Bit,
     Bits,
     Arglist,
@@ -24,7 +24,9 @@ from .lib import (
     load,
     fixed_point,
     NoTyping,
+    it,
 )
 from .monad import Monad
 from .mutable import Mutable
 from .listset import ListSet
+from .keydefaultdict import KeyDefaultDict

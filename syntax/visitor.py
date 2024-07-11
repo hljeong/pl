@@ -114,3 +114,34 @@ class Visitor:
 
         else:  # pragma: no cover
             assert False
+
+
+class Shake(Visitor):
+    def __init__(self) -> None:
+        super().__init__(
+            default_nonterminal_node_visitor=Shake._shake_nonterminal,
+            default_terminal_node_visitor=Shake._shake_terminal,
+        )
+
+    @staticmethod
+    def _shake_nonterminal(v: Visitor, n: ASTNode) -> ASTNode | None:
+        n_: NonterminalASTNode
+        if type(n) is ChoiceNonterminalASTNode:
+            n_ = ChoiceNonterminalASTNode(n.node_type, n.choice, extras=dict(n.extras))
+
+        elif type(n) is NonterminalASTNode:
+            n_ = NonterminalASTNode(n.node_type, extras=dict(n.extras))
+
+        else:  # pragma: no cover
+            assert False
+
+        for c in n:
+            c_: ASTNode = v(c)
+            if c_:
+                n_.add(c_)
+
+        return n_ if n_ or "name" in n.extras else None
+
+    @staticmethod
+    def _shake_terminal(_: Visitor, n: ASTNode) -> ASTNode | None:
+        return n if "name" in n.extras else None

@@ -1,6 +1,6 @@
 <a> ::= sections=<section>*;
 
-<section> ::=  <code_section> | <data_section>;
+<section> ::=  code=<code_section> | data=<data_section>;
 
 <data_section> ::= "[data]" definitions=<constant_definition>*;
 

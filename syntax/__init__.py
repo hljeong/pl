@@ -7,4 +7,4 @@ from .ast import (
 )
 from .grammar import Grammar
 from .parser import ExpressionTerm, Parse
-from .visitor import Visitor
+from .visitor import Visitor, Shake

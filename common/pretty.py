@@ -1,5 +1,4 @@
 from __future__ import annotations
-from os import X_OK
 from typing import Any, Iterable
 from rich import print
 
@@ -13,7 +12,7 @@ def hexdump(data: bytearray, columns=4) -> str:
     # round up
     lines: int = (len(data) + columns - 1) // columns
     max_addr_width: int = len(f"{(len(data) - 1) // columns * columns:x}")
-    return joini(
+    return join(
         "".join(
             [
                 f"0x{i * columns:0{max_addr_width}x}: ",
@@ -102,22 +101,22 @@ SPACE: str = (
 )
 
 
-def join(*lines: str):
+def joinv(*lines: str):
     return "\n".join(filter(lambda line: line is SPACE or len(line.strip()) > 0, lines))
 
 
-def sjoin(*lines: str):
+def sjoinv(*lines: str):
     return "\n\n".join(
         filter(lambda line: line is SPACE or len(line.strip()) > 0, lines)
     )
 
 
-def joini(lines: Iterable[str]):
-    return join(*lines)
+def join(lines: Iterable[str]):
+    return joinv(*lines)
 
 
-def sjoini(lines: Iterable[str]):
-    return sjoin(*lines)
+def sjoin(lines: Iterable[str]):
+    return sjoinv(*lines)
 
 
 def tabbed(text: str, tab: int = 2):

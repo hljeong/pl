@@ -5,8 +5,9 @@ from itertools import pairwise
 from collections import deque
 
 
-from common import limit, Log
-from langs import A, B, B2, Expr
+from common import limit, Log, it
+from langs import Lang, A, B, B2, Expr
+from syntax.ast import ASTNode
 
 from .source import Source
 
@@ -41,6 +42,14 @@ class Synthesize:
         for s, t in pairwise(path):
             artifact = self._transform(s, t)(artifact)
         return artifact
+
+    @classmethod
+    def synthesizable(cls, s: str, t: str) -> bool:
+        try:
+            cls._find_path(s, t)
+        except ValueError:
+            return False
+        return True
 
     # bfs, returns path excluding source
     @classmethod
@@ -95,20 +104,23 @@ class Synthesize:
     def add_transform(cls, s: str, t: str, transform: Callable[..., Any]) -> None:
         cls._graph[s][t] = transform
 
+    @classmethod
+    def add_lang(cls, lang: type[Lang]):
+        Log.d(f"adding {lang.name} to synthesizer")
+        cls.add_transform(f"{lang.name}", f"{lang.name}-raw-ast", lang.parse)
+        cls.add_transform(f"{lang.name}-raw-ast", f"{lang.name}-ast", lang.shake)
+        cls.add_transform(f"{lang.name}-ast", f"{lang.name}-formatted", lang.print)
+        cls.add_transform(f"{lang.name}-formatted", f"{lang.name}", it)
 
-Synthesize.add_transform("a", "a-ast", A.parse)
-Synthesize.add_transform("a-ast", "a", A.print)
+
+Synthesize.add_lang(A)
+Synthesize.add_lang(B)
+Synthesize.add_lang(B2)
+Synthesize.add_lang(Expr)
+
 Synthesize.add_transform("a-ast", "mp0", A.assemble)
-
-Synthesize.add_transform("b", "b-ast", B.parse)
-Synthesize.add_transform("b-ast", "b", B.print)
 Synthesize.add_transform("b-ast", "a", B.compile)
-
-Synthesize.add_transform("b2", "b2-ast", B2.parse)
-Synthesize.add_transform("b2-ast", "b2", B2.print)
+Synthesize.add_transform("b", "b2", it)
 Synthesize.add_transform("b2-ast", "b", B2.translate)
-
-Synthesize.add_transform("expr", "expr-ast", Expr.parse)
-Synthesize.add_transform("expr-ast", "expr", Expr.print)
 
 synthesize = Synthesize()

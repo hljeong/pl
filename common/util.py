@@ -13,6 +13,10 @@ else:
     NoTyping = object
 
 
+def it(it: T) -> T:
+    return it
+
+
 def fixed_point(
     seed: T, iterate: Callable[[T], T], eq: Optional[Callable[[T, T], bool]] = None
 ) -> T:

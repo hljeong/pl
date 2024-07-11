@@ -4,10 +4,10 @@ from typing import Any, Callable
 from common import (
     Monad,
     tabbed,
+    joinv,
     join,
-    joini,
+    sjoinv,
     sjoin,
-    sjoini,
     load,
 )
 from lexical import Lex
@@ -20,11 +20,14 @@ from syntax import (
     ChoiceNonterminalASTNode,
 )
 
+from ..lang import Lang
 
-class B:
-    grammar: Grammar = Grammar.from_xbnf(
-        "b", load("langs/b/spec/b.xbnf"), ignore=["#[^\n]*"]
-    )
+
+class B(Lang):
+    name = "b"
+    grammar = Grammar.from_xbnf("b", load("langs/b/spec/b.xbnf"), ignore=["#[^\n]*"])
+
+    compile: Callable[[ASTNode], None]
 
     class Parse:
         def __init__(self, entry_point: str | None = None) -> None:
@@ -34,11 +37,7 @@ class B:
         def __call__(self, prog) -> ASTNode:
             return Monad(prog).then(self._lex).then(self._parse).v
 
-    parse: Callable[[str], ASTNode]
-    print: Callable[[ASTNode], str]
-    compile: Callable[[ASTNode], None]
-
-    class BuildInternalAST(Visitor):
+    class Shake(Visitor):
         def __init__(self):
             super().__init__(
                 default_nonterminal_node_visitor=Visitor.rebuild,
@@ -96,12 +95,12 @@ class B:
     class Print(Visitor):
         def __init__(self):
             super().__init__(
-                default_nonterminal_node_visitor=Visitor.visit_all(joini),
+                default_nonterminal_node_visitor=Visitor.visit_all(join),
                 default_terminal_node_visitor=lambda _, n: n.lexeme,
             )
 
         def _visit_b(self, n: ASTNode) -> str:
-            return self._builtin_visit_all(n, sjoini)
+            return self._builtin_visit_all(n, sjoin)
 
         def _visit_declaration(self, n: ASTNode) -> str:
             return f"fn {self(n.name)}({self(n.params)}) {self(n.body)}"
@@ -128,7 +127,7 @@ class B:
                         return "{}"
 
                     else:
-                        return join("{", tabbed(inner), "}")
+                        return joinv("{", tabbed(inner), "}")
 
                 case _:  # pragma: no cover
                     assert False
@@ -285,12 +284,12 @@ class B:
             self,
         ):
             super().__init__(
-                default_nonterminal_node_visitor=Visitor.visit_all(joini),
+                default_nonterminal_node_visitor=Visitor.visit_all(join),
             )
 
         # todo: incredibly ugly
         def _generate_data_section(self) -> str:
-            return join("[data]", joini(f'{self._c[s]}: "{s}"' for s in self._c))
+            return joinv("[data]", join(f'{self._c[s]}: "{s}"' for s in self._c))
 
         def _label(self) -> str:
             label = f"l{self._label_num}"
@@ -301,9 +300,9 @@ class B:
             self._c: dict[str, str] = B.Compile.Aggregate()(n)
             self._s: dict[str, dict[str, Any]] = B.Compile.GenerateSymbolTable()(n)
             self._label_num: int = 0
-            return sjoin(
+            return sjoinv(
                 self._generate_data_section(),
-                join("[code]", sjoini(self(c) for c in n)),
+                joinv("[code]", sjoin(self(c) for c in n)),
             )
 
         def _visit_block(
@@ -335,17 +334,17 @@ class B:
             # store arguments in local variables
             commit_args: str = ""
             if n.params:
-                commit_args = joini(
+                commit_args = join(
                     self._commit_var(c.lexeme, f"a{i}")
                     for i, c in enumerate(n.params[0])
                     if i < 6
                 )
 
                 if len(n.params[0]) > 6:
-                    commit_args = join(
+                    commit_args = joinv(
                         commit_args,
-                        joini(
-                            join(
+                        join(
+                            joinv(
                                 f"l t0 sp {self._cst['stack_frame'] + (i - 6) * 4} # t0 = [sp + {self._cst['stack_frame'] + (i - 6) * 4}]",
                                 self._commit_var(n.params[0][i].lexeme, "t0"),
                             )
@@ -353,10 +352,10 @@ class B:
                         ),
                     )
 
-            appetizer: str = join(
+            appetizer: str = joinv(
                 f"{fn_label}:",
                 tabbed(
-                    join(
+                    joinv(
                         # allocate stack frame
                         f"subv sp sp {self._cst['stack_frame']} # sp = sp - {self._cst['stack_frame']};",
                         # todo: optimize this away if there are no fn calls?
@@ -368,7 +367,7 @@ class B:
             )
             main_course: str = ""
             dessert: str = tabbed(
-                join(
+                joinv(
                     # reload ra
                     f"l ra sp {self._csr['ra']} # ra = [sp + {self._csr['ra']}];",
                     # deallocate stack frame
@@ -389,7 +388,7 @@ class B:
                 case _:  # pragma: no cover
                     assert False
 
-            return join(appetizer, main_course, dessert)
+            return joinv(appetizer, main_course, dessert)
 
         def _visit_statement(
             self,
@@ -417,7 +416,7 @@ class B:
                         # <function> "\(" <flattened_argument_list> "\)"
                         case 2:
                             # todo: the second instruction is completely avoidable... just commit a0 directly
-                            main_course = join(
+                            main_course = joinv(
                                 self._call_function(n.rhs),
                                 "set t0 a0 # t0 = a0;",
                             )
@@ -425,38 +424,38 @@ class B:
                         case _:  # pragma: no cover
                             assert False
 
-                    return join(main_course, dessert)
+                    return joinv(main_course, dessert)
 
                 # <statement> ::= "while" "\(" <expression> "\)" <block>;
                 case 1:
                     start_label: str = self._label()
                     end_label: str = self._label()
                     main_course: str = tabbed(self(n.body))
-                    appetizer: str = join(
+                    appetizer: str = joinv(
                         f"{start_label}:",
                         self(n.cond),
                         f"eqv t0 t0 0 # t0 = (t0 == 0);",
                         f"b t0 {end_label} # if (t0) goto {end_label};",
                     )
-                    dessert: str = join(
+                    dessert: str = joinv(
                         f"j {start_label} # goto {start_label};",
                         f"{end_label}:",
                     )
 
-                    return join(appetizer, main_course, dessert)
+                    return joinv(appetizer, main_course, dessert)
 
                 # <statement> ::= "if" "\(" <expression> "\)" <block>;
                 case 2:
                     label: str = self._label()
                     main_course: str = tabbed(self(n.body))
-                    appetizer: str = join(
+                    appetizer: str = joinv(
                         self(n.cond),
                         f"eqv t0 t0 0 # t0 = (t0 == 0);",
                         f"b t0 {label} # if (t0) goto {label};",
                     )
                     dessert: str = f"{label}:"
 
-                    return join(appetizer, main_course, dessert)
+                    return joinv(appetizer, main_course, dessert)
 
                 # <statement> ::= "return" <operand>? ";";
                 case 3:
@@ -467,7 +466,7 @@ class B:
                         return_operand = self._fetch_operand(n.ret[0], "a0")
 
                     # todo: duplicate of function dessert
-                    return join(
+                    return joinv(
                         return_operand,
                         # reload ra
                         f"l ra sp {self._csr['ra']} # ra = [sp + {self._csr['ra']}];",
@@ -505,9 +504,9 @@ class B:
                 if n.args:
                     # todo: prayging user does not spam arguments in ecall rn
                     #         -- would need extra processing in symbol table generation
-                    fetch_args = join(
+                    fetch_args = joinv(
                         fetch_args,
-                        joini(
+                        join(
                             self._fetch_operand(c, f"a{i + 1}")
                             for i, c in enumerate(n.args[0])
                             if i < 5
@@ -515,10 +514,10 @@ class B:
                     )
 
                     if len(n.args[0]) > 5:
-                        fetch_args = join(
+                        fetch_args = joinv(
                             fetch_args,
-                            joini(
-                                join(
+                            join(
+                                joinv(
                                     self._fetch_operand(n.args[0][i], "t0"),
                                     self._commit_var(f"#a{i + 1}", "t0"),
                                 )
@@ -527,7 +526,7 @@ class B:
                         )
 
                 # todo: reg saving
-                return join(
+                return joinv(
                     fetch_args,
                     f"e # a0 = {fn_name}({B.print(n.args)});",
                 )
@@ -535,17 +534,17 @@ class B:
             else:
                 fn_label: str = self._s[fn_name]["label"]
                 if n.args:
-                    fetch_args = joini(
+                    fetch_args = join(
                         self._fetch_operand(c, f"a{i}")
                         for i, c in enumerate(n.args[0])
                         if i < 6
                     )
 
                     if len(n.args[0]) > 6:
-                        fetch_args = join(
+                        fetch_args = joinv(
                             fetch_args,
-                            joini(
-                                join(
+                            join(
+                                joinv(
                                     self._fetch_operand(n.args[0][i], "t0"),
                                     self._commit_var(f"#a{i}", "t0"),
                                 )
@@ -554,7 +553,7 @@ class B:
                         )
 
                 # todo: reg saving
-                return join(
+                return joinv(
                     fetch_args,
                     "addv ra pc 8 # t0 = pc + 8;",
                     f"j {fn_label} # goto {fn_label};",
@@ -566,7 +565,7 @@ class B:
             )
 
         def _commit_array_access(self, n: ASTNode, reg: str) -> str:
-            return join(
+            return joinv(
                 self._fetch_var(n.arr, "t2"),
                 self._fetch_operand(n.idx, "t3"),
                 f"lsv t3 t3 2 # t3 = t3 << 2;",
@@ -581,7 +580,7 @@ class B:
             )
 
         def _fetch_array_access(self, n: ASTNode, reg: str) -> str:
-            return join(
+            return joinv(
                 self._fetch_var(n.arr, "t2"),
                 self._fetch_operand(n.idx, "t3"),
                 f"lsv t3 t3 2 # t3 = t3 << 2;",
@@ -625,7 +624,7 @@ class B:
 
                     else:
                         # todo: optimize constant
-                        return join(
+                        return joinv(
                             self._fetch_operand(n.op, "t1"),
                             f"eqv t0 t1 0 # t0 = t1 == 0;",
                         )
@@ -712,7 +711,7 @@ class B:
                     # todo: fix lazy comment (print it as binary operation)
                     # todo: constant optimizations
                     # todo: very very sloppy
-                    return join(
+                    return joinv(
                         self._fetch_operand(n.lop, "t1"),
                         self._fetch_operand(n.rop, "t2"),
                         f"{inst} t0 t1 t2 # t0 = {inst}(t1, t2);",
@@ -722,6 +721,8 @@ class B:
                     assert False
 
 
-B.parse = Monad.F(B.Parse()).then(B.BuildInternalAST()).f
+B.parse = B.Parse()
+B.shake = B.Shake()
 B.print = B.Print()
+
 B.compile = B.Compile()

@@ -4,9 +4,9 @@ from typing import Callable
 from common import (
     Monad,
     tabbed,
+    joinv,
     join,
-    joini,
-    sjoini,
+    sjoin,
     load,
 )
 from lexical import Lex
@@ -19,11 +19,14 @@ from syntax import (
     ChoiceNonterminalASTNode,
 )
 
+from ..lang import Lang
 
-class B2:
-    grammar: Grammar = Grammar.from_xbnf(
-        "b2", load("langs/b2/spec/b2.xbnf"), ignore=["#[^\n]*"]
-    )
+
+class B2(Lang):
+    name = "b2"
+    grammar = Grammar.from_xbnf(name, load("langs/b2/spec/b2.xbnf"), ignore=["#[^\n]*"])
+
+    translate: Callable[[ASTNode], ASTNode]
 
     class Parse:
         def __init__(self, entry_point: str | None = None) -> None:
@@ -33,12 +36,7 @@ class B2:
         def __call__(self, prog) -> ASTNode:
             return Monad(prog).then(self._lex).then(self._parse).v
 
-    parse: Callable[[str], ASTNode]
-    print: Callable[[ASTNode], str]
-    translate: Callable[[ASTNode], ASTNode]
-    compile: Callable[[ASTNode], None]
-
-    class BuildInternalAST(Visitor):
+    class Shake(Visitor):
         def __init__(self):
             super().__init__(
                 default_nonterminal_node_visitor=Visitor.rebuild,
@@ -105,7 +103,7 @@ class B2:
             )
 
         def _visit_b2(self, n: ASTNode) -> str:
-            return self._builtin_visit_all(n, sjoini)
+            return self._builtin_visit_all(n, sjoin)
 
         def _visit_declaration(self, n: ASTNode) -> str:
             return f"fn {self(n.name)}({self(n.params)}) {self(n.body)}"
@@ -127,12 +125,12 @@ class B2:
 
                 # <block> ::= "{" <statement>* "}";
                 case 1:
-                    inner: str = self._builtin_visit_all(n.statements, joini)
+                    inner: str = self._builtin_visit_all(n.statements, join)
                     if not inner:
                         return "{}"
 
                     else:
-                        return join("{", tabbed(inner), "}")
+                        return joinv("{", tabbed(inner), "}")
 
                 case _:  # pragma: no cover
                     assert False
@@ -203,7 +201,7 @@ class B2:
         def _visit_b2(self, n: ASTNode) -> str:
             self._n_vars: int = 0
             self._vars: list[str] = []
-            return self._builtin_visit_all(n, sjoini)
+            return self._builtin_visit_all(n, sjoin)
 
         def _var(self) -> str:
             if self._vars:
@@ -232,10 +230,10 @@ class B2:
                     for statement in n.statements:
                         statements.append(self(statement))
 
-            if joini(statements) == "":
+            if join(statements) == "":
                 return "{}"
             else:
-                return join("{", tabbed(joini(statements)), "}")
+                return joinv("{", tabbed(join(statements)), "}")
 
         def _visit_statement(self, n: ASTNode) -> str:
             setup: str = ""
@@ -252,23 +250,23 @@ class B2:
                     # dont forget to load up var at the end of the loop body!!!
                     # took me so long to find this...
                     original_body: str = self(n.body)  # guaranteed to have brances
-                    mutated_body: str = join(
+                    mutated_body: str = joinv(
                         *original_body.split("\n")[:-1], tabbed(setup), "}"
                     )
                     # todo: get rid of the != 0
-                    return join(setup, f"while ({var} != 0) {mutated_body}")
+                    return joinv(setup, f"while ({var} != 0) {mutated_body}")
 
                 # <statement> ::= "if" "(" cond=<expression> ")" body=<block> ";";
                 case 2:
                     setup, var = self(n.cond)
                     # todo: get rid of the != 0
-                    return join(setup, f"if ({var} != 0) {self(n.body)}")
+                    return joinv(setup, f"if ({var} != 0) {self(n.body)}")
 
                 # <statement> ::= return <expression>? ";";
                 case 3:
                     if n.ret:
                         setup, var = self(n.ret[0])
-                        return join(setup, f"return {var};")
+                        return joinv(setup, f"return {var};")
 
                     else:
                         return "return;"
@@ -293,13 +291,13 @@ class B2:
                         # <store> ::= <variable>;
                         case 0:
                             var = n.lhs[0].lexeme
-                            setup = join(setup, f"{var} = {rvar};")
+                            setup = joinv(setup, f"{var} = {rvar};")
 
                         # <store> ::= <array_access>;
                         case 1:
                             var = self._var()
                             aisetup, aivar = self(n.lhs[0].idx)
-                            setup = join(
+                            setup = joinv(
                                 setup,
                                 aisetup,
                                 f"{n.lhs[0].arr.lexeme}[{aivar}] = {rvar};",
@@ -322,7 +320,7 @@ class B2:
             var: str = self._var()
             for rhs in n.rest:
                 rsetup, rvar = self(rhs.expr)
-                setup = join(
+                setup = joinv(
                     setup, rsetup, f"{var} = {lvar} {rhs[0][0].lexeme} {rvar};"
                 )
                 # use self as lvar for subsequent ops
@@ -338,7 +336,7 @@ class B2:
             var: str = self._var()
             for rhs in n.rest:
                 rsetup, rvar = self(rhs.expr)
-                setup = join(setup, rsetup, f"{var} = {lvar} {rhs[0].lexeme} {rvar};")
+                setup = joinv(setup, rsetup, f"{var} = {lvar} {rhs[0].lexeme} {rvar};")
                 # use self as lvar for subsequent ops
                 lvar = var
 
@@ -352,7 +350,7 @@ class B2:
             var: str = self._var()
             for rhs in n.rest:
                 rsetup, rvar = self(rhs.expr)
-                setup = join(setup, rsetup, f"{var} = {lvar} {rhs[0].lexeme} {rvar};")
+                setup = joinv(setup, rsetup, f"{var} = {lvar} {rhs[0].lexeme} {rvar};")
                 # use self as lvar for subsequent ops
                 lvar = var
 
@@ -366,7 +364,7 @@ class B2:
             var: str = self._var()
             for rhs in n.rest:
                 rsetup, rvar = self(rhs.expr)
-                setup = join(setup, rsetup, f"{var} = {lvar} {rhs[0].lexeme} {rvar};")
+                setup = joinv(setup, rsetup, f"{var} = {lvar} {rhs[0].lexeme} {rvar};")
                 # use self as lvar for subsequent ops
                 lvar = var
 
@@ -380,7 +378,7 @@ class B2:
             var: str = self._var()
             for rhs in n.rest:
                 rsetup, rvar = self(rhs.expr)
-                setup = join(
+                setup = joinv(
                     setup, rsetup, f"{var} = {lvar} {rhs[0][0].lexeme} {rvar};"
                 )
                 # use self as lvar for subsequent ops
@@ -396,7 +394,7 @@ class B2:
             var: str = self._var()
             for rhs in n.rest:
                 rsetup, rvar = self(rhs.expr)
-                setup = join(
+                setup = joinv(
                     setup, rsetup, f"{var} = {lvar} {rhs[0][0].lexeme} {rvar};"
                 )
                 # use self as lvar for subsequent ops
@@ -412,7 +410,7 @@ class B2:
             var: str = self._var()
             for rhs in n.rest:
                 rsetup, rvar = self(rhs.expr)
-                setup = join(
+                setup = joinv(
                     setup, rsetup, f"{var} = {lvar} {rhs[0][0].lexeme} {rvar};"
                 )
                 # use self as lvar for subsequent ops
@@ -426,7 +424,7 @@ class B2:
 
             setup, var = self(n.expr)
             for uop in list(iter(n.ops))[::-1]:
-                setup = join(setup, f"{var} = {uop[0].lexeme}{var};")
+                setup = joinv(setup, f"{var} = {uop[0].lexeme}{var};")
 
             return setup, var
 
@@ -444,18 +442,18 @@ class B2:
                         for arg in n.args[0]:
                             asetup, avar = self(arg)
                             vars.append(avar)
-                            setup = join(setup, asetup)
+                            setup = joinv(setup, asetup)
                     var: str
                     # dont reuse here...
                     var = self._var()
-                    setup = join(setup, f"{var} = {n.fn.lexeme}({', '.join(vars)});")
+                    setup = joinv(setup, f"{var} = {n.fn.lexeme}({', '.join(vars)});")
                     return setup, var
 
                 # <primary_expression> ::= <array_access>;
                 case 2:
                     setup, var = self(n[0].idx)
                     # reuse var!
-                    setup = join(setup, f"{var} = {n[0].arr.lexeme}[{var}];")
+                    setup = joinv(setup, f"{var} = {n[0].arr.lexeme}[{var}];")
                     return setup, var
 
                 # <primary_expression> ::= <integer> | <string> | <variable>;
@@ -467,6 +465,8 @@ class B2:
                     assert False
 
 
-B2.parse = Monad.F(B2.Parse()).then(B2.BuildInternalAST()).f
+B2.parse = B2.Parse()
+B2.shake = B2.Shake()
 B2.print = B2.Print()
+
 B2.translate = B2.Translate()

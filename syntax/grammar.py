@@ -60,6 +60,7 @@ class Grammar:
 
         self._generate_vocabulary(ignore)
         self._generate_node_parsers()
+        self._generate_nnode_parsers()
         self._check_ll1()
 
     def __repr__(self) -> str:
@@ -89,6 +90,11 @@ class Grammar:
     @property
     def node_parsers(self) -> dict[str, Parse.Backtracking.NodeParser]:
         return self._node_parsers
+
+    # todo: stinky coupling
+    @property
+    def nnode_parsers(self) -> dict[str, Parse.NBacktracking.NodeParser]:
+        return self._nnode_parsers
 
     @property
     def is_ll1(self) -> bool:
@@ -172,9 +178,37 @@ class Grammar:
             Parse.Backtracking.generate_parsers_from_vocabulary(self._vocabulary)
         )
 
+    def _generate_nnode_parsers(self) -> None:
+        self._nnode_parsers: dict[str, Parse.NBacktracking.NodeParser] = {}
+
+        for nonterminal in self._nrules:
+            rule: NRule = self._nrules[nonterminal]
+            if type(rule) is NProduction:
+                self._nnode_parsers[nonterminal] = (
+                    Parse.NBacktracking.generate_nonterminal_parser(nonterminal, rule)
+                )
+
+            elif type(rule) is NAlias:
+                self._nnode_parsers[nonterminal] = (
+                    Parse.NBacktracking.generate_alias_parser(
+                        nonterminal, rule.node_type
+                    )
+                )
+
+            else:  # pragma: no cover
+                assert False
+
+        self._nnode_parsers.update(
+            Parse.NBacktracking.generate_parsers_from_vocabulary(self._vocabulary)
+        )
+
     # todo: clean up
     def _check_ll1(self) -> None:
-        eq = lambda a, b: all(k in b for k in a) and all(a[k] == b[k] for k in a)
+        eq = (
+            lambda a, b: all(k in b for k in a)
+            and all(k in a for k in b)
+            and all(a[k] == b[k] for k in a)
+        )
 
         def cp(r):
             f = defaultdict(lambda: ListSet())
@@ -284,18 +318,12 @@ class XBNF:
                 ),
             ),
             (
-                "<rule>+",
-                NProduction(
-                    [
-                        [NExpressionTerm("<rule>"), NExpressionTerm("<rule>+")],
-                        [NExpressionTerm("<rule>")],
-                    ],
-                ),
-            ),
-            (
                 "<rule>*",
                 NProduction(
-                    [[NExpressionTerm("<rule>+")], [NExpressionTerm("e")]],
+                    [
+                        [NExpressionTerm("<rule>"), NExpressionTerm("<rule>*")],
+                        [NExpressionTerm("e")],
+                    ],
                 ),
             ),
             (
@@ -358,19 +386,10 @@ class XBNF:
                 ),
             ),
             (
-                "<body>:1+",
-                NProduction(
-                    [
-                        [NExpressionTerm("<body>:1"), NExpressionTerm("<body>:1+")],
-                        [NExpressionTerm("<body>:1")],
-                    ],
-                ),
-            ),
-            (
                 "<body>:1*",
                 NProduction(
                     [
-                        [NExpressionTerm("<body>:1+")],
+                        [NExpressionTerm("<body>:1"), NExpressionTerm("<body>:1*")],
                         [NExpressionTerm("e")],
                     ],
                 ),
@@ -391,8 +410,25 @@ class XBNF:
                 NProduction(
                     [
                         [
-                            NExpressionTerm("<term>", "+"),
+                            NExpressionTerm("<term>+"),
                         ],
+                    ],
+                ),
+            ),
+            (
+                "<term>*",
+                NProduction(
+                    [
+                        [NExpressionTerm("<term>"), NExpressionTerm("<term>*")],
+                        [NExpressionTerm("e")],
+                    ],
+                ),
+            ),
+            (
+                "<term>+",
+                NProduction(
+                    [
+                        [NExpressionTerm("<term>"), NExpressionTerm("<term>*")],
                     ],
                 ),
             ),
@@ -413,15 +449,6 @@ class XBNF:
                 NProduction(
                     [
                         [NExpressionTerm("<term>:0")],
-                        [NExpressionTerm("e")],
-                    ],
-                ),
-            ),
-            (
-                "<multiplicity>?",
-                NProduction(
-                    [
-                        [NExpressionTerm("<multiplicity>")],
                         [NExpressionTerm("e")],
                     ],
                 ),
@@ -466,6 +493,15 @@ class XBNF:
                         [NExpressionTerm("escaped_string")],
                         [NExpressionTerm("regex")],
                         [NExpressionTerm("identifier")],
+                    ],
+                ),
+            ),
+            (
+                "<multiplicity>?",
+                NProduction(
+                    [
+                        [NExpressionTerm("<multiplicity>")],
+                        [NExpressionTerm("e")],
                     ],
                 ),
             ),

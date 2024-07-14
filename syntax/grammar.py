@@ -66,7 +66,7 @@ class Grammar:
 
     # todo: stinky coupling
     @property
-    def nnode_parsers(self) -> dict[str, Parse.Backtracking.NodeParser]:
+    def node_parsers(self) -> dict[str, Parse.Backtracking.NodeParser]:
         return self._node_parsers
 
     @property

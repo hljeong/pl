@@ -66,7 +66,7 @@ class Parse:
         else:
             Log.d(f"using nbacktracking parser for {grammar.name}")
             return cls.Backtracking(
-                grammar.nnode_parsers,
+                grammar.node_parsers,
                 entry_point or grammar.entry_point,
                 grammar.name,
             )
@@ -377,35 +377,7 @@ class Parse:
                 if term.label:
                     n.extras["name"] = term.label
                 production = self._rules[term.node_type][choice]
-                match term.node_type[-1]:
-                    case "?":
-                        if choice == 0:
-                            n.add(self._parse_node(production[0]))
-
-                    case "+":
-                        n.add(self._parse_node(production[0]))
-                        for c in self._parse_node(production[1]):
-                            n.add(c)
-
-                    # todo: kinda ugly...
-                    case "*":
-                        while choice == 0:
-                            n.add(self._parse_node(production[0]))
-                            t = self._safe_peek()
-                            if (
-                                t.token_type
-                                not in self._ll1_parsing_table[term.node_type]
-                            ):
-                                raise Parse.ParseError(
-                                    f"unexpected token '{t.lexeme}' while parsing {term.node_type}, expecting {{{', '.join(self._ll1_parsing_table[term.node_type].keys())}}}"
-                                )
-                            choice = self._ll1_parsing_table[term.node_type][
-                                t.token_type
-                            ]
-
-                    case _:
-                        for term in production:
-                            n.add(self._parse_node(term))
+                n.add_all(self._parse_node(term) for term in production)
                 return n
             elif term.node_type == "e":
                 return TerminalASTNode("e", Token("e", ""))
@@ -449,4 +421,4 @@ class Parse:
         def __call__(self, tokens: list[Token]) -> ASTNode:
             self._tokens: list[Token] = tokens
             self._current: int = 0
-            return self._parse()
+            return Parse._clean(self._parse())

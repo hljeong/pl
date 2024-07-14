@@ -10,7 +10,6 @@ from syntax import (
     ASTNode,
     Visitor,
     NonterminalASTNode,
-    ChoiceNonterminalASTNode,
     TerminalASTNode,
 )
 from runtime import Ins, Prog
@@ -51,7 +50,7 @@ class A(Lang):
             code_section: NonterminalASTNode = NonterminalASTNode("<code_section>")
             data_section: NonterminalASTNode = NonterminalASTNode("<data_section>")
             for c in n.sections:
-                c_: ChoiceNonterminalASTNode = self(c)
+                c_: NonterminalASTNode = self(c)
                 match c_.choice:
                     case 0:
                         for gc in c_[0]:
@@ -99,7 +98,7 @@ class A(Lang):
             return n_
 
         def _visit_labeled_instruction(self, n: ASTNode) -> ASTNode:
-            n_: ChoiceNonterminalASTNode = ChoiceNonterminalASTNode(
+            n_: NonterminalASTNode = NonterminalASTNode(
                 "<instruction>", choice=n.ins.choice
             )
 
@@ -183,7 +182,7 @@ class A(Lang):
                 # todo: now extras contain grammatic term name info... does update work?
                 def ins(code: str, extras: dict[str, Any] = {}) -> ASTNode:
                     n_: ASTNode = A.parse_instruction(code)[0]
-                    n_.extras.update(dict(extras))
+                    n_.extras.update(extras)
                     return n_
 
                 match n.choice:

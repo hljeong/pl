@@ -2,7 +2,6 @@ from .ast import (
     ASTNode,
     TerminalASTNode,
     NonterminalASTNode,
-    ChoiceNonterminalASTNode,
     AliasASTNode,
 )
 from .grammar import Grammar

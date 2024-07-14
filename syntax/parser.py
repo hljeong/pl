@@ -11,7 +11,6 @@ from lexical import Token, Vocabulary
 from .ast import (
     ASTNode,
     NonterminalASTNode,
-    ChoiceNonterminalASTNode,
     AliasASTNode,
     TerminalASTNode,
 )
@@ -104,15 +103,8 @@ class Parse:
 
             case _:
                 match n:
-                    case ChoiceNonterminalASTNode(
-                        node_type=node_type, choice=choice, extras=extras
-                    ):
-                        n_ = ChoiceNonterminalASTNode(
-                            node_type, choice, extras=dict(extras)
-                        )
-
-                    case NonterminalASTNode(node_type=node_type, extras=extras):
-                        n_ = NonterminalASTNode(node_type, extras=dict(extras))
+                    case NonterminalASTNode(node_type, choice, extras):
+                        n_ = NonterminalASTNode(node_type, choice=choice, extras=extras)
 
                     case _:  # pragma: no cover
                         assert False
@@ -231,8 +223,8 @@ class Parse:
 
                 for choice, production in enumerate(body):
 
-                    n: ChoiceNonterminalASTNode = ChoiceNonterminalASTNode(
-                        nonterminal, choice
+                    n: NonterminalASTNode = NonterminalASTNode(
+                        nonterminal, choice=choice
                     )
                     good: bool = True
                     save: int = parser._save()
@@ -381,7 +373,7 @@ class Parse:
                         f"unexpected token '{t.lexeme}' while parsing {term.node_type}, expecting {{{', '.join(self._ll1_parsing_table[term.node_type].keys())}}}"
                     )
                 choice: int = self._ll1_parsing_table[term.node_type][t.token_type]
-                n = ChoiceNonterminalASTNode(term.node_type, choice)
+                n = NonterminalASTNode(term.node_type, choice=choice)
                 if term.label:
                     n.extras["name"] = term.label
                 production = self._rules[term.node_type][choice]

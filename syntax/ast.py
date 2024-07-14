@@ -7,14 +7,9 @@ from lexical import Token
 
 
 class ASTNode(ABC, NoTyping):
-    no_extras: dict[str, Any] = {}
-
-    # janky way to circumvent tricky bug with static default parameter...
-    def __init__(self, node_type: str, extras: dict[str, Any] = no_extras):
+    def __init__(self, node_type: str, extras: dict[str, Any] = {}):
         self.node_type: str = node_type
-        self.extras: dict[str, Any] = extras
-        if self.extras is ASTNode.no_extras:
-            self.extras = {}
+        self.extras: dict[str, Any] = dict(extras)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({str(self)})"
@@ -29,13 +24,17 @@ class ASTNode(ABC, NoTyping):
 
 
 class NonterminalASTNode(ASTNode):
+    __match_args__ = "node_type", "choice", "extras"
+
     def __init__(
         self,
         node_type: str,
+        choice: int = 0,
         *children: ASTNode,
-        extras: dict[str, Any] = ASTNode.no_extras,
+        extras: dict[str, Any] = {},
     ):
         super().__init__(node_type, extras)
+        self._choice = choice
         self._children: list[ASTNode] = []
         self.add_all(children)
 
@@ -61,24 +60,12 @@ class NonterminalASTNode(ASTNode):
         return f'{self.summary}{{{", ".join(map(str, self._children))}}}'
 
     @property
-    def children(self) -> tuple[ASTNode, ...]:
-        return tuple(self._children)
-
-
-class ChoiceNonterminalASTNode(NonterminalASTNode):
-    def __init__(
-        self,
-        node_type: str,
-        choice: int = 0,
-        *children: ASTNode,
-        extras: dict[str, Any] = ASTNode.no_extras,
-    ):
-        super().__init__(node_type, *children, extras=extras)
-        self._choice = choice
-
-    @property
     def choice(self) -> int:
         return self._choice
+
+    @property
+    def children(self) -> tuple[ASTNode, ...]:
+        return tuple(self._children)
 
 
 class AliasASTNode(ASTNode):
@@ -87,7 +74,7 @@ class AliasASTNode(ASTNode):
         node_type: str,
         aliased_node_type: str,
         token: Token,
-        extras: dict[str, Any] = ASTNode.no_extras,
+        extras: dict[str, Any] = {},
     ):
         super().__init__(node_type, extras=extras)
         self.aliased_node_type: str = aliased_node_type
@@ -118,7 +105,7 @@ class TerminalASTNode(ASTNode):
         self,
         node_type: str,
         token: Token,
-        extras: dict[str, Any] = ASTNode.no_extras,
+        extras: dict[str, Any] = {},
     ):
         super().__init__(node_type, extras)
         self.token = token

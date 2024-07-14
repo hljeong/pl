@@ -16,7 +16,6 @@ from syntax import (
     Visitor,
     ASTNode,
     NonterminalASTNode,
-    ChoiceNonterminalASTNode,
 )
 
 from ..lang import Lang
@@ -116,7 +115,7 @@ class B2(Lang):
 
         def _visit_block(
             self,
-            n: ChoiceNonterminalASTNode,
+            n: NonterminalASTNode,
         ) -> str:
             match n.choice:
                 # <block> ::= <statement>;
@@ -137,7 +136,7 @@ class B2(Lang):
 
         def _visit_statement(
             self,
-            n: ChoiceNonterminalASTNode,
+            n: NonterminalASTNode,
         ) -> str:
             match n.choice:
                 # <statement> ::= <expression> ";";

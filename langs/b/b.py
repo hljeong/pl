@@ -17,7 +17,6 @@ from syntax import (
     Visitor,
     ASTNode,
     NonterminalASTNode,
-    ChoiceNonterminalASTNode,
 )
 
 from ..lang import Lang
@@ -113,7 +112,7 @@ class B(Lang):
 
         def _visit_block(
             self,
-            n: ChoiceNonterminalASTNode,
+            n: NonterminalASTNode,
         ) -> str:
             match n.choice:
                 # <block> ::= <statement>;
@@ -134,7 +133,7 @@ class B(Lang):
 
         def _visit_statement(
             self,
-            n: ChoiceNonterminalASTNode,
+            n: NonterminalASTNode,
         ) -> str:
             match n.choice:
                 # <statement> ::= (<variable> | <array_access>) "=" (<operand> | <expression> | <function> "\(" <flattened_parameter_list>? "\)") ";";
@@ -307,7 +306,7 @@ class B(Lang):
 
         def _visit_block(
             self,
-            n: Node,
+            n: ASTNode,
         ) -> Any:
             match n.choice:
                 # <block> ::= <statement>;

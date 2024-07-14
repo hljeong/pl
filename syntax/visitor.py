@@ -4,16 +4,11 @@ from typing import cast, Any, Callable, Iterable
 
 from syntax import ASTNode, NonterminalASTNode, AliasASTNode, TerminalASTNode
 
-from .ast import ChoiceNonterminalASTNode, TerminalASTNode
+from .ast import TerminalASTNode
 
 # note: kwargs (ctx) not captured in these type aliases
 TerminalASTNodeVisitor = Callable[["Visitor", TerminalASTNode], Any]
-ChoiceNonterminalASTNodeVisitor = Callable[["Visitor", ChoiceNonterminalASTNode], Any]
-# todo: review
-PureNonterminalASTNodeVisitor = Callable[["Visitor", NonterminalASTNode], Any]
-NonterminalASTNodeVisitor = (
-    PureNonterminalASTNodeVisitor | ChoiceNonterminalASTNodeVisitor
-)
+NonterminalASTNodeVisitor = Callable[["Visitor", NonterminalASTNode], Any]
 AgnosticASTNodeVisitor = Callable[["Visitor", ASTNode], Any]
 ASTNodeVisitor = AgnosticASTNodeVisitor | NonterminalASTNodeVisitor | TerminalASTNode
 
@@ -40,13 +35,8 @@ class Visitor:
     def rebuild(v: Visitor, n: NonterminalASTNode, **ctx: Any) -> NonterminalASTNode:
         n_: NonterminalASTNode
         match n:
-            case ChoiceNonterminalASTNode(
-                node_type=node_type, choice=choice, extras=extras
-            ):
-                n_ = ChoiceNonterminalASTNode(node_type, choice, extras=dict(extras))
-
-            case NonterminalASTNode(node_type=node_type, extras=extras):
-                n_ = NonterminalASTNode(node_type, extras=dict(extras))
+            case NonterminalASTNode(node_type, choice, extras):
+                n_ = NonterminalASTNode(node_type, choice=choice, extras=extras)
 
             case _:  # pragma: no cover
                 assert False
@@ -134,13 +124,8 @@ class Shake(Visitor):
     def _shake_nonterminal(v: Visitor, n: ASTNode) -> ASTNode | None:
         n_: NonterminalASTNode
         match n:
-            case ChoiceNonterminalASTNode(
-                node_type=node_type, choice=choice, extras=extras
-            ):
-                n_ = ChoiceNonterminalASTNode(node_type, choice, extras=dict(extras))
-
-            case NonterminalASTNode(node_type=node_type, extras=extras):
-                n_ = NonterminalASTNode(node_type, extras=dict(extras))
+            case NonterminalASTNode(node_type, choice, extras):
+                n_ = NonterminalASTNode(node_type, choice=choice, extras=extras)
 
             case _:  # pragma: no cover
                 assert False

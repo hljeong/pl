@@ -1,6 +1,6 @@
 from __future__ import annotations
 from collections import defaultdict
-from typing import cast, Any, Callable, Union, Iterable, Optional
+from typing import cast, Any, Callable, Iterable
 
 from syntax import ASTNode, NonterminalASTNode, AliasASTNode, TerminalASTNode
 
@@ -11,13 +11,11 @@ TerminalASTNodeVisitor = Callable[["Visitor", TerminalASTNode], Any]
 ChoiceNonterminalASTNodeVisitor = Callable[["Visitor", ChoiceNonterminalASTNode], Any]
 # todo: review
 PureNonterminalASTNodeVisitor = Callable[["Visitor", NonterminalASTNode], Any]
-NonterminalASTNodeVisitor = Union[
-    PureNonterminalASTNodeVisitor, ChoiceNonterminalASTNodeVisitor
-]
+NonterminalASTNodeVisitor = (
+    PureNonterminalASTNodeVisitor | ChoiceNonterminalASTNodeVisitor
+)
 AgnosticASTNodeVisitor = Callable[["Visitor", ASTNode], Any]
-ASTNodeVisitor = Union[
-    AgnosticASTNodeVisitor, NonterminalASTNodeVisitor, TerminalASTNode
-]
+ASTNodeVisitor = AgnosticASTNodeVisitor | NonterminalASTNodeVisitor | TerminalASTNode
 
 # funny little hack because cant use self in default parameter
 USE_DEFAULT_DEFAULT_NONTERMINAL_AST_NODE_VISITOR: NonterminalASTNodeVisitor = (
@@ -51,7 +49,7 @@ class Visitor:
             assert False
 
         for c in n:
-            c_: Optional[Union[ASTNode, Iterable[ASTNode]]] = v(c, **ctx)
+            c_: ASTNode | Iterable[ASTNode] | None = v(c, **ctx)
             if c_ is not None:
                 if isinstance(c_, ASTNode):
                     n_.add(c_)

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TypeVar, Callable, Any, Union, Optional, TYPE_CHECKING
+from typing import TypeVar, Callable, Any, TYPE_CHECKING
 from time import sleep
 from dataclasses import dataclass
 
@@ -18,7 +18,7 @@ def it(it: T) -> T:
 
 
 def fixed_point(
-    seed: T, iterate: Callable[[T], T], eq: Optional[Callable[[T, T], bool]] = None
+    seed: T, iterate: Callable[[T], T], eq: Callable[[T, T], bool] | None = None
 ) -> T:
     if eq is None:
         eq = lambda a, b: a == b
@@ -76,7 +76,7 @@ class Bits(list[Bit]):
 
 @dataclass(frozen=True)
 class Placeholder:
-    key: Union[str, int] = "value"
+    key: str | int = "value"
 
 
 class Arglist:

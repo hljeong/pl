@@ -110,7 +110,7 @@ def test_print(capsys):
     )
 
     MP0()(synthesize("mp0", load_b2(f), "b2"))
-    check_output(capsys, "13\n0\n1\n3\n7\n15\n31\n63\ni > 3\nhello\n")
+    check_output(capsys, "13\n0\n1\n3\n7\n15\n31\n63\ni > 3\n1\nhello\n")
 
 
 def test_expr(capsys):

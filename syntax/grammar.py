@@ -6,61 +6,43 @@ from common import Monad, Log, ListSet, fixed_point
 from lexical import Vocabulary, Lex
 
 from .ast import ASTNode, NonterminalASTNode
-from .parser import ExpressionTerm, Parse, NExpressionTerm
+from .parser import Parse, Term
 from .visitor import Visitor
 
-Expression = list[ExpressionTerm]
+Expression = list[Term]
 
 
 class Production(list[Expression]): ...
 
 
-class Alias(ExpressionTerm): ...
+class Alias(Term): ...
 
 
 Rule = Production | Alias
+
 Rules = dict[str, Rule]
-
-NExpression = list[NExpressionTerm]
-
-
-class NProduction(list[NExpression]): ...
-
-
-class NAlias(NExpressionTerm): ...
-
-
-NRule = NProduction | NAlias
-
-NRules = dict[str, NRule]
 
 
 class Grammar:
     @classmethod
     def from_xbnf(cls, name: str, xbnf: str, ignore: list[str] = []) -> Grammar:
         ast: ASTNode = Monad(xbnf).then(Lex.for_lang(XBNF)).then(Parse.for_lang(XBNF)).v
-
-        # todo: dirty
         rules: Rules = GenerateRules()(ast)
-        nrules: NRules = NGenerateRules()(ast)
-        return cls(name, rules, nrules, ignore=ignore)
+        return cls(name, rules, ignore=ignore)
 
     def __init__(
         self,
         name: str,
         rules: Rules,
-        nrules: NRules,
         # todo: move this to xbnf
         ignore: list[str] = [],
     ):
         # todo: validate input grammar
         self._name: str = name
         self._rules = rules
-        self._nrules = nrules
 
         self._generate_vocabulary(ignore)
         self._generate_node_parsers()
-        self._generate_nnode_parsers()
         self._check_ll1()
 
     def __repr__(self) -> str:
@@ -75,10 +57,6 @@ class Grammar:
         return self._rules
 
     @property
-    def nrules(self) -> NRules:
-        return self._nrules
-
-    @property
     def entry_point(self) -> str:
         return f"<{self._name}>"
 
@@ -88,13 +66,8 @@ class Grammar:
 
     # todo: stinky coupling
     @property
-    def node_parsers(self) -> dict[str, Parse.Backtracking.NodeParser]:
+    def nnode_parsers(self) -> dict[str, Parse.Backtracking.NodeParser]:
         return self._node_parsers
-
-    # todo: stinky coupling
-    @property
-    def nnode_parsers(self) -> dict[str, Parse.NBacktracking.NodeParser]:
-        return self._nnode_parsers
 
     @property
     def is_ll1(self) -> bool:
@@ -178,30 +151,6 @@ class Grammar:
             Parse.Backtracking.generate_parsers_from_vocabulary(self._vocabulary)
         )
 
-    def _generate_nnode_parsers(self) -> None:
-        self._nnode_parsers: dict[str, Parse.NBacktracking.NodeParser] = {}
-
-        for nonterminal in self._nrules:
-            rule: NRule = self._nrules[nonterminal]
-            if type(rule) is NProduction:
-                self._nnode_parsers[nonterminal] = (
-                    Parse.NBacktracking.generate_nonterminal_parser(nonterminal, rule)
-                )
-
-            elif type(rule) is NAlias:
-                self._nnode_parsers[nonterminal] = (
-                    Parse.NBacktracking.generate_alias_parser(
-                        nonterminal, rule.node_type
-                    )
-                )
-
-            else:  # pragma: no cover
-                assert False
-
-        self._nnode_parsers.update(
-            Parse.NBacktracking.generate_parsers_from_vocabulary(self._vocabulary)
-        )
-
     # todo: clean up
     def _check_ll1(self) -> None:
         eq = (
@@ -219,16 +168,16 @@ class Grammar:
         first: DefaultDict[str, ListSet[str]] = defaultdict(lambda: ListSet())
         for terminal in self._vocabulary:
             first[terminal].add(terminal)
-        for nonterminal in self._nrules:
-            rule: NRule = self._nrules[nonterminal]
-            if type(rule) is NAlias:
+        for nonterminal in self._rules:
+            rule: Rule = self._rules[nonterminal]
+            if type(rule) is Alias:
                 first[nonterminal].add(rule.node_type)
 
         def iterate_first(cur):
             nxt = cp(cur)
-            for nonterminal in self._nrules:
-                rule = self._nrules[nonterminal]
-                if type(rule) is NProduction:
+            for nonterminal in self._rules:
+                rule = self._rules[nonterminal]
+                if type(rule) is Production:
                     for expression in rule:
                         nullable = True
                         for term in expression:
@@ -251,9 +200,9 @@ class Grammar:
         def iterate_follow(cur):
             cur = cp(cur)  # prevent side effects to the original cur
             nxt = cp(cur)
-            for nonterminal in self._nrules:
-                rule = self._nrules[nonterminal]
-                if type(rule) is NProduction:
+            for nonterminal in self._rules:
+                rule = self._rules[nonterminal]
+                if type(rule) is Production:
                     for production in rule:
                         nxt[production[-1].node_type].add_all(
                             cur[nonterminal].diff(["e"])
@@ -279,9 +228,9 @@ class Grammar:
         ] = defaultdict(lambda: {})
 
         self._is_ll1 = True
-        for nonterminal in self._nrules:
-            rule = self._nrules[nonterminal]
-            if type(rule) is NProduction:
+        for nonterminal in self._rules:
+            rule = self._rules[nonterminal]
+            if type(rule) is Production:
                 for idx, expression in enumerate(rule):
                     nullable = True
                     for term in expression:
@@ -309,356 +258,199 @@ class Grammar:
 
 
 class XBNF:
-    nrules = NRules(
+    rules = Rules(
         [
             (
                 "<xbnf>",
-                NProduction(
-                    [[NExpressionTerm("<production>"), NExpressionTerm("<rule>*")]],
+                Production(
+                    [[Term("<production>"), Term("<rule>*")]],
                 ),
             ),
             (
                 "<rule>*",
-                NProduction(
+                Production(
                     [
-                        [NExpressionTerm("<rule>"), NExpressionTerm("<rule>*")],
-                        [NExpressionTerm("e")],
+                        [Term("<rule>"), Term("<rule>*")],
+                        [Term("e")],
                     ],
                 ),
             ),
             (
                 "<rule>",
-                NProduction(
+                Production(
                     [
-                        [NExpressionTerm("<production>")],
-                        [NExpressionTerm("<alias>")],
+                        [Term("<production>")],
+                        [Term("<alias>")],
                     ],
                 ),
             ),
             (
                 "<production>",
-                NProduction(
+                Production(
                     [
                         [
-                            NExpressionTerm("<nonterminal>"),
-                            NExpressionTerm('"::="'),
-                            NExpressionTerm("<body>"),
-                            NExpressionTerm('";"'),
+                            Term("<nonterminal>"),
+                            Term('"::="'),
+                            Term("<body>"),
+                            Term('";"'),
                         ],
                     ],
                 ),
             ),
             (
                 "<alias>",
-                NProduction(
+                Production(
                     [
                         [
-                            NExpressionTerm('"alias"'),
-                            NExpressionTerm("<nonterminal>"),
-                            NExpressionTerm('"::="'),
-                            NExpressionTerm("<terminal>"),
-                            NExpressionTerm('";"'),
+                            Term('"alias"'),
+                            Term("<nonterminal>"),
+                            Term('"::="'),
+                            Term("<terminal>"),
+                            Term('";"'),
                         ],
                     ],
                 ),
             ),
             (
                 "<nonterminal>",
-                NProduction(
+                Production(
                     [
                         [
-                            NExpressionTerm('"<"'),
-                            NExpressionTerm("identifier"),
-                            NExpressionTerm('">"'),
+                            Term('"<"'),
+                            Term("identifier"),
+                            Term('">"'),
                         ],
                     ],
                 ),
             ),
             (
                 "<body>",
-                NProduction(
+                Production(
                     [
                         [
-                            NExpressionTerm("<expression>"),
-                            NExpressionTerm("<body>:1*"),
+                            Term("<expression>"),
+                            Term("<body>:1*"),
                         ],
                     ],
                 ),
             ),
             (
                 "<body>:1*",
-                NProduction(
+                Production(
                     [
-                        [NExpressionTerm("<body>:1"), NExpressionTerm("<body>:1*")],
-                        [NExpressionTerm("e")],
+                        [Term("<body>:1"), Term("<body>:1*")],
+                        [Term("e")],
                     ],
                 ),
             ),
             (
                 "<body>:1",
-                NProduction(
+                Production(
                     [
                         [
-                            NExpressionTerm('"|"'),
-                            NExpressionTerm("<expression>"),
+                            Term('"|"'),
+                            Term("<expression>"),
                         ],
                     ],
                 ),
             ),
             (
                 "<expression>",
-                NProduction(
+                Production(
                     [
                         [
-                            NExpressionTerm("<term>+"),
+                            Term("<term>+"),
                         ],
                     ],
                 ),
             ),
             (
                 "<term>*",
-                NProduction(
+                Production(
                     [
-                        [NExpressionTerm("<term>"), NExpressionTerm("<term>*")],
-                        [NExpressionTerm("e")],
+                        [Term("<term>"), Term("<term>*")],
+                        [Term("e")],
                     ],
                 ),
             ),
             (
                 "<term>+",
-                NProduction(
+                Production(
                     [
-                        [NExpressionTerm("<term>"), NExpressionTerm("<term>*")],
+                        [Term("<term>"), Term("<term>*")],
                     ],
                 ),
             ),
             (
                 "<term>",
-                NProduction(
+                Production(
                     [
                         [
-                            NExpressionTerm("<term>:0?"),
-                            NExpressionTerm("<group>"),
-                            NExpressionTerm("<multiplicity>?"),
+                            Term("<term>:0?"),
+                            Term("<group>"),
+                            Term("<multiplicity>?"),
                         ],
                     ],
                 ),
             ),
             (
                 "<term>:0?",
-                NProduction(
+                Production(
                     [
-                        [NExpressionTerm("<term>:0")],
-                        [NExpressionTerm("e")],
+                        [Term("<term>:0")],
+                        [Term("e")],
                     ],
                 ),
             ),
             (
                 "<term>:0",
-                NProduction(
+                Production(
                     [
                         [
-                            NExpressionTerm("<label>"),
-                            NExpressionTerm('"="'),
+                            Term("<label>"),
+                            Term('"="'),
                         ],
                     ],
                 ),
             ),
             (
                 "<group>",
-                NProduction(
+                Production(
                     [
-                        [NExpressionTerm("<item>")],
+                        [Term("<item>")],
                         [
-                            NExpressionTerm('"("'),
-                            NExpressionTerm("<body>"),
-                            NExpressionTerm('")"'),
+                            Term('"("'),
+                            Term("<body>"),
+                            Term('")"'),
                         ],
                     ],
                 ),
             ),
             (
                 "<item>",
-                NProduction(
+                Production(
                     [
-                        [NExpressionTerm("<nonterminal>")],
-                        [NExpressionTerm("<terminal>")],
+                        [Term("<nonterminal>")],
+                        [Term("<terminal>")],
                     ],
                 ),
             ),
             (
                 "<terminal>",
-                NProduction(
+                Production(
                     [
-                        [NExpressionTerm("escaped_string")],
-                        [NExpressionTerm("regex")],
-                        [NExpressionTerm("identifier")],
+                        [Term("escaped_string")],
+                        [Term("regex")],
+                        [Term("identifier")],
                     ],
                 ),
             ),
             (
                 "<multiplicity>?",
-                NProduction(
-                    [
-                        [NExpressionTerm("<multiplicity>")],
-                        [NExpressionTerm("e")],
-                    ],
-                ),
-            ),
-            (
-                "<multiplicity>",
-                NProduction(
-                    [
-                        [NExpressionTerm('"?"')],
-                        [NExpressionTerm('"*"')],
-                        [NExpressionTerm('"+"')],
-                    ],
-                ),
-            ),
-            ("<label>", NAlias("identifier")),
-        ]
-    )
-
-    rules = Rules(
-        [
-            (
-                "<xbnf>",
-                Production(
-                    [[ExpressionTerm("<production>"), ExpressionTerm("<rule>", "*")]],
-                ),
-            ),
-            (
-                "<rule>",
                 Production(
                     [
-                        [ExpressionTerm("<production>")],
-                        [ExpressionTerm("<alias>")],
-                    ],
-                ),
-            ),
-            (
-                "<production>",
-                Production(
-                    [
-                        [
-                            ExpressionTerm("<nonterminal>"),
-                            ExpressionTerm('"::="'),
-                            ExpressionTerm("<body>"),
-                            ExpressionTerm('";"'),
-                        ],
-                    ],
-                ),
-            ),
-            (
-                "<alias>",
-                Production(
-                    [
-                        [
-                            ExpressionTerm('"alias"'),
-                            ExpressionTerm("<nonterminal>"),
-                            ExpressionTerm('"::="'),
-                            ExpressionTerm("<terminal>"),
-                            ExpressionTerm('";"'),
-                        ],
-                    ],
-                ),
-            ),
-            (
-                "<nonterminal>",
-                Production(
-                    [
-                        [
-                            ExpressionTerm('"<"'),
-                            ExpressionTerm("identifier"),
-                            ExpressionTerm('">"'),
-                        ],
-                    ],
-                ),
-            ),
-            (
-                "<body>",
-                Production(
-                    [
-                        [
-                            ExpressionTerm("<expression>"),
-                            ExpressionTerm("<body>:1", "*"),
-                        ],
-                    ],
-                ),
-            ),
-            (
-                "<body>:1",
-                Production(
-                    [
-                        [
-                            ExpressionTerm('"|"'),
-                            ExpressionTerm("<expression>"),
-                        ],
-                    ],
-                ),
-            ),
-            (
-                "<expression>",
-                Production(
-                    [
-                        [
-                            ExpressionTerm("<term>", "+"),
-                        ],
-                    ],
-                ),
-            ),
-            (
-                "<term>",
-                Production(
-                    [
-                        [
-                            ExpressionTerm("<term>:0", "?"),
-                            ExpressionTerm("<group>"),
-                            ExpressionTerm("<multiplicity>", "?"),
-                        ],
-                    ],
-                ),
-            ),
-            (
-                "<term>:0",
-                Production(
-                    [
-                        [
-                            ExpressionTerm("<label>"),
-                            ExpressionTerm('"="'),
-                        ],
-                    ],
-                ),
-            ),
-            (
-                "<group>",
-                Production(
-                    [
-                        [ExpressionTerm("<item>")],
-                        [
-                            ExpressionTerm('"("'),
-                            ExpressionTerm("<body>"),
-                            ExpressionTerm('")"'),
-                        ],
-                    ],
-                ),
-            ),
-            (
-                "<item>",
-                Production(
-                    [
-                        [ExpressionTerm("<nonterminal>")],
-                        [ExpressionTerm("<terminal>")],
-                    ],
-                ),
-            ),
-            (
-                "<terminal>",
-                Production(
-                    [
-                        [ExpressionTerm("escaped_string")],
-                        [ExpressionTerm("regex")],
-                        [ExpressionTerm("identifier")],
+                        [Term("<multiplicity>")],
+                        [Term("e")],
                     ],
                 ),
             ),
@@ -666,9 +458,9 @@ class XBNF:
                 "<multiplicity>",
                 Production(
                     [
-                        [ExpressionTerm('"?"')],
-                        [ExpressionTerm('"*"')],
-                        [ExpressionTerm('"+"')],
+                        [Term('"?"')],
+                        [Term('"*"')],
+                        [Term('"+"')],
                     ],
                 ),
             ),
@@ -695,140 +487,9 @@ class XBNF:
         }
     )
 
-    node_parsers = {
-        "<xbnf>": Parse.Backtracking.generate_nonterminal_parser(
-            "<xbnf>",
-            [
-                [ExpressionTerm("<production>"), ExpressionTerm("<rule>", "*")],
-            ],
-        ),
-        "<rule>": Parse.Backtracking.generate_nonterminal_parser(
-            "<rule>",
-            [[ExpressionTerm("<production>")], [ExpressionTerm("<alias>")]],
-        ),
-        "<production>": Parse.Backtracking.generate_nonterminal_parser(
-            "<production>",
-            [
-                [
-                    ExpressionTerm("<nonterminal>"),
-                    ExpressionTerm('"::="'),
-                    ExpressionTerm("<body>"),
-                    ExpressionTerm('";"'),
-                ],
-            ],
-        ),
-        "<alias>": Parse.Backtracking.generate_nonterminal_parser(
-            "<alias>",
-            [
-                [
-                    ExpressionTerm('"alias"'),
-                    ExpressionTerm("<nonterminal>"),
-                    ExpressionTerm('"::="'),
-                    ExpressionTerm("<terminal>"),
-                    ExpressionTerm('";"'),
-                ],
-            ],
-        ),
-        "<nonterminal>": Parse.Backtracking.generate_nonterminal_parser(
-            "<nonterminal>",
-            [
-                [
-                    ExpressionTerm('"<"'),
-                    ExpressionTerm("identifier"),
-                    ExpressionTerm('">"'),
-                ],
-            ],
-        ),
-        "<body>": Parse.Backtracking.generate_nonterminal_parser(
-            "<body>",
-            [
-                [
-                    ExpressionTerm("<expression>"),
-                    ExpressionTerm("<body>:1", "*"),
-                ],
-            ],
-        ),
-        "<body>:1": Parse.Backtracking.generate_nonterminal_parser(
-            "<body>:1",
-            [
-                [
-                    ExpressionTerm('"|"'),
-                    ExpressionTerm("<expression>"),
-                ],
-            ],
-        ),
-        "<expression>": Parse.Backtracking.generate_nonterminal_parser(
-            "<expression>",
-            [
-                [
-                    ExpressionTerm("<term>", "+"),
-                ],
-            ],
-        ),
-        "<term>": Parse.Backtracking.generate_nonterminal_parser(
-            "<term>",
-            [
-                [
-                    ExpressionTerm("<term>:0", "?"),
-                    ExpressionTerm("<group>"),
-                    ExpressionTerm("<multiplicity>", "?"),
-                ],
-            ],
-        ),
-        "<term>:0": Parse.Backtracking.generate_nonterminal_parser(
-            "<term>:0",
-            [
-                [
-                    ExpressionTerm("<label>"),
-                    ExpressionTerm('"="'),
-                ],
-            ],
-        ),
-        "<group>": Parse.Backtracking.generate_nonterminal_parser(
-            "<group>",
-            [
-                [ExpressionTerm("<item>")],
-                [
-                    ExpressionTerm('"("'),
-                    ExpressionTerm("<body>"),
-                    ExpressionTerm('")"'),
-                ],
-            ],
-        ),
-        "<item>": Parse.Backtracking.generate_nonterminal_parser(
-            "<item>",
-            [
-                [ExpressionTerm("<nonterminal>")],
-                [ExpressionTerm("<terminal>")],
-            ],
-        ),
-        "<terminal>": Parse.Backtracking.generate_nonterminal_parser(
-            "<terminal>",
-            [
-                [ExpressionTerm("escaped_string")],
-                [ExpressionTerm("regex")],
-                [ExpressionTerm("identifier")],
-            ],
-        ),
-        "<multiplicity>": Parse.Backtracking.generate_nonterminal_parser(
-            "<multiplicity>",
-            [
-                [ExpressionTerm('"?"')],
-                [ExpressionTerm('"*"')],
-                [ExpressionTerm('"+"')],
-            ],
-        ),
-        "<label>": Parse.Backtracking.generate_alias_parser(
-            "<label>",
-            "identifier",
-        ),
-        **Parse.Backtracking.generate_parsers_from_vocabulary(vocabulary),
-    }
-
     grammar: Grammar = Grammar(
         "xbnf",
         rules=rules,
-        nrules=nrules,
     )
 
 
@@ -841,7 +502,7 @@ class GenerateRules(Visitor):
         self._idx_stack: list[int] = []
         self._used: set[str] = set()
 
-        self._rules: Rules = {}
+        self._rules: Rules = Rules()
 
     def _visit_xbnf(self, n: ASTNode) -> Rules:
         self._builtin_visit_all(n)
@@ -938,205 +599,41 @@ class GenerateRules(Visitor):
             # expression_term[1]: <group>
             group: str = self(term[1])
 
-            ret.append(ExpressionTerm(group, multiplicity, label))
-
-        return ret
-
-    def _visit_group(
-        self,
-        n: ASTNode,
-    ) -> str:
-        match n.choice:
-            # node: <item>
-            case 0:
-                # term: <nonterminal> | <terminal>
-                term = n[0]
-                self._idx_stack[-1] += 1
-                return self(term)
-
-            # node: "\(" <body> "\)"
-            case 1:
-                auxiliary_nonterminal = f"{self._lhs_stack[-1]}:{self._idx_stack[-1]}"
-                self._lhs_stack.append(auxiliary_nonterminal)
-                self._idx_stack.append(0)
-
-                # node[1]: <body>
-                self._rules[auxiliary_nonterminal] = self(n[1])
-
-                self._idx_stack.pop()
-                self._lhs_stack.pop()
-                self._idx_stack[-1] += 1
-
-                return auxiliary_nonterminal
-
-    def _visit_nonterminal(
-        self,
-        n: ASTNode,
-    ) -> str:
-        nonterminal: str = f"<{n[1].lexeme}>"
-        return nonterminal
-
-    def _visit_terminal(
-        self,
-        n: ASTNode,
-    ) -> str:
-        terminal: str = n[0].lexeme
-        return terminal
-
-    def _visit_multiplicity(
-        self,
-        n: ASTNode,
-    ) -> str:
-        return n[0].lexeme
-
-
-class NGenerateRules(Visitor):
-    def __init__(self):
-        super().__init__()
-
-        # todo: this is ugly, move to call stack
-        self._lhs_stack: list[str] = []
-        self._idx_stack: list[int] = []
-        self._used: set[str] = set()
-
-        self._rules: NRules = NRules()
-
-    def _visit_xbnf(self, n: ASTNode) -> NRules:
-        self._builtin_visit_all(n)
-        return self._rules
-
-    def _visit_production(
-        self,
-        n: ASTNode,
-    ) -> None:
-        nonterminal: str = f"<{n[0][1].lexeme}>"
-
-        self._lhs_stack.append(nonterminal)
-        self._idx_stack.append(0)
-
-        self._rules[nonterminal] = self(n[2])
-
-        self._idx_stack.pop()
-        self._lhs_stack.pop()
-
-    def _visit_alias(
-        self,
-        n: ASTNode,
-    ) -> None:
-        alias: str = f"<{n[1][1].lexeme}>"
-        self._rules[alias] = NAlias(self(n[3]))
-
-    def _visit_body(
-        self,
-        n: ASTNode,
-    ) -> NProduction:
-        productions: NProduction = NProduction()
-
-        # only 1 production
-        if len(n[1]) == 0:
-            # node[0]: <expression>
-            productions.append(self(n[0]))
-
-        # multiple productions
-        else:
-
-            auxiliary_nonterminal = f"{self._lhs_stack[-1]}~{self._idx_stack[-1]}"
-            self._lhs_stack.append(auxiliary_nonterminal)
-            self._idx_stack.append(0)
-
-            # node[0]: <expression>
-            productions.append(self(n[0]))
-
-            self._idx_stack.pop()
-            self._lhs_stack.pop()
-            self._idx_stack[-1] += 1
-
-        # node[1]: ("\|" <expression>)*
-        # or_production: "\|" <expression>
-        for or_production in n[1]:
-            auxiliary_nonterminal = f"{self._lhs_stack[-1]}~{self._idx_stack[-1]}"
-            self._lhs_stack.append(auxiliary_nonterminal)
-            self._idx_stack.append(0)
-
-            # or_production[1]: <expression>
-            productions.append(self(or_production[1]))
-
-            self._idx_stack.pop()
-            self._lhs_stack.pop()
-            self._idx_stack[-1] += 1
-
-        return productions
-
-    def _visit_expression(
-        self,
-        n: ASTNode,
-    ) -> NExpression:
-        ret: NExpression = NExpression()
-
-        # node[0]: <term>+
-        # <term>: (<label> "=")? <group> <multiplicity>?
-        for term in n[0]:
-            label: Optional[str] = None
-            optional_label: NonterminalASTNode = term[0]
-
-            if optional_label:
-                label = optional_label[0][0].lexeme
-
-            # multiplicity: <multiplicity>?
-            optional_multiplicity: NonterminalASTNode = term[2]
-
-            multiplicity: str
-            # default multiplicity is 1
-            if not optional_multiplicity:
-                multiplicity = ""
-
-            else:
-                multiplicity = self(optional_multiplicity[0])
-
-            # expression_term[1]: <group>
-            group: str = self(term[1])
-
             match multiplicity:
                 case "":
-                    ret.append(NExpressionTerm(group, label))
+                    ret.append(Term(group, label))
 
                 case "?":
-                    self._rules[f"{group}?"] = NProduction(
+                    self._rules[f"{group}?"] = Production(
                         [
-                            NExpression([NExpressionTerm(group)]),
-                            NExpression([NExpressionTerm("e")]),
+                            Expression([Term(group)]),
+                            Expression([Term("e")]),
                         ]
                     )
-                    ret.append(NExpressionTerm(f"{group}?", label))
+                    ret.append(Term(f"{group}?", label))
 
                 case "*":
-                    self._rules[f"{group}*"] = NProduction(
+                    self._rules[f"{group}*"] = Production(
                         [
-                            NExpression(
-                                [NExpressionTerm(group), NExpressionTerm(f"{group}*")]
-                            ),
-                            NExpression([NExpressionTerm("e")]),
+                            Expression([Term(group), Term(f"{group}*")]),
+                            Expression([Term("e")]),
                         ]
                     )
-                    ret.append(NExpressionTerm(f"{group}*", label))
+                    ret.append(Term(f"{group}*", label))
 
                 case "+":
-                    self._rules[f"{group}*"] = NProduction(
+                    self._rules[f"{group}*"] = Production(
                         [
-                            NExpression(
-                                [NExpressionTerm(group), NExpressionTerm(f"{group}*")]
-                            ),
-                            NExpression([NExpressionTerm("e")]),
+                            Expression([Term(group), Term(f"{group}*")]),
+                            Expression([Term("e")]),
                         ]
                     )
-                    self._rules[f"{group}+"] = NProduction(
+                    self._rules[f"{group}+"] = Production(
                         [
-                            NExpression(
-                                [NExpressionTerm(group), NExpressionTerm(f"{group}*")]
-                            ),
+                            Expression([Term(group), Term(f"{group}*")]),
                         ]
                     )
-                    ret.append(NExpressionTerm(f"{group}+", label))
+                    ret.append(Term(f"{group}+", label))
 
                 case _:
                     assert False
@@ -1169,6 +666,9 @@ class NGenerateRules(Visitor):
                 self._idx_stack[-1] += 1
 
                 return auxiliary_nonterminal
+
+            case _:  # pragma: no cover
+                assert False
 
     def _visit_nonterminal(
         self,

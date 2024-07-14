@@ -12,7 +12,13 @@ fn main() {
   if (i > 180) {
     print("i > 180\n");
   }
+  printi(two_args(1, 2));
+  print("\n");
   hello();
+}
+
+fn two_args(a, b) {
+  return a;
 }
 
 fn fib(n) {

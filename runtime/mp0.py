@@ -287,24 +287,22 @@ class MP0:
         self._ins_count += 1
 
     def _fmt(self, reg_or_addr: Reg | Addr) -> str:
-        if type(reg_or_addr) is Reg:
-            reg: Reg = MP0._unalias(reg_or_addr)
+        match reg_or_addr:
+            case Reg():
+                reg: Reg = MP0._unalias(reg_or_addr)
 
-            if reg == MP0._alias(reg):
-                return f"[bold][yellow]{reg}[/yellow][/bold]"
+                if reg == MP0._alias(reg):
+                    return f"[bold][yellow]{reg}[/yellow][/bold]"
 
-            else:
-                return f"[bold][yellow]{MP0._alias(reg)}[/yellow][/bold]"
+                else:
+                    return f"[bold][yellow]{MP0._alias(reg)}[/yellow][/bold]"
 
-                # tired of seeing the unaliased version when debugging...
-                # return f"[bold][yellow]{MP0._alias(reg)}[/yellow][/bold] ([bold][yellow]{reg}[/yellow][/bold])"
+            case Addr():
+                addr: Addr = reg_or_addr
+                return f"[bold][[blue]{addr}[/blue]][/bold]"
 
-        elif type(reg_or_addr) is Addr:
-            addr: Addr = reg_or_addr
-
-            return f"[bold][[blue]{addr}[/blue]][/bold]"
-
-        assert False  # pragma: no cover
+            case _:  # pragma: no cover
+                assert False
 
     def _fmtv(self, val: int, color: str = "blue") -> str:
         val_bytes: list[int] = list(
@@ -314,51 +312,53 @@ class MP0:
 
     # todo: cleaner tracking
     def __getitem__(self, reg_or_addr: Reg | Addr) -> int:
-        if type(reg_or_addr) is Reg:
-            reg: Reg = self._unalias(reg_or_addr)
-            # hard wired 0
-            if reg == "r0":
-                return 0
-            val = self._r[reg]
-            if val > (1 << 31):
-                val -= 1 << 32
+        match reg_or_addr:
+            case Reg():
+                reg: Reg = self._unalias(reg_or_addr)
+                # hard wired 0
+                if reg == "r0":
+                    return 0
+                val = self._r[reg]
+                if val > (1 << 31):
+                    val -= 1 << 32
 
-        elif type(reg_or_addr) is Addr:
-            addr: Addr = reg_or_addr
-            if addr < 0 or addr + 4 > self._mem_size:
-                raise RuntimeError(f"segment fault: 0x{addr:08x}")
+            case Addr():
+                addr: Addr = reg_or_addr
+                if addr < 0 or addr + 4 > self._mem_size:
+                    raise RuntimeError(f"segment fault: 0x{addr:08x}")
 
-            val = sum(self._m[addr + i] << (i * 8) for i in range(4))
+                val = sum(self._m[addr + i] << (i * 8) for i in range(4))
 
-        else:  # pragma: no cover
-            assert False
+            case _:  # pragma: no cover
+                assert False
 
         Log.tf(f"{self._fmt(reg_or_addr)} = {self._fmtv(val)}", tag="runtime")
         return val
 
     def __setitem__(self, reg_or_addr: Reg | Addr, val: int) -> None:
-        if type(reg_or_addr) is Reg:
-            reg: Reg = self._unalias(reg_or_addr)
-            old_val: int = self._r[reg]
-            # hard wired 0
-            if reg == "r0":
-                return
-            elif self._alias(reg) == "pc":
-                self._next_pc = val
-            else:
-                self._r[reg] = val
+        match reg_or_addr:
+            case Reg():
+                reg: Reg = self._unalias(reg_or_addr)
+                old_val: int = self._r[reg]
+                # hard wired 0
+                if reg == "r0":
+                    return
+                elif self._alias(reg) == "pc":
+                    self._next_pc = val
+                else:
+                    self._r[reg] = val
 
-        elif type(reg_or_addr) is Addr:
-            addr: Addr = reg_or_addr
-            if addr < 0 or addr + 4 > self._mem_size:
-                raise RuntimeError(f"segment fault: 0x{addr:08x}")
+            case Addr():
+                addr: Addr = reg_or_addr
+                if addr < 0 or addr + 4 > self._mem_size:
+                    raise RuntimeError(f"segment fault: 0x{addr:08x}")
 
-            old_val: int = sum(self._m[addr + i] << (i * 8) for i in range(4))
-            for i in range(4):
-                self._m[addr + i] = (val >> (i * 8)) & 0xFF
+                old_val: int = sum(self._m[addr + i] << (i * 8) for i in range(4))
+                for i in range(4):
+                    self._m[addr + i] = (val >> (i * 8)) & 0xFF
 
-        else:  # pragma: no cover
-            assert False
+            case _:  # pragma: no cover
+                assert False
 
         Log.tf(
             f"{self._fmt(reg_or_addr)} = [red]{old_val}[/red] -> {self._fmtv(val, 'green')}",

@@ -87,43 +87,43 @@ class Grammar:
         # todo: what is this nesting :skull:
         for nonterminal in self._rules:
             rule: Rule = self._rules[nonterminal]
-            if type(rule) is Production:
-                for expression in rule:
-                    for term in expression:
-                        # todo: terrible
-                        if term.node_type.startswith('"'):
-                            if term.node_type not in dictionary:
-                                # todo: ew... what?
-                                dictionary[term.node_type] = (
-                                    Vocabulary.Definition.make_exact(
-                                        term.node_type[1:-1]
+            match rule:
+                case Production():
+                    for expression in rule:
+                        for term in expression:
+                            # todo: terrible
+                            if term.node_type.startswith('"'):
+                                if term.node_type not in dictionary:
+                                    # todo: ew... what?
+                                    dictionary[term.node_type] = (
+                                        Vocabulary.Definition.make_exact(
+                                            term.node_type[1:-1]
+                                        )
                                     )
-                                )
-                        elif term.node_type.startswith('r"'):
-                            if term.node_type not in dictionary:
-                                dictionary[term.node_type] = (
-                                    Vocabulary.Definition.make_regex(
-                                        term.node_type[1:-1]
+                            elif term.node_type.startswith('r"'):
+                                if term.node_type not in dictionary:
+                                    dictionary[term.node_type] = (
+                                        Vocabulary.Definition.make_regex(
+                                            term.node_type[1:-1]
+                                        )
                                     )
-                                )
+                case Alias(node_type=node_type):
+                    # todo: terrible
+                    # todo: also duplicated logic
+                    if node_type.startswith('"'):
+                        if node_type not in dictionary:
+                            # todo: ew... what?
+                            dictionary[node_type] = Vocabulary.Definition.make_exact(
+                                node_type[1:-1]
+                            )
+                    elif node_type.startswith('r"'):
+                        if node_type not in dictionary:
+                            dictionary[node_type] = Vocabulary.Definition.make_regex(
+                                node_type[2:-1]
+                            )
 
-            elif type(rule) is Alias:
-                # todo: terrible
-                # todo: also duplicated logic
-                if rule.node_type.startswith('"'):
-                    if rule.node_type not in dictionary:
-                        # todo: ew... what?
-                        dictionary[rule.node_type] = Vocabulary.Definition.make_exact(
-                            rule.node_type[1:-1]
-                        )
-                elif rule.node_type.startswith('r"'):
-                    if rule.node_type not in dictionary:
-                        dictionary[rule.node_type] = Vocabulary.Definition.make_regex(
-                            rule.node_type[1:-1]
-                        )
-
-            else:  # pragma: no cover
-                assert False
+                case _:  # pragma: no cover
+                    assert False
 
         self._vocabulary: Vocabulary = Vocabulary(dictionary, ignore)
 
@@ -132,20 +132,21 @@ class Grammar:
 
         for nonterminal in self._rules:
             rule: Rule = self._rules[nonterminal]
-            if type(rule) is Production:
-                self._node_parsers[nonterminal] = (
-                    Parse.Backtracking.generate_nonterminal_parser(nonterminal, rule)
-                )
-
-            elif type(rule) is Alias:
-                self._node_parsers[nonterminal] = (
-                    Parse.Backtracking.generate_alias_parser(
-                        nonterminal, rule.node_type
+            match rule:
+                case Production():
+                    self._node_parsers[nonterminal] = (
+                        Parse.Backtracking.generate_nonterminal_parser(
+                            nonterminal, rule
+                        )
                     )
-                )
 
-            else:  # pragma: no cover
-                assert False
+                case Alias(node_type=node_type):
+                    self._node_parsers[nonterminal] = (
+                        Parse.Backtracking.generate_alias_parser(nonterminal, node_type)
+                    )
+
+                case _:  # pragma: no cover
+                    assert False
 
         self._node_parsers.update(
             Parse.Backtracking.generate_parsers_from_vocabulary(self._vocabulary)

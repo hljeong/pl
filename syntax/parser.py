@@ -77,8 +77,9 @@ class Parse:
 
     @staticmethod
     def _clean(n: ASTNode) -> ASTNode:
-        if isinstance(n, TerminalASTNode) or isinstance(n, AliasASTNode):
-            return n
+        match n:
+            case TerminalASTNode() | AliasASTNode():
+                return n
 
         n_: ASTNode
         match n.node_type[-1]:
@@ -102,12 +103,19 @@ class Parse:
                 return n_
 
             case _:
-                if isinstance(n, ChoiceNonterminalASTNode):
-                    n_ = ChoiceNonterminalASTNode(
-                        n.node_type, n.choice, extras=n.extras
-                    )
-                else:
-                    n_ = NonterminalASTNode(n.node_type, extras=n.extras)
+                match n:
+                    case ChoiceNonterminalASTNode(
+                        node_type=node_type, choice=choice, extras=extras
+                    ):
+                        n_ = ChoiceNonterminalASTNode(
+                            node_type, choice, extras=dict(extras)
+                        )
+
+                    case NonterminalASTNode(node_type=node_type, extras=extras):
+                        n_ = NonterminalASTNode(node_type, extras=dict(extras))
+
+                    case _:  # pragma: no cover
+                        assert False
 
                 for c in n:
                     n_.add(Parse._clean(c))

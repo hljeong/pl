@@ -39,24 +39,32 @@ class Visitor:
     @staticmethod
     def rebuild(v: Visitor, n: NonterminalASTNode, **ctx: Any) -> NonterminalASTNode:
         n_: NonterminalASTNode
-        if type(n) is ChoiceNonterminalASTNode:
-            n_ = ChoiceNonterminalASTNode(n.node_type, n.choice, extras=dict(n.extras))
+        match n:
+            case ChoiceNonterminalASTNode(
+                node_type=node_type, choice=choice, extras=extras
+            ):
+                n_ = ChoiceNonterminalASTNode(node_type, choice, extras=dict(extras))
 
-        elif type(n) is NonterminalASTNode:
-            n_ = NonterminalASTNode(n.node_type, extras=dict(n.extras))
+            case NonterminalASTNode(node_type=node_type, extras=extras):
+                n_ = NonterminalASTNode(node_type, extras=dict(extras))
 
-        else:  # pragma: no cover
-            assert False
+            case _:  # pragma: no cover
+                assert False
 
         for c in n:
             c_: ASTNode | Iterable[ASTNode] | None = v(c, **ctx)
-            if c_ is not None:
-                if isinstance(c_, ASTNode):
+            match c_:
+                case ASTNode():
                     n_.add(c_)
 
-                # assuming c_ is of type Iterable[ASTNode]
-                else:
-                    n_.add_all(c_)  # type: ignore
+                case Iterable():
+                    n_.add_all_(c_)
+
+                case None:
+                    pass
+
+                case _:  # pragma: no cover
+                    assert False
 
         return n_
 
@@ -101,17 +109,18 @@ class Visitor:
         return self[n](self, n, **ctx)
 
     def __getitem__(self, n: ASTNode):
-        if isinstance(n, NonterminalASTNode):
-            return self._node_visitor[n.node_type[1:-1]]
+        match n:
+            case NonterminalASTNode(node_type=node_type):
+                return self._node_visitor[node_type[1:-1]]
 
-        elif isinstance(n, AliasASTNode):
-            return self._node_visitor[n.node_type[1:-1]]
+            case AliasASTNode(node_type=node_type):
+                return self._node_visitor[node_type[1:-1]]
 
-        elif isinstance(n, TerminalASTNode):
-            return self._node_visitor[n.node_type]
+            case TerminalASTNode(node_type=node_type):
+                return self._node_visitor[node_type]
 
-        else:  # pragma: no cover
-            assert False
+            case _:  # pragma: no cover
+                assert False
 
 
 class Shake(Visitor):
@@ -124,17 +133,20 @@ class Shake(Visitor):
     @staticmethod
     def _shake_nonterminal(v: Visitor, n: ASTNode) -> ASTNode | None:
         n_: NonterminalASTNode
-        if type(n) is ChoiceNonterminalASTNode:
-            n_ = ChoiceNonterminalASTNode(n.node_type, n.choice, extras=dict(n.extras))
+        match n:
+            case ChoiceNonterminalASTNode(
+                node_type=node_type, choice=choice, extras=extras
+            ):
+                n_ = ChoiceNonterminalASTNode(node_type, choice, extras=dict(extras))
 
-        elif type(n) is NonterminalASTNode:
-            n_ = NonterminalASTNode(n.node_type, extras=dict(n.extras))
+            case NonterminalASTNode(node_type=node_type, extras=extras):
+                n_ = NonterminalASTNode(node_type, extras=dict(extras))
 
-        else:  # pragma: no cover
-            assert False
+            case _:  # pragma: no cover
+                assert False
 
         for c in n:
-            c_: ASTNode = v(c)
+            c_: ASTNode | None = v(c)
             if c_:
                 n_.add(c_)
 

@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 
-from typing import DefaultDict, Any, Callable
+from typing import Any, Callable
 from argparse import ArgumentParser
-from collections import defaultdict
 
 from common import Log, KeyDefaultDict, ast_to_tree_string, hexdump
 
@@ -11,14 +10,20 @@ def main():
     parser = ArgumentParser(prog="syn", description="synthesize pl programs")
     parser.add_argument("source")
     parser.add_argument(
-        "target", help="mp0, a, a-ast, b, b-ast, b2, b2-ast, expr, or expr-ast"
+        "target",
+        help="mp0, "
+        "xbnf, xbnf-raw-ast, xbnf-ast, xbnf-formatted, "
+        "a, a-raw-ast, a-ast, a-formatted, "
+        "b, b-raw-ast, b-ast, b-formatted, "
+        "b2, b2-raw-ast, b2-ast, b2-formatted, "
+        "expr, expr-raw-ast, expr-ast, or expr-formatted",
     )
     parser.add_argument(
         "-s",
         "--source-lang",
         type=str,
         default=None,
-        help="mp0, a, a-ast, b, b-ast, b2, b2-ast, expr, or expr-ast",
+        help="xbnf, a, b, b2, or expr",
     )
     parser.add_argument(
         "-w",

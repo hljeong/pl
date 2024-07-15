@@ -13,6 +13,14 @@ else:
     NoTyping = object
 
 
+def autorepr(cls):
+    def __repr__(self):
+        return f"{cls.__name__}({str(self)})"
+
+    cls.__repr__ = __repr__
+    return cls
+
+
 def it(it: T) -> T:
     return it
 

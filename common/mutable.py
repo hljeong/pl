@@ -14,6 +14,12 @@ class Mutable(Generic[T]):
         self._v += other  # type: ignore
         return self
 
+    def __str__(self) -> str:
+        return str(self.v)
+
+    def __repr__(self) -> str:
+        return f"Mutable({self})"
+
     # todo: add implementations as needed
 
     @property

@@ -25,6 +25,7 @@ from .util import (
     fixed_point,
     NoTyping,
     it,
+    autorepr,
 )
 from .monad import Monad
 from .mutable import Mutable

@@ -1,11 +1,13 @@
 from __future__ import annotations
-from typing import NamedTuple, Callable, Any
+from typing import NamedTuple, Callable, Any, DefaultDict
+from collections import defaultdict
+from itertools import pairwise
 from sys import setrecursionlimit
 
 # yikes
 setrecursionlimit(5000)
 
-from common import Log
+from common import Log, ListSet, fixed_point
 from lexical import Token, Vocabulary
 
 from .ast import (
@@ -14,33 +16,7 @@ from .ast import (
     AliasASTNode,
     TerminalASTNode,
 )
-
-
-class Term:
-    def __init__(
-        self,
-        node_type: str,
-        label: str | None = None,
-    ):
-        self._node_type: str = node_type
-        self._label: str | None = label
-
-    @property
-    def node_type(self) -> str:
-        return self._node_type
-
-    @property
-    def label(self) -> str | None:
-        return self._label
-
-    def __str__(self) -> str:
-        if self._label is None:
-            return f"{self._node_type}"
-        else:
-            return f"{self._label}={self._node_type}"
-
-    def __repr__(self) -> str:
-        return f"ExpressionTerm({self})"
+from .grammar import Grammar
 
 
 class Parse:
@@ -51,28 +27,16 @@ class Parse:
         def __init__(self, msg: str = "an error occured"):
             super().__init__(msg)
 
-    @classmethod
-    def for_grammar(cls, grammar: "Grammar", entry_point: str | None = None):  # type: ignore
-        if grammar.is_ll1:
-            Log.d(f"using ll(1) parser for {grammar.name}")
-            return cls.LL1(
-                grammar.ll1_parsing_table,
-                grammar.rules,
-                entry_point or grammar.entry_point,
-                grammar.name,
-            )
+    @staticmethod
+    def for_grammar(grammar: Grammar, entry_point: str | None = None):
+        entry_point = entry_point or grammar.entry_point
+        return Parse.LL1.for_grammar(
+            grammar, entry_point
+        ) or Parse.Backtracking.for_grammar(grammar, entry_point)
 
-        else:
-            Log.d(f"using nbacktracking parser for {grammar.name}")
-            return cls.Backtracking(
-                grammar.node_parsers,
-                entry_point or grammar.entry_point,
-                grammar.name,
-            )
-
-    @classmethod
-    def for_lang(cls, lang: "Lang", entry_point: str | None = None):  # type: ignore
-        return cls.for_grammar(lang.grammar, entry_point)
+    @staticmethod
+    def for_lang(lang: "Lang", entry_point: str | None = None):  # type: ignore
+        return Parse.for_grammar(lang.grammar, entry_point)
 
     @staticmethod
     def _clean(n: ASTNode) -> ASTNode:
@@ -121,6 +85,38 @@ class Parse:
 
         NodeParser = Callable[["Parse.Backtracking"], Result | None]
 
+        @staticmethod
+        def for_grammar(grammar: Grammar, entry_point: str) -> Parse.Backtracking:
+            vocabulary = grammar.vocabulary
+            rules = grammar.rules
+            node_parsers: dict[str, Parse.Backtracking.NodeParser] = {}
+
+            for nonterminal in rules:
+                rule: Grammar.Rule = rules[nonterminal]
+                match rule:
+                    case Grammar.Production():
+                        node_parsers[nonterminal] = (
+                            Parse.Backtracking.generate_nonterminal_parser(
+                                nonterminal, rule
+                            )
+                        )
+
+                    case Grammar.Alias(node_type=node_type):
+                        node_parsers[nonterminal] = (
+                            Parse.Backtracking.generate_alias_parser(
+                                nonterminal, node_type
+                            )
+                        )
+
+                    case _:  # pragma: no cover
+                        assert False
+
+            node_parsers.update(
+                Parse.Backtracking.generate_parsers_from_vocabulary(vocabulary)
+            )
+
+            return Parse.Backtracking(node_parsers, entry_point, grammar.name)
+
         def __init__(
             self,
             node_parsers: dict[str, NodeParser],
@@ -147,7 +143,7 @@ class Parse:
             return parse_result.node
 
         def parse_node(
-            self, term: Term, **ctx: Any
+            self, term: "Term", **ctx: Any  # type: ignore
         ) -> Parse.Backtracking.Result | None:
             Log.t(
                 f"parsing {term.node_type}, next token (index {self._current}) is {self._safe_peek()}",
@@ -213,7 +209,7 @@ class Parse:
 
         @staticmethod
         def generate_nonterminal_parser(
-            nonterminal: str, body: list[list[Term]]
+            nonterminal: str, body: Grammar.Production
         ) -> NodeParser:
 
             def nonterminal_parser(
@@ -322,25 +318,137 @@ class Parse:
 
     class LL1:
 
+        @staticmethod
+        def for_grammar(grammar: Grammar, entry_point: str) -> Parse.LL1 | None:
+            vocabulary: Vocabulary = grammar.vocabulary
+            rules: Grammar.Rules = grammar.rules
+            productions: dict[str, Grammar.Production] = {}
+            eq = (
+                lambda a, b: all(k in b for k in a)
+                and all(k in a for k in b)
+                and all(a[k] == b[k] for k in a)
+            )
+
+            def cp(r):
+                f = defaultdict(lambda: ListSet())
+                for k in r:
+                    f[k] = ListSet(r[k])
+                return f
+
+            first: DefaultDict[str, ListSet[str]] = defaultdict(lambda: ListSet())
+            for terminal in vocabulary:
+                first[terminal].add(terminal)
+            for nonterminal in rules:
+                rule: Grammar.Rule = rules[nonterminal]
+                match rule:
+                    case Grammar.Production():
+                        productions[nonterminal] = rule
+                    case Grammar.Alias():
+                        first[nonterminal].add(rule.node_type)
+                    case _:  # pragma: no cover
+                        assert False
+
+            def iterate_first(cur):
+                nxt = cp(cur)
+                for nonterminal in productions:
+                    production = productions[nonterminal]
+                    for expression in production:
+                        nullable = True
+                        for term in expression:
+                            if term.node_type == "e":
+                                continue
+                            nxt[nonterminal].add_all(cur[term.node_type].diff(["e"]))
+                            if "e" not in cur[term.node_type]:
+                                nullable = False
+                                break
+
+                        if nullable:
+                            nxt[nonterminal].add("e")
+                return nxt
+
+            first = fixed_point(first, iterate_first, eq)  # type: ignore
+
+            follow: DefaultDict[str, ListSet[str]] = defaultdict(lambda: ListSet())
+            follow[f"<{grammar.name}>"].append("$")
+
+            def iterate_follow(cur):
+                cur = cp(cur)  # prevent side effects to the original cur
+                nxt = cp(cur)
+                for nonterminal in productions:
+                    production = productions[nonterminal]
+                    for expression in production:
+                        nxt[expression[-1].node_type].add_all(
+                            cur[nonterminal].diff(["e"])
+                        )
+
+                        right_nullable = True
+                        # for i in range(len(expression) - 1, 0, -1):
+                        #     l = expression[i - 1].node_type
+                        #     r = expression[i].node_type
+                        for l_term, r_term in reversed(tuple(pairwise(expression))):
+                            l, r = l_term.node_type, r_term.node_type
+                            nxt[l].add_all(first[r].diff(["e"]))
+                            if right_nullable:
+                                if "e" in first[r]:
+                                    nxt[l].add_all(cur[nonterminal].diff("e"))
+                                else:
+                                    right_nullable = False
+
+                return nxt
+
+            follow = fixed_point(follow, iterate_follow, eq)
+
+            parsing_table: DefaultDict[
+                str,
+                dict[str, int | None],
+            ] = defaultdict(lambda: {})
+
+            for nonterminal in productions:
+                production = productions[nonterminal]
+                for idx, expression in enumerate(production):
+                    nullable = True
+                    for term in expression:
+                        for x in first[term.node_type]:
+                            if x != "e":
+                                if x in parsing_table[nonterminal]:
+                                    Log.w(
+                                        f"{grammar.name} is not ll(1): multiple productions for ({nonterminal}, {x})"
+                                    )
+                                    return None
+                                parsing_table[nonterminal][x] = idx
+                        if "e" not in first[term.node_type]:
+                            nullable = False
+                            break
+                    if nullable:
+                        for x in follow[nonterminal]:
+                            if x in parsing_table[nonterminal]:
+                                Log.w(
+                                    f"{grammar.name} is not ll(1): multiple productions for ({nonterminal}, {x})"
+                                )
+                                return None
+                            parsing_table[nonterminal][x] = idx
+
+            return Parse.LL1(parsing_table, rules, entry_point, grammar.name)
+
         def __init__(
             self,
-            ll1_parsing_table,
+            parsing_table,
             rules,
             entry_point: str,
             grammar_name: str = "none",
         ):
             self._grammar_name: str = grammar_name
-            self._ll1_parsing_table = ll1_parsing_table
+            self._parsing_table = parsing_table
             self._rules = rules
             self._entry_point: str = entry_point
 
         def __repr__(self) -> str:
-            return f"Parser(grammar={self._grammar_name})"
+            return f"Parse(grammar={self._grammar_name})"
 
         def _parse(self) -> ASTNode:
-            return self._parse_node(Term(self._entry_point))
+            return self._parse_node(Grammar.Term(self._entry_point))
 
-        def _parse_node(self, term: Term) -> ASTNode:
+        def _parse_node(self, term: Grammar.Term) -> ASTNode:  # type: ignore
             Log.t(
                 f"parsing {term.node_type}, next token (index {self._current}) is {self._safe_peek()}",
                 tag="parser",
@@ -352,7 +460,7 @@ class Parse:
                 t: Token = self._safe_peek()
                 # alias
                 # todo: disgusting.
-                if term.node_type not in self._ll1_parsing_table:
+                if term.node_type not in self._parsing_table:
                     token = self._expect(self._rules[term.node_type].node_type)
                     if not token:
                         # todo: need way better error message
@@ -368,11 +476,11 @@ class Parse:
                         n.extras["name"] = term.label
                     return n
 
-                if t.token_type not in self._ll1_parsing_table[term.node_type]:
+                if t.token_type not in self._parsing_table[term.node_type]:
                     raise Parse.ParseError(
-                        f"unexpected token '{t.lexeme}' while parsing {term.node_type}, expecting {{{', '.join(self._ll1_parsing_table[term.node_type].keys())}}}"
+                        f"unexpected token '{t.lexeme}' while parsing {term.node_type}, expecting {{{', '.join(self._parsing_table[term.node_type].keys())}}}"
                     )
-                choice: int = self._ll1_parsing_table[term.node_type][t.token_type]
+                choice: int = self._parsing_table[term.node_type][t.token_type]
                 n = NonterminalASTNode(term.node_type, choice=choice)
                 if term.label:
                     n.extras["name"] = term.label

@@ -6,10 +6,17 @@ from collections import deque
 
 
 from common import limit, Log, it
-from langs import Lang, A, B, B2, Expr
-from syntax.ast import ASTNode
+from langs import Lang, XBNF, A, B, B2, Expr
 
 from .source import Source
+
+langs = {
+    "xbnf": XBNF,
+    "a": A,
+    "b": B,
+    "b2": B2,
+    "expr": Expr,
+}
 
 
 class Synthesize:
@@ -86,17 +93,12 @@ class Synthesize:
     @staticmethod
     def _guess_lang(source_handle: str) -> str:
         source: str = Source.content_of(source_handle)
-        for lang, parse in {
-            "a": A.parse,
-            "b": B.parse,
-            "b2": B2.parse,
-            "expr": Expr.parse,
-        }.items():
+        for name, lang in langs.items():
             try:
-                parse(source)
+                lang.parse(source)
             except:
                 continue
-            return lang
+            return name
         # todo: error
         raise ValueError(f"invalid source: {limit(source)}")
 
@@ -113,10 +115,8 @@ class Synthesize:
         cls.add_transform(f"{lang.name}-formatted", f"{lang.name}", it)
 
 
-Synthesize.add_lang(A)
-Synthesize.add_lang(B)
-Synthesize.add_lang(B2)
-Synthesize.add_lang(Expr)
+for lang in langs.values():
+    Synthesize.add_lang(lang)
 
 Synthesize.add_transform("a-ast", "mp0", A.assemble)
 Synthesize.add_transform("b-ast", "a", B.compile)

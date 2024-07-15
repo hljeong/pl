@@ -58,6 +58,24 @@ class Visitor:
 
         return n_
 
+    @staticmethod
+    def flatten(v: Visitor, n: NonterminalASTNode, **ctx: Any) -> NonterminalASTNode:
+        assert (
+            len(n) == 2
+            and "name" in n[0].extras
+            and "name" in n[1].extras
+            and n[0].extras["name"] == "first"
+            and n[1].extras["name"] == "rest"
+        )
+
+        n_: NonterminalASTNode = NonterminalASTNode(n.node_type)
+        n_.add(v(n.first, **ctx))
+
+        for c in n.rest:
+            n_.add(v(c[1], **ctx))
+
+        return n_
+
     def _builtin_visit_all(
         self,
         n: NonterminalASTNode,

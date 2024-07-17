@@ -26,10 +26,8 @@ def it(it: T) -> T:
 
 
 def fixed_point(
-    seed: T, iterate: Callable[[T], T], eq: Callable[[T, T], bool] | None = None
+    seed: T, iterate: Callable[[T], T], eq: Callable[[T, T], bool] = lambda a, b: a == b
 ) -> T:
-    if eq is None:
-        eq = lambda a, b: a == b
     cur: T = seed
     nxt = iterate(cur)
     while not eq(cur, nxt):

@@ -19,6 +19,104 @@ from .ast import (
 from .grammar import Grammar
 
 
+# placing here for now cuz static methods suck
+def util_dict_eq(
+    a: DefaultDict[str, ListSet[str]], b: DefaultDict[str, ListSet[str]]
+) -> bool:
+    return (
+        all(k in b for k in a)
+        and all(k in a for k in b)
+        and all(a[k] == b[k] for k in a)
+    )
+
+
+# placing here for now cuz static methods suck
+def util_dict_cp(d: DefaultDict[str, ListSet[str]]) -> DefaultDict[str, ListSet[str]]:
+    d_: DefaultDict[str, ListSet[str]] = defaultdict(lambda: ListSet())
+    for k, v in d.items():
+        d_[k] = ListSet(v)
+    return d_
+
+
+# todo: super sucky in terms of efficiency
+def generate_first(grammar: Grammar) -> DefaultDict[str, ListSet[str]]:
+    vocabulary: Vocabulary = grammar.vocabulary
+    rules: Grammar.Rules = grammar.rules
+    productions: dict[str, Grammar.Production] = {}
+
+    first: DefaultDict[str, ListSet[str]] = defaultdict(lambda: ListSet())
+    for terminal in vocabulary:
+        first[terminal].add(terminal)
+    for nonterminal in rules:
+        rule: Grammar.Rule = rules[nonterminal]
+        match rule:
+            case Grammar.Production():
+                productions[nonterminal] = rule
+            case Grammar.Alias():
+                first[nonterminal].add(rule.node_type)
+            case _:  # pragma: no cover
+                assert False
+
+    def iterate_first(cur):
+        cur = util_dict_cp(cur)  # prevent side effects to the original cur
+        nxt = util_dict_cp(cur)
+        for nonterminal in productions:
+            production = productions[nonterminal]
+            for expression in production:
+                nullable = True
+                for term in expression:
+                    if term.node_type == "e":
+                        continue
+                    nxt[nonterminal].add_all(cur[term.node_type].diff(["e"]))
+                    if "e" not in cur[term.node_type]:
+                        nullable = False
+                        break
+
+                if nullable:
+                    nxt[nonterminal].add("e")
+        return nxt
+
+    return fixed_point(first, iterate_first, util_dict_eq)
+
+
+# todo: super sucky in terms of efficiency
+def generate_follow(grammar: Grammar) -> DefaultDict[str, ListSet[str]]:
+    rules: Grammar.Rules = grammar.rules
+    productions: dict[str, Grammar.Production] = {}
+
+    for nonterminal in rules:
+        rule: Grammar.Rule = rules[nonterminal]
+        if type(rule) is Grammar.Production:
+            productions[nonterminal] = rule
+
+    first: DefaultDict[str, ListSet[str]] = generate_first(grammar)
+
+    follow: DefaultDict[str, ListSet[str]] = defaultdict(lambda: ListSet())
+    follow[f"<{grammar.name}>"].append("$")
+
+    def iterate_follow(cur):
+        cur = util_dict_cp(cur)  # prevent side effects to the original cur
+        nxt = util_dict_cp(cur)
+        for nonterminal in productions:
+            production = productions[nonterminal]
+            for expression in production:
+                nxt[expression[-1].node_type].add_all(cur[nonterminal].diff(["e"]))
+
+                right_nullable = True
+                for l_term, r_term in reversed(tuple(pairwise(expression))):
+                    l, r = l_term.node_type, r_term.node_type
+                    nxt[l].add_all(first[r].diff(["e"]))
+                    if right_nullable:
+                        if "e" in first[r]:
+                            nxt[l].add_all(cur[nonterminal].diff("e"))
+                        else:
+                            right_nullable = False
+
+        return nxt
+
+    return fixed_point(follow, iterate_follow, util_dict_eq)
+
+
 class Parse:
 
     clean: Callable[[ASTNode], ASTNode]
@@ -317,86 +415,18 @@ class Parse:
             }
 
     class LL1:
-
         @staticmethod
         def for_grammar(grammar: Grammar, entry_point: str) -> Parse.LL1 | None:
-            vocabulary: Vocabulary = grammar.vocabulary
             rules: Grammar.Rules = grammar.rules
             productions: dict[str, Grammar.Production] = {}
-            eq = (
-                lambda a, b: all(k in b for k in a)
-                and all(k in a for k in b)
-                and all(a[k] == b[k] for k in a)
-            )
 
-            def cp(r):
-                f = defaultdict(lambda: ListSet())
-                for k in r:
-                    f[k] = ListSet(r[k])
-                return f
-
-            first: DefaultDict[str, ListSet[str]] = defaultdict(lambda: ListSet())
-            for terminal in vocabulary:
-                first[terminal].add(terminal)
             for nonterminal in rules:
                 rule: Grammar.Rule = rules[nonterminal]
-                match rule:
-                    case Grammar.Production():
-                        productions[nonterminal] = rule
-                    case Grammar.Alias():
-                        first[nonterminal].add(rule.node_type)
-                    case _:  # pragma: no cover
-                        assert False
+                if type(rule) is Grammar.Production:
+                    productions[nonterminal] = rule
 
-            def iterate_first(cur):
-                nxt = cp(cur)
-                for nonterminal in productions:
-                    production = productions[nonterminal]
-                    for expression in production:
-                        nullable = True
-                        for term in expression:
-                            if term.node_type == "e":
-                                continue
-                            nxt[nonterminal].add_all(cur[term.node_type].diff(["e"]))
-                            if "e" not in cur[term.node_type]:
-                                nullable = False
-                                break
-
-                        if nullable:
-                            nxt[nonterminal].add("e")
-                return nxt
-
-            first = fixed_point(first, iterate_first, eq)  # type: ignore
-
-            follow: DefaultDict[str, ListSet[str]] = defaultdict(lambda: ListSet())
-            follow[f"<{grammar.name}>"].append("$")
-
-            def iterate_follow(cur):
-                cur = cp(cur)  # prevent side effects to the original cur
-                nxt = cp(cur)
-                for nonterminal in productions:
-                    production = productions[nonterminal]
-                    for expression in production:
-                        nxt[expression[-1].node_type].add_all(
-                            cur[nonterminal].diff(["e"])
-                        )
-
-                        right_nullable = True
-                        # for i in range(len(expression) - 1, 0, -1):
-                        #     l = expression[i - 1].node_type
-                        #     r = expression[i].node_type
-                        for l_term, r_term in reversed(tuple(pairwise(expression))):
-                            l, r = l_term.node_type, r_term.node_type
-                            nxt[l].add_all(first[r].diff(["e"]))
-                            if right_nullable:
-                                if "e" in first[r]:
-                                    nxt[l].add_all(cur[nonterminal].diff("e"))
-                                else:
-                                    right_nullable = False
-
-                return nxt
-
-            follow = fixed_point(follow, iterate_follow, eq)
+            first: DefaultDict[str, ListSet[str]] = generate_first(grammar)
+            follow: DefaultDict[str, ListSet[str]] = generate_follow(grammar)
 
             parsing_table: DefaultDict[
                 str,

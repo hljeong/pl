@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TypeVar, Callable, Any, TYPE_CHECKING
+from typing import TypeVar, Callable, Any, TYPE_CHECKING, Iterable
 from time import sleep
 from dataclasses import dataclass
 
@@ -11,6 +11,28 @@ if TYPE_CHECKING:
     NoTyping = Any  # type: ignore
 else:
     NoTyping = object
+
+
+def cached_property(func: Callable[..., T]) -> property:
+    cache: dict[Any, T] = {}
+
+    @property
+    def wrapped(self, *args, **kwargs) -> T:
+        nonlocal cache
+        if self not in cache:
+            cache[self] = func(self, *args, **kwargs)
+        return cache[self]
+
+    return wrapped
+
+
+def common_prefix(a: Iterable[T], b: Iterable[T]) -> list[T]:
+    res: list[T] = []
+    for ai, bi in zip(a, b):
+        if ai != bi:
+            break
+        res.append(ai)
+    return res
 
 
 def autorepr(cls):

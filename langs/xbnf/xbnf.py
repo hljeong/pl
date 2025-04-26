@@ -327,3 +327,12 @@ def grammar_from_xbnf(name: str, xbnf: str, ignore: list[str] = []) -> Grammar:
 
 
 Grammar.from_xbnf = grammar_from_xbnf
+
+
+# todo: delete
+from common import load
+
+# g = Grammar.from_xbnf("star", '<star> ::= <thing>*; <thing> ::= "a";')
+# Monad("a a a").then(Lex.for_grammar(g)).then(Parse.for_grammar(g)).then(print)
+# Parse.for_grammar(Grammar.from_xbnf("A", load("A.xbnf")))
+# Parse.for_grammar(Grammar.from_xbnf("B", load("B.xbnf")))

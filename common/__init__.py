@@ -26,11 +26,8 @@ from .util import (
     NoTyping,
     it,
     autorepr,
-    common_prefix,
-    cached_property,
 )
 from .monad import Monad
 from .mutable import Mutable
 from .listset import ListSet
 from .keydefaultdict import KeyDefaultDict
-from .graph import Graph

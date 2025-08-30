@@ -1,0 +1,22 @@
+Hbnf: Prod+
+
+Prod: Nonterm Rule+
+
+Rule: ":" Expr
+
+Expr: Factor+
+
+Factor: Symbol Mult?
+
+Mult
+: "?"
+: "*"
+: "+"
+
+Symbol
+: Nonterm
+: Term
+
+Nonterm: identifier
+
+Term: string

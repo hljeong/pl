@@ -1,5 +1,0 @@
-<expr> ::= first=<term> rest=("+" <term>)*;
-
-<term> ::= first=<factor> rest=("*" <factor>)*;
-
-<factor> ::= "(" <expr> ")" | identifier;

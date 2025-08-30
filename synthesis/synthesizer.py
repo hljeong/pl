@@ -6,7 +6,7 @@ from collections import deque
 
 
 from common import limit, Log, it
-from langs import Lang, XBNF, A, B, B2, Expr
+from langs import Lang, XBNF, A, B, B2, Expr, Regex
 
 from .source import Source
 
@@ -16,6 +16,7 @@ langs = {
     "b": B,
     "b2": B2,
     "expr": Expr,
+    "regex": Regex,
 }
 
 
@@ -109,10 +110,16 @@ class Synthesize:
     @classmethod
     def add_lang(cls, lang: type[Lang]):
         Log.d(f"adding {lang.name} to synthesizer")
-        cls.add_transform(f"{lang.name}", f"{lang.name}-raw-ast", lang.parse)
-        cls.add_transform(f"{lang.name}-raw-ast", f"{lang.name}-ast", lang.shake)
-        cls.add_transform(f"{lang.name}-ast", f"{lang.name}-formatted", lang.print)
-        cls.add_transform(f"{lang.name}-formatted", f"{lang.name}", it)
+        if hasattr(lang, "shake"):
+            cls.add_transform(f"{lang.name}", f"{lang.name}-raw-ast", lang.parse)
+            cls.add_transform(f"{lang.name}-raw-ast", f"{lang.name}-ast", lang.shake)
+
+        else:
+            cls.add_transform(f"{lang.name}", f"{lang.name}-ast", lang.parse)
+
+        if hasattr(lang, "print"):
+            cls.add_transform(f"{lang.name}-ast", f"{lang.name}-formatted", lang.print)
+            cls.add_transform(f"{lang.name}-formatted", f"{lang.name}", it)
 
 
 for lang in langs.values():

@@ -16,14 +16,15 @@ def main():
         "a, a-raw-ast, a-ast, a-formatted, "
         "b, b-raw-ast, b-ast, b-formatted, "
         "b2, b2-raw-ast, b2-ast, b2-formatted, "
-        "expr, expr-raw-ast, expr-ast, or expr-formatted",
+        "expr, expr-raw-ast, expr-ast, expr-formatted, "
+        "regex, or regex-ast",
     )
     parser.add_argument(
         "-s",
         "--source-lang",
         type=str,
         default=None,
-        help="xbnf, a, b, b2, or expr",
+        help="xbnf, a, b, b2, expr, or regex",
     )
     parser.add_argument(
         "-w",

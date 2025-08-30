@@ -1,0 +1,44 @@
+<regex> ::= <union_expr>;
+
+<union_expr> ::= first=<concat_expr> rest=("|" <concat_expr>)*;
+
+<concat_expr> ::= first=<repeat_expr> rest=<repeat_expr>*;
+
+<repeat_expr> ::= <base_expr> <quantifier>?;
+
+<quantifier> ::=
+  "?"  | "*"  | "+" |
+  "??" | "*?" | "+?";
+
+<base_expr> ::= <char> | <dot> | <escaped_char> | <char_class> | "(" <regex> ")";
+
+<char_class> ::= "[" <not>? first=<char_range> rest=<char_range>* "]";
+
+<not> ::= "^";
+
+<char_range> ::= <char> "-" <char> | <char>;
+
+<dot> ::= ".";
+
+<escaped_char> ::=
+  "\(" | "\)" | "\|" | "\?" |
+  "\*" | "\+" | "\[" | "\]" |
+  "\^" | "\-" | "\.";
+
+<char> ::=
+  "a" | "b" | "c" | "d" |
+  "e" | "f" | "g" | "h" |
+  "i" | "j" | "k" | "l" |
+  "m" | "n" | "o" | "p" |
+  "q" | "r" | "s" | "t" |
+  "u" | "v" | "w" | "x" |
+  "y" | "z" | "A" | "B" |
+  "C" | "D" | "E" | "F" |
+  "G" | "H" | "I" | "J" |
+  "K" | "L" | "M" | "N" |
+  "O" | "P" | "Q" | "R" |
+  "S" | "T" | "U" | "V" |
+  "W" | "X" | "Y" | "Z" |
+  "0" | "1" | "2" | "3" |
+  "4" | "5" | "6" | "7" |
+  "8" | "9" | "_" | "@";

@@ -1,0 +1,21 @@
+Bnf2 =>
+  Production Bnf2 |
+  Production;
+
+Production => Nonterminal "=>" Body ";";
+
+Body =>
+  Expression "|" Body |
+  Expression;
+
+Expression =>
+  Term Expression |
+  Term;
+
+Term =>
+  Nonterminal |
+  Terminal;
+
+Nonterminal => identifier;
+
+Terminal => string;

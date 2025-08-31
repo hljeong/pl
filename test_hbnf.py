@@ -52,9 +52,7 @@ def test_bootstrap():
     prods: list[hbnf.Prod] = ast.prods
     symbols: set[str] = set()
     terminals: set[str] = set()
-    dependencies: dict[str, set[str]] = {}
     type_name: dict[str, str] = {}
-    symbol_to_prod: dict[str, hbnf.Prod] = {}
     for prod in prods:
         lhs: str = prod.nonterm.identifier.lexeme
         if lhs in BUILTINS:
@@ -62,7 +60,6 @@ def test_bootstrap():
         # todo: deny repeat productions
         symbols.add(lhs)
         type_name[lhs] = lhs
-        symbol_to_prod[lhs] = prod
         for rule in prod.rules:
             for factor in rule.factors:
                 symbol: str
@@ -89,31 +86,6 @@ def test_bootstrap():
                             type_name[symbol] = terminal_type_name
 
                 symbols.add(symbol)
-                dependencies.setdefault(lhs, set()).add(symbol)
-
-    # symbol_order: list[str] = []
-    # topsort: list[str] = []
-    # for terminal in terminals:
-    #     for nonterminal in dependencies:
-    #         if terminal in dependencies[nonterminal]:
-    #             dependencies[nonterminal].remove(terminal)
-    #             if not dependencies[nonterminal]:
-    #                 topsort.append(nonterminal)
-    #
-    # while topsort:
-    #     symbol: str = topsort.pop()
-    #     symbol_order.append(symbol)
-    #     for nonterminal in dependencies:
-    #         if symbol in dependencies[nonterminal]:
-    #             dependencies[nonterminal].remove(symbol)
-    #             if not dependencies[nonterminal]:
-    #                 topsort.append(nonterminal)
-    #
-    # if len(symbol_order) < len(dependencies):
-    #     raise ValueError("cyclic dependency found in grammar")
-
-    # todo: delete this
-    symbol_order: list[str] = list(dependencies)
 
     print("from dataclasses import dataclass")
     print("from typing import Iterator, TypeAlias")
@@ -126,7 +98,7 @@ def test_bootstrap():
     # todo: move to ast.py or smth
     print("from hbnf import Node, InternalNode")
     print(
-        f"from lexer import {', '.join(type_name[symbol] for symbol in terminals if symbol in BUILTINS)}"
+        f"from hbnf import {', '.join(type_name[symbol] for symbol in terminals if symbol in BUILTINS)}"
     )
     print()
 
@@ -143,12 +115,8 @@ def test_bootstrap():
 
     print()
 
-    for symbol in symbol_order:
-        prod: hbnf.Prod = symbol_to_prod[symbol]
+    for prod in ast.prods:
         lhs: str = prod.nonterm.lexeme
-        # todo: if this works then replace lhs w symbol
-        assert lhs == symbol
-
         match len(prod.rules):
             case 1:
                 rule: hbnf.Rule = prod.rules[0]
@@ -159,32 +127,29 @@ def test_bootstrap():
 
                     base_type: str = type_name[factor.symbol.lexeme]
 
+                    def maybe_type_ignore(s: str) -> str:
+                        if factor.symbol.lexeme in BUILTINS:
+                            return f"{s}  # type: ignore"
+                        else:
+                            return s
+
                     match factor.mult:
                         case None:
-                            # todo: try to fix type check error? but fix this code dup for sure
-                            if factor.symbol.lexeme in BUILTINS:
-                                print(f"    {varname}: {base_type}  # type: ignore")
-                            else:
-                                print(f"    {varname}: {base_type}")
+                            # todo: try to fix type check error?
+                            print(maybe_type_ignore(f"    {varname}: {base_type}"))
 
                         case hbnf.MultUnnamedVariant1():
-                            # todo: try to fix type check error? but fix this code dup for sure
-                            if factor.symbol.lexeme in BUILTINS:
-                                print(
-                                    f"    {varname}: {base_type} | None  # type: ignore"
-                                )
-                            else:
-                                print(f"    {varname}: {base_type} | None")
+                            # todo: try to fix type check error?
+                            print(
+                                maybe_type_ignore(f"    {varname}: {base_type} | None")
+                            )
 
                         case hbnf.MultUnnamedVariant2() | hbnf.MultUnnamedVariant3():
                             # todo: tuple instead of list?
-                            # todo: try to fix type check error? but fix this code dup for sure
-                            if factor.symbol.lexeme in BUILTINS:
-                                print(
-                                    f"    {varname}: list[{base_type}]  # type: ignore"
-                                )
-                            else:
-                                print(f"    {varname}: list[{base_type}]")
+                            # todo: try to fix type check error?
+                            print(
+                                maybe_type_ignore(f"    {varname}: list[{base_type}]")
+                            )
 
                 print()
                 print(f"    def __iter__(self) -> Iterator[Node]:")
@@ -202,7 +167,6 @@ def test_bootstrap():
                         case hbnf.MultUnnamedVariant2() | hbnf.MultUnnamedVariant3():
                             print(f"        yield from {varname}")
 
-            # todo: fix code dup...
             case _:
                 for rule_idx, rule in enumerate(prod.rules, 1):
                     print(f"@dataclass")
@@ -212,33 +176,34 @@ def test_bootstrap():
 
                         base_type: str = type_name[factor.symbol.lexeme]
 
+                        def maybe_type_ignore(s: str) -> str:
+                            if factor.symbol.lexeme in BUILTINS:
+                                return f"{s}  # type: ignore"
+                            else:
+                                return s
+
                         match factor.mult:
                             case None:
-                                # todo: try to fix type check error? but fix this code dup for sure
-                                if factor.symbol.lexeme in BUILTINS:
-                                    print(f"    {varname}: {base_type}  # type: ignore")
-                                else:
-                                    print(f"    {varname}: {base_type}")
+                                # todo: try to fix type check error?
+                                print(maybe_type_ignore(f"    {varname}: {base_type}"))
 
                             case hbnf.MultUnnamedVariant1():
-                                # todo: try to fix type check error? but fix this code dup for sure
-                                if factor.symbol.lexeme in BUILTINS:
-                                    print(
-                                        f"    {varname}: {base_type} | None  # type: ignore"
+                                # todo: try to fix type check error?
+                                print(
+                                    maybe_type_ignore(
+                                        f"    {varname}: {base_type} | None"
                                     )
-                                else:
-                                    print(f"    {varname}: {base_type} | None")
+                                )
 
                             case (
                                 hbnf.MultUnnamedVariant2() | hbnf.MultUnnamedVariant3()
                             ):
-                                # todo: try to fix type check error? but fix this code dup for sure
-                                if factor.symbol.lexeme in BUILTINS:
-                                    print(
-                                        f"    {varname}: list[{base_type}]  # type: ignore"
+                                # todo: try to fix type check error?
+                                print(
+                                    maybe_type_ignore(
+                                        f"    {varname}: list[{base_type}]"
                                     )
-                                else:
-                                    print(f"    {varname}: list[{base_type}]")
+                                )
 
                     print()
                     print(f"    def __iter__(self) -> Iterator[Node]:")
@@ -368,39 +333,41 @@ class Parser:
                 parse_one = f"self.parse_{base_type}()"
                 try_parse_one = f"self.try_parse_{base_type}()"
 
+            def maybe_type_ignore(s: str) -> str:
+                if factor.symbol.lexeme in BUILTINS:
+                    return f"{s}  # type: ignore"
+                else:
+                    return s
+
             match factor.mult:
                 case None:
-                    # todo: try to fix type check error? but fix this code dup for sure
-                    if factor.symbol.lexeme in BUILTINS:
-                        print(
-                            f"            {varname}: {base_type} = {parse_one}  # type: ignore"
+                    # todo: try to fix type check error?
+                    print(
+                        maybe_type_ignore(
+                            f"            {varname}: {base_type} = {parse_one}"
                         )
-                    else:
-                        print(f"            {varname}: {base_type} = {parse_one}")
+                    )
 
                 case hbnf.MultUnnamedVariant1():
-                    # todo: try to fix type check error? but fix this code dup for sure
-                    if factor.symbol.lexeme in BUILTINS:
-                        print(
-                            f"            {varname}: {base_type} | None = {try_parse_one}  # type: ignore"
-                        )
-                    else:
-                        print(
+                    # todo: try to fix type check error?
+                    print(
+                        maybe_type_ignore(
                             f"            {varname}: {base_type} | None = {try_parse_one}"
                         )
+                    )
 
                 case hbnf.MultUnnamedVariant2() | hbnf.MultUnnamedVariant3():
-                    # todo: try to fix type check error? but fix this code dup for sure
-                    if factor.symbol.lexeme in BUILTINS:
-                        print(
-                            f"            {varname}: list[{base_type}] = []  # type: ignore"
+                    # todo: try to fix type check error?
+                    print(
+                        maybe_type_ignore(
+                            f"            {varname}: list[{base_type}] = []"
                         )
-                        print(
-                            f"            {varname}_item: {base_type} | None  # type: ignore"
+                    )
+                    print(
+                        maybe_type_ignore(
+                            f"            {varname}_item: {base_type} | None"
                         )
-                    else:
-                        print(f"            {varname}: list[{base_type}] = []")
-                        print(f"            {varname}_item: {base_type} | None")
+                    )
                     print(f"            while {varname}_item := {try_parse_one}:")
                     print(f"                {varname}.append({varname}_item)")
 
@@ -421,24 +388,23 @@ class Parser:
         print(f"                return None")
         print()
 
-    for symbol in symbol_order[::-1]:
-        prod: hbnf.Prod = symbol_to_prod[symbol]
-
+    for prod in ast.prods:
+        lhs: str = prod.nonterm.identifier.lexeme
         match len(prod.rules):
             case 1:
-                generate_single_rule_symbol_parser(symbol, prod.rules[0])
+                generate_single_rule_symbol_parser(lhs, prod.rules[0])
 
             case _:
-                for rule_idx, rule in enumerate(symbol_to_prod[symbol].rules, 1):
+                for rule_idx, rule in enumerate(prod.rules, 1):
                     generate_single_rule_symbol_parser(
-                        f"{symbol}UnnamedVariant{rule_idx}", rule
+                        f"{lhs}UnnamedVariant{rule_idx}", rule
                     )
 
-                print(f"        def parse_{symbol}(self) -> {symbol}:")
-                print(f"            result: {symbol} | None")
-                for rule_idx, rule in enumerate(symbol_to_prod[symbol].rules, 1):
+                print(f"        def parse_{lhs}(self) -> {lhs}:")
+                print(f"            result: {lhs} | None")
+                for rule_idx, rule in enumerate(prod.rules, 1):
                     print(
-                        f"            if (result := self.try_parse_{symbol}UnnamedVariant{rule_idx}()) is not None:"
+                        f"            if (result := self.try_parse_{lhs}UnnamedVariant{rule_idx}()) is not None:"
                     )
                     print(f"                return result")
                     print()
@@ -446,10 +412,10 @@ class Parser:
                 print(f'            raise ValueError("could not parse")')
                 print()
 
-                print(f"        def try_parse_{symbol}(self) -> {symbol} | None:")
+                print(f"        def try_parse_{lhs}(self) -> {lhs} | None:")
                 print(f"            idx: int = self.idx")
                 print(f"            try:")
-                print(f"                return self.parse_{symbol}()")
+                print(f"                return self.parse_{lhs}()")
                 # todo: Parser.Exception
                 print(f"            except Exception:")
                 print(f"                self.idx = idx")

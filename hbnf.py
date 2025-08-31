@@ -21,8 +21,9 @@ TOKEN_TYPES: list[type[Token]] = [
     String,
     Identifier,
     Colon,
-    Plus,
     Question,
+    Asterisk,
+    Plus,
     Semicolon,
 ]
 
@@ -45,7 +46,9 @@ from typing import Iterator, TypeAlias
 
 
 class Node:
-    pass
+    @property
+    def lexeme(self) -> str:
+        raise NotImplementedError(repr(self))
 
 
 class InternalNode(Node):
@@ -55,54 +58,57 @@ class InternalNode(Node):
     def __iter__(self) -> Iterator[Node]:
         raise NotImplementedError(type(self).__name__)
 
-
-class LeafNode(Node):
     @property
-    def summary(self) -> str:
-        raise NotImplementedError(type(self).__name__)
+    def lexeme(self) -> str:
+        # todo: fix this
+        return " ".join(child.lexeme for child in self)
+
+
+LeafNode: TypeAlias = Token
 
 
 # todo: semantic nomenclature
 @dataclass
-class MultUnnamedVariant1(LeafNode):
-    @property
-    def summary(self) -> str:
-        return "?"
+class MultUnnamedVariant1(InternalNode):
+    question: Question
+
+    def __iter__(self) -> Iterator[Node]:
+        yield self.question
 
 
 @dataclass
-class MultUnnamedVariant2(LeafNode):
-    @property
-    def summary(self) -> str:
-        return "*"
+class MultUnnamedVariant2(InternalNode):
+    asterisk: Asterisk
+
+    def __iter__(self) -> Iterator[Node]:
+        yield self.asterisk
 
 
 @dataclass
-class MultUnnamedVariant3(LeafNode):
-    @property
-    def summary(self) -> str:
-        return "+"
+class MultUnnamedVariant3(InternalNode):
+    plus: Plus
+
+    def __iter__(self) -> Iterator[Node]:
+        yield self.plus
 
 
 Mult: TypeAlias = MultUnnamedVariant1 | MultUnnamedVariant2 | MultUnnamedVariant3
 
 
 @dataclass
-class Term(LeafNode):
-    lexeme: str
+class Term(InternalNode):
+    string: String
 
-    @property
-    def summary(self) -> str:
-        return f"Term {self.lexeme}"
+    def __iter__(self) -> Iterator[Node]:
+        yield self.string
 
 
 @dataclass
-class Nonterm(LeafNode):
-    identifier: str
+class Nonterm(InternalNode):
+    identifier: Identifier
 
-    @property
-    def summary(self) -> str:
-        return f"Nonterm {self.identifier}"
+    def __iter__(self) -> Iterator[Node]:
+        yield self.identifier
 
 
 @dataclass
@@ -136,19 +142,11 @@ class Factor(InternalNode):
 
 
 @dataclass
-class Expr(InternalNode):
+class Rule(InternalNode):
     factors: list[Factor]
 
     def __iter__(self) -> Iterator[Node]:
         yield from self.factors
-
-
-@dataclass
-class Rule(InternalNode):
-    expr: Expr
-
-    def __iter__(self) -> Iterator[Node]:
-        yield self.expr
 
 
 @dataclass
@@ -253,23 +251,23 @@ class Parser:
         # todo: type analysis
         def parse_mult(self) -> Mult:
             match self.expect(Question, Asterisk, Plus):
-                case Question():
-                    return MultUnnamedVariant1()
+                case Question() as question:
+                    return MultUnnamedVariant1(question)
 
-                case Asterisk():
-                    return MultUnnamedVariant2()
+                case Asterisk() as asterisk:
+                    return MultUnnamedVariant2(asterisk)
 
-                case Plus():
-                    return MultUnnamedVariant3()
+                case Plus() as plus:
+                    return MultUnnamedVariant3(plus)
 
         def parse_nonterm(self) -> Nonterm:
-            return Nonterm(self.expect(Identifier).lexeme)
+            return Nonterm(self.expect(Identifier))
 
         def parse_symbol_unnamed_variant_1(self) -> SymbolUnnamedVariant1:
             return SymbolUnnamedVariant1(self.parse_nonterm())
 
         def parse_term(self) -> Term:
-            return Term(self.expect(String).lexeme[1:-1])
+            return Term(self.expect(String))
 
         def parse_symbol_unnamed_variant_2(self) -> SymbolUnnamedVariant2:
             return SymbolUnnamedVariant2(self.parse_term())
@@ -283,6 +281,10 @@ class Parser:
                 case String():
                     return self.parse_symbol_unnamed_variant_2()
 
+                # appease dimwit type checker
+                case _:
+                    assert False
+
         def parse_factor(self) -> Factor:
             symbol: Symbol = self.parse_symbol()
             if self.lookahead(Question, Asterisk, Plus):
@@ -290,15 +292,12 @@ class Parser:
             else:
                 return Factor(symbol, None)
 
-        def parse_expr(self) -> Expr:
+        def parse_rule(self) -> Rule:
+            self.expect(Colon)
             factors: list[Factor] = [self.parse_factor()]
             while self.lookahead(Identifier, String):
                 factors.append(self.parse_factor())
-            return Expr(factors)
-
-        def parse_rule(self) -> Rule:
-            self.expect(Colon)
-            return Rule(self.parse_expr())
+            return Rule(factors)
 
         def parse_prod(self) -> Prod:
             nonterm: Nonterm = self.parse_nonterm()
@@ -336,7 +335,7 @@ def ast_str(
 
     match node:
         case LeafNode():
-            return f"{use_prefix}{node.summary}"
+            return f"{use_prefix}{node.lexeme}"
 
         case InternalNode():
             lines = [f"{use_prefix}{type(node).__name__}"]

@@ -2,9 +2,7 @@ Hbnf: Prod+;
 
 Prod: Nonterm Rule+ ";";
 
-Rule: ":" Expr;
-
-Expr: Factor+;
+Rule: ":" Factor+;
 
 Factor: Symbol Mult?;
 

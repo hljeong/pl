@@ -244,6 +244,7 @@ class Parser:
             self.advance()
             return token
 
+        # todo: return from lookahead directly
         # todo: return type should be token_type | None -- is it even possible?
         def maybe(self, *token_types: type[Token]) -> Token | None:
             return self.expect(*token_types) if self.lookahead(*token_types) else None

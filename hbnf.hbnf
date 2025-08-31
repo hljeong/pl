@@ -1,22 +1,24 @@
-Hbnf: Prod+
+Hbnf: Prod+;
 
-Prod: Nonterm Rule+
+Prod: Nonterm Rule+ ";";
 
-Rule: ":" Expr
+Rule: ":" Expr;
 
-Expr: Factor+
+Expr: Factor+;
 
-Factor: Symbol Mult?
+Factor: Symbol Mult?;
 
 Mult
 : "?"
 : "*"
 : "+"
+;
 
 Symbol
 : Nonterm
 : Term
+;
 
-Nonterm: identifier
+Nonterm: identifier;
 
-Term: string
+Term: string;

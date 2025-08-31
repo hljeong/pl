@@ -183,122 +183,14 @@ def test_bootstrap():
                 class_defns.append(
                     generate_single_rule_symbol_class(lhs, prod.rules[0])
                 )
-                # rule: hbnf.Rule = prod.rules[0]
-                # fields: Statements = Statements()
-                # iter_fn: Function = Function("__iter__", "self", "Iterator[Node]")
-                # lhs_class_defn: Class = Class(
-                #     lhs,
-                #     dataclass=True,
-                #     base="InternalNode",
-                #     statements=[
-                #         fields,
-                #         "",
-                #         iter_fn,
-                #     ],
-                # )
-                # class_defns.append(lhs_class_defn)
-                #
-                # for factor_idx, factor in enumerate(rule.factors, 1):
-                #     varname: str = f"factor{factor_idx}"
-                #     base_type: str = type_name[factor.symbol.lexeme]
-                #
-                #     def maybe_type_ignore(s: str) -> str:
-                #         if factor.symbol.lexeme in BUILTINS:
-                #             return f"{s}  # type: ignore"
-                #         else:
-                #             return s
-                #
-                #     match factor.mult:
-                #         case None:
-                #             # todo: try to fix type check error?
-                #             fields += maybe_type_ignore(f"{varname}: {base_type}")
-                #
-                #         case hbnf.MultUnnamedVariant1():
-                #             # todo: try to fix type check error?
-                #             fields += maybe_type_ignore(
-                #                 f"{varname}: {base_type} | None"
-                #             )
-                #
-                #         case hbnf.MultUnnamedVariant2() | hbnf.MultUnnamedVariant3():
-                #             # todo: tuple instead of list?
-                #             # todo: try to fix type check error?
-                #             fields += maybe_type_ignore(f"{varname}: list[{base_type}]")
-                #
-                # for factor_idx, factor in enumerate(rule.factors, 1):
-                #     varname: str = f"self.factor{factor_idx}"
-                #     match factor.mult:
-                #         case None:
-                #             iter_fn += f"yield {varname}"
-                #
-                #         case hbnf.MultUnnamedVariant1():
-                #             iter_fn += If(varname, [f"yield {varname}"])
-                #
-                #         case hbnf.MultUnnamedVariant2() | hbnf.MultUnnamedVariant3():
-                #             iter_fn += f"yield from {varname}"
 
             case _:
-                for rule_idx, rule in enumerate(prod.rules, 1):
-                    class_defns.append(
-                        generate_single_rule_symbol_class(
-                            f"{lhs}UnnamedVariant{rule_idx}", rule
-                        )
+                class_defns.extend(
+                    generate_single_rule_symbol_class(
+                        f"{lhs}UnnamedVariant{rule_idx}", rule
                     )
-                    # fields: Statements = Statements()
-                    # iter_fn: Function = Function("__iter__", "self", "Iterator[Node]")
-                    # variant_class_defn: Class = Class(
-                    #     f"{lhs}UnnamedVariant{rule_idx}",
-                    #     dataclass=True,
-                    #     base="InternalNode",
-                    #     statements=[
-                    #         fields,
-                    #         "",
-                    #         iter_fn,
-                    #     ],
-                    # )
-                    # class_defns.append(variant_class_defn)
-                    #
-                    # for factor_idx, factor in enumerate(rule.factors, 1):
-                    #     varname: str = f"factor{factor_idx}"
-                    #     base_type: str = type_name[factor.symbol.lexeme]
-                    #
-                    #     def maybe_type_ignore(s: str) -> str:
-                    #         if factor.symbol.lexeme in BUILTINS:
-                    #             return f"{s}  # type: ignore"
-                    #         else:
-                    #             return s
-                    #
-                    #     match factor.mult:
-                    #         case None:
-                    #             # todo: try to fix type check error?
-                    #             fields += maybe_type_ignore(f"{varname}: {base_type}")
-                    #
-                    #         case hbnf.MultUnnamedVariant1():
-                    #             # todo: try to fix type check error?
-                    #             fields += maybe_type_ignore(
-                    #                 f"{varname}: {base_type} | None"
-                    #             )
-                    #
-                    #         case (
-                    #             hbnf.MultUnnamedVariant2() | hbnf.MultUnnamedVariant3()
-                    #         ):
-                    #             # todo: try to fix type check error?
-                    #             fields += maybe_type_ignore(
-                    #                 f"{varname}: list[{base_type}]"
-                    #             )
-                    #
-                    # for factor_idx, factor in enumerate(rule.factors, 1):
-                    #     varname: str = f"self.factor{factor_idx}"
-                    #     match factor.mult:
-                    #         case None:
-                    #             iter_fn += f"yield {varname}"
-                    #
-                    #         case hbnf.MultUnnamedVariant1():
-                    #             iter_fn += If(varname, [f"yield {varname}"])
-                    #
-                    #         case (
-                    #             hbnf.MultUnnamedVariant2() | hbnf.MultUnnamedVariant3()
-                    #         ):
-                    #             iter_fn += f"yield from {varname}"
+                    for rule_idx, rule in enumerate(prod.rules, 1)
+                )
 
                 class_defns.append(
                     f"{lhs}: TypeAlias = {' | '.join([f'{lhs}UnnamedVariant{idx}' for idx, _ in enumerate(prod.rules, 1)])}"
@@ -528,13 +420,11 @@ def test_bootstrap():
 
                 parse_defn: list[Statement] = [f"result: {lhs} | None"]
                 parse_defn.extend(
-                    [
-                        If(
-                            f"(result := self.try_parse_{lhs}UnnamedVariant{rule_idx}()) is not None",
-                            ["return result"],
-                        )
-                        for rule_idx, _ in enumerate(prod.rules, 1)
-                    ]
+                    If(
+                        f"(result := self.try_parse_{lhs}UnnamedVariant{rule_idx}()) is not None",
+                        ["return result"],
+                    )
+                    for rule_idx, _ in enumerate(prod.rules, 1)
                 )
                 # todo: sad message... also raise Parser.Error instead
                 parse_defn.append('raise ValueError("could not parse")')
